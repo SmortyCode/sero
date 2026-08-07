@@ -1,12 +1,46 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (zweiter Durchgang — Roadmap umgesetzt).** Diese Datei
+**Stand: 7. August 2026 (Abend — Go-Live-Checkliste aus Audit).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
 
+## Go-Live-Checkliste (07.08. abends)
+
+Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
+
+| Punkt | Stand |
+|---|---|
+| `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot-Prozess danach neu starten (`launchctl kickstart …bot`), sonst cached er den alten Wert. |
+| Scanner-WIP committen | erledigt (Warp-pur Slab, kein rembg auf Slabs, Pristine/`label_type`, Pins `sero.css?v=61` / `sero.js?v=107`) |
+| Alte CGC `_cut` → `slab_recut` | Glurak `b3042c764fee`, One Piece `47178a440f37`, Exeggutor `c9ae19782791` aus `photos_raw` neu → `*_slab.png` (Case komplett) |
+| `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint (Vision, Modell `cardscan.VISION_MODEL`) |
+| 4 Error-Entwürfe | Orphans ohne Titel/SKU/Offer (unterbrochene Pipelines) — gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
+| Sales-Sync 403 | **Rest extern:** Token von Telegram-Nutzer `5694742134` hat kein `sell.fulfillment`. Scope ist im Code schon in `USER_SCOPES`; wirksam erst nach erneutem eBay-Verbinden (`/verbinden`). Bis dahin loggt Sync weiter 403, Inventory-Offer-Check läuft weiter. |
+| Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-Dev ok). **Nicht** auf production gestellt — ohne HTTPS/Domain bricht Secure-Cookie das Handy-WLAN. Schritte in `.env.example` dokumentiert. |
+| E2E Handy Foto→Listen | **Sven selbst** — hier nur API/Auth/Collection prüfbar |
+
+Backup vor DB-Aktionen: `backups/data-18.db`.
+
 ## Zweiter Durchgang (07.08. nachmittags): Roadmap-Punkte umgesetzt
 
+- **Slab: aufrecht + enger Zuschnitt (07.08. spät):** `slab_recut` richtet
+  per Perspektiv-Warp hinter Symmetrie-Gates auf (Parallelogramm → kein Zerren);
+  bei asymmetischen Kanten nur `warpAffine`-Rotation. Danach `kanten_trim`
+  (je Zeile/Spalte) + `tisch_trim` (warmer Kork/Holz-Rand weg). Klares Case
+  bleibt; kein rembg. Sechs CGC-Stücke aus `photos_raw` neu geschnitten;
+  `label_type` pristine/gem_mint unverändert. Tests in `test_render_standard`.
+- **Slab: kein rembg nach Warp (07.08. abends):** PicsArt-rembg nach
+  `slab_recut` hat klares Case-Plastik als Hintergrund gefressen — Label und
+  Karte schwebten getrennt (Gyarados/Umbreon CGC Pristine). Fix: bei
+  `kind=slab` nur Ecken-Warp + Nachschnitt; rembg nur Fallback wenn der Warp
+  reißt (`crop_photos` + Graded-Hook in `app_api`). Vier CGC-Stücke aus
+  `photos_raw` neu gewarpt (`*_slab.png`), `label_type` unverändert.
+  Vertrag in `test_render_standard` / Modul-Docstring.
+- **CGC Pristine + PicsArt-Freisteller (07.08.):** `graded.label_type`
+  (pristine/perfect/gem_mint) — Gold-Siegel „CGC Pristine 10“, Titel + Verkaufssuche.
+  Slab-Pfad siehe Punkt oben (PicsArt-Nachschritt zurückgenommen).
+  Pins `sero.css?v=61` / `sero.js?v=107`.
 - **Ein Ordner für die App (07.08. abends):** Frontend von `~/sero-app/web`
   nach `~/ebay-bot/frontend/` gezogen. `web/server.py` liefert `/app` jetzt
   aus demselben Repo (Default `SERO_APP_DIR` = `<repo>/frontend`). Website
@@ -53,7 +87,7 @@ diese Datei aktualisieren.
   `market`-Dicts aus der KI-Ära werden geleert und im Frontend gefiltert,
   CSRF versteht X-Forwarded-Host/Default-Ports (Proxy-Betrieb), und
   `/api/ebay-setup` ist pro Nutzer serialisiert.
-- Suite: **330 passed, 1 xfailed**; Smoke grün; `sero.js?v=106`.
+- Suite: **340 passed, 1 xfailed**; Smoke grün; `sero.js?v=107`.
 - Git: Basis-Commit + Umsetzungs-Commit in `~/ebay-bot` und `~/sero-app`;
   `~/listo-website` ebenfalls versioniert.
 
@@ -68,10 +102,10 @@ reduziert auf das, was für SERO wirklich zutrifft.
 
 | | |
 |---|---|
-| Tests | **330 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
+| Tests | **340 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=106`, `sero.css?v=60` |
+| Frontend | `sero.js?v=107`, `sero.css?v=61` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)

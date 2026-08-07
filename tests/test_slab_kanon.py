@@ -116,3 +116,49 @@ def test_korrekter_titel_bleibt():
          "graded_info": {"grader": "CGC"}}
     _grader_im_titel_richtigstellen(d)
     assert d["title"] == "Pokémon Glurak ex 199/165 CGC 10"
+
+
+# ────────────────────── CGC Pristine / Perfect ──────────────────────
+
+def test_normalize_label_type_pristine():
+    assert slab.normalize_label_type("pristine") == "pristine"
+    assert slab.normalize_label_type("Gold Label") == "pristine"
+    assert slab.normalize_label_type(None, text="CGC PRISTINE 10") == "pristine"
+    assert slab.normalize_label_type("gem_mint") == "gem_mint"
+    assert slab.normalize_label_type("perfect") == "perfect"
+
+
+def test_grade_display_pristine():
+    assert slab.grade_display({"grader": "CGC", "grade": "10",
+                               "label_type": "pristine"}) == "CGC Pristine 10"
+    assert slab.grade_display({"grader": "CGC", "grade": "10",
+                               "label_type": "gem_mint"}) == "CGC 10"
+    assert slab.bucket({"grader": "CGC", "grade": "10",
+                        "label_type": "pristine"}) == "CGC 10"
+
+
+def test_normalize_graded_setzt_label():
+    g = slab.normalize_graded({"grader": "cgc", "grade": "10.0",
+                               "label_type": "PRISTINE",
+                               "cert_number": "6078904048"})
+    assert g["grader"] == "CGC"
+    assert g["grade"] == "10"
+    assert g["label_type"] == "pristine"
+    assert g["cert_number"] == "6078904048"
+
+
+def test_pristine_wird_in_titel_geschrieben():
+    from bot.claude_client import _label_im_titel_sicherstellen
+    d = {"title": "Pokémon Gyarados ex 014/078 Japanisch CGC 10",
+         "graded_info": {"grader": "CGC", "grade": "10", "label_type": "pristine"}}
+    _label_im_titel_sicherstellen(d)
+    assert "CGC Pristine 10" in d["title"]
+    assert d["graded_info"]["label_type"] == "pristine"
+
+
+def test_pristine_titel_wird_nicht_doppelt():
+    from bot.claude_client import _label_im_titel_sicherstellen
+    d = {"title": "Pokémon Umbreon ex CGC Pristine 10",
+         "graded_info": {"grader": "CGC", "grade": "10", "label_type": "pristine"}}
+    _label_im_titel_sicherstellen(d)
+    assert d["title"].count("Pristine") == 1

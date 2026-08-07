@@ -536,6 +536,27 @@ const CAT_COLORS = {
   "Lorcana": "#8a5cf6", "Dragon Ball": "#f0a03c", "Sport": "#5aa85e", "Games": "#a78bfa",
   "LEGO": "#e05252", "TCG Sonstiges": "#5a9aa8", "Sonstiges": "#8e8e93",
 };
+/** Grade-Siegel: Text + Farbe. CGC Pristine/Perfect → Gold, nicht schwarz/weiß. */
+function gradeSeal(g, nameHint) {
+  if (!g || !g.grade) return { text: "", cls: "" };
+  const gr = (g.grader || "").toUpperCase();
+  const note = String(g.grade);
+  const lab = String(g.label_type || "").toLowerCase().replace(/[\s-]+/g, "_");
+  const blob = `${nameHint || ""} ${g.label_type || ""} ${note}`.toLowerCase();
+  const isPristine = lab === "pristine" || lab === "gold_label" || blob.includes("pristine");
+  const isPerfect = lab === "perfect" || blob.includes("perfect");
+  const isBlack = lab === "black_label" || blob.includes("black label");
+  let extra = "";
+  if (isPristine) extra = "Pristine";
+  else if (isPerfect) extra = "Perfect";
+  else if (isBlack) extra = "Black Label";
+  const text = extra ? `${gr} ${extra} ${note}` : `${gr} ${note}`;
+  const cls = gr === "PSA" ? "red"
+    : gr === "CGC" ? (isPristine || isPerfect ? "gold" : "bw")
+    : (gr === "BGS" || gr === "BECKETT") ? (isBlack ? "gold" : "silver")
+    : gr === "WATA" ? "navy" : "grey";
+  return { text, cls };
+}
 const GAME_OF_CAT = {
   "Pokémon": "pokemon", "One Piece": "onepiece", "Magic": "magic", "Yu-Gi-Oh!": "yugioh",
   "Lorcana": "lorcana", "Dragon Ball": "dragonball",
@@ -1958,14 +1979,9 @@ function renderCollection() {
       ${badge}${fav}<span class="gmore" data-more="1">${icon("sliders", 14)}</span>
       <div class="gbody">
         <span class="gcat" style="color:${CAT_COLORS[i.category] || "var(--label-3)"}">${esc(i.category)}${(() => {
-          const g = i.graded; if (!g || !g.grade) return "";
-          const gr = (g.grader || "").toUpperCase();
-          const t = `${i.name} ${g.grade}`.toLowerCase();
-          const cls = gr === "PSA" ? "red"
-            : gr === "CGC" ? (t.includes("pristine") || t.includes("perfect") ? "gold" : "bw")
-            : (gr === "BGS" || gr === "BECKETT") ? "silver"
-            : gr === "WATA" ? "navy" : "grey";
-          return `<i class="gseal-in ${cls}">${esc(gr)} ${esc(String(g.grade))}</i>`; })()}</span>
+          const seal = gradeSeal(i.graded, i.name);
+          if (!seal.text) return "";
+          return `<i class="gseal-in ${seal.cls}">${esc(seal.text)}</i>`; })()}</span>
         <div class="gname">${esc(i.name)}</div>
         ${statLine}${condLine}${value}
       </div>`;
@@ -2997,7 +3013,7 @@ function renderDetail(det) {
 
   if (item && seg === "overview") {
     html += `<div class="d-name">${esc(item.name)}</div>
-             <div class="d-cat" style="color:${CAT_COLORS[item.category] || "var(--label-3)"}">${esc(item.category)}${item.graded ? ` · ${esc(item.graded.grader || "")} ${esc(item.graded.grade || "")}` : ""}
+             <div class="d-cat" style="color:${CAT_COLORS[item.category] || "var(--label-3)"}">${esc(item.category)}${item.graded ? ` · ${esc(gradeSeal(item.graded, item.name).text || ((item.graded.grader || "") + " " + (item.graded.grade || "")))}` : ""}
              ${(item.tags || []).map((t) => `<span class="tag-chip"># ${esc(t)}</span>`).join("")}</div>`;
     if (item.status === "analyzing") {
       html += `<div class="stage-line"><span class="spinner"></span> ${esc(item.status_text || "Wird analysiert …")}</div>`;

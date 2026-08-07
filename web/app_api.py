@@ -910,12 +910,14 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             item["name"] = item.get("name") or title
             item["condition"] = item.get("condition") or listing.get("condition")
             if listing.get("graded_info"):
-                item["graded"] = listing["graded_info"]
+                from web.slab import normalize_graded
+                item["graded"] = normalize_graded(listing["graded_info"]) or listing["graded_info"]
                 # Slab-Garantie: Cutout mit Case-Ecken wiederholen, falls der
-                # Segmentierer nur die innere Karte erwischt hat. Auslöser ist
-                # ein FLÄCHENVERGLEICH, kein Seitenverhältnis mehr — Svens
-                # Band 1 (03.08.) war hochkant wie ein Slab und rutschte durch,
-                # obwohl das Beckett-Label komplett fehlte (rembg-Alpha 0).
+                # Segmentierer nur die innere Karte erwischt hat — ODER (häufiger
+                # auf Holztischen) RemBG Tisch+Slab als „Objekt" behält und der
+                # Flächenvergleich die Rettung blockiert (Sven CGC 07.08.).
+                # Deshalb: bei erkanntem Grading IMMER Warp versuchen; ein
+                # erfolgreicher Warp ersetzt den Zuschnitt.
                 def _zuschnitt_anteil(cur_p: str, raw_p: str) -> float:
                     """Objektfläche des Zuschnitts als Anteil am Rohbild — auf
                     derselben 2000er-Arbeitsgröße, in der der Freisteller
@@ -934,10 +936,33 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                         return float((a > 8).sum()) / max(basis, 1.0)
                     except Exception:  # noqa: BLE001
                         return 0.0
-                # Full-Scan-Befund 03.08.: Fällt der Segmentierer KOMPLETT aus,
-                # gibt es kein photos_raw — genau dann brauchte der Slab die
-                # Rettung am dringendsten und wurde übersprungen. Ohne raw-Satz
-                # sind die aktuellen Fotos die Originale (Rettung lohnt immer).
+
+                def _tischnachbar(cur_p: str) -> bool:
+                    """Opaker Bildrand in Tischfarbe? RemBG hat den Untergrund
+                    mitgenommen — Warp muss ersetzen, egal wie groß die Fläche."""
+                    try:
+                        import numpy as _np
+                        from PIL import Image as _I
+                        with _I.open(cur_p) as im:
+                            if im.mode != "RGBA":
+                                return True
+                            a = _np.asarray(im)
+                        H, W = a.shape[:2]
+                        by, bx = max(4, H // 12), max(4, W // 12)
+                        ring = _np.zeros(H * W, dtype=bool).reshape(H, W)
+                        ring[:by, :] = True
+                        ring[-by:, :] = True
+                        ring[:, :bx] = True
+                        ring[:, -bx:] = True
+                        mask = (a[:, :, 3] > 8) & ring
+                        if mask.mean() < 0.15:
+                            return False
+                        rgb = a[:, :, :3][mask].astype(_np.float32).mean(axis=0)
+                        # Studio-Weiß / hellgrau = ok; braun/grau-Tisch = Rettung
+                        return not (rgb.min() > 200 or (rgb.mean() > 210 and rgb.std() < 25))
+                    except Exception:  # noqa: BLE001
+                        return False
+
                 roh = item.get("photos_raw") or item.get("photos") or []
                 if roh:
                     from web import cardscan as _cs
@@ -945,11 +970,16 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
 
                     async def _one_slab(raw_p, cur_p):
                         outp = str(Path(raw_p).with_name(Path(raw_p).stem + "_slab.png"))
+                        # Tischrand oder kein sauberer Cutout → min_area 0 (immer ersetzen)
+                        min_frac = 0.0 if _tischnachbar(cur_p) else (
+                            _zuschnitt_anteil(cur_p, raw_p) * 1.35)
                         try:
-                            if await _cs.slab_recut(
+                            # Warp-only: rembg frisst klares Case-Plastik
+                            # (Label+Karte schweben getrennt — Sven 07.08.).
+                            if (await _cs.slab_recut(
                                 cfg.anthropic_api_key, raw_p, outp,
-                                min_area_frac=_zuschnitt_anteil(cur_p, raw_p) * 1.35,
-                            ) and _cs.bild_ok(outp, "slab"):
+                                min_area_frac=min_frac,
+                            ) and _cs.bild_ok(outp, "slab")):
                                 return outp
                             return cur_p
                         except Exception:  # noqa: BLE001
@@ -961,6 +991,14 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                         rest = list(item.get("photos") or roh)[len(fixed):]
                         item.setdefault("photos_raw", list(roh))
                         item["photos"] = fixed + rest
+                # Pristine/Perfect im Anzeigenamen, falls der alte Name es nicht trägt
+                from web.slab import label_display as _ld
+                _wort = _ld((item.get("graded") or {}).get("label_type")) or ""
+                if (_wort and _wort != "Gem Mint"
+                        and _wort.lower() not in (item.get("name") or "").lower()
+                        and listing.get("title")
+                        and _wort.lower() in listing["title"].lower()):
+                    item["name"] = listing["title"]
             item["category"] = (item.get("category")
                                 or guess_category(title, listing.get("category_query", ""),
                                                   str(listing.get("aspects") or "")))

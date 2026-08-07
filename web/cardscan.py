@@ -4,19 +4,25 @@
 RENDER-STANDARD (Svens Dauer-Entscheid, 03.08.2026 — FEST, Änderung nur mit
 seinem ausdrücklichen Ja; Referenzbild: Exeggutor CGC 10):
 
-  slab   → ECKEN-WARP (slab_recut) + kanten_trim (exakter Nachschnitt auf
-           die Case-Kante) + belichtung_normalisieren (globaler Gain wie
-           der Kamera-Auto-Modus). KEINE selektive Nachbearbeitung — keine
-           Masken, kein örtliches Aufhellen, kein Hintergrund-Mischen.
+  slab   → Aufrichten per ROTATION (minAreaRect/Hough + warpAffine) + enger
+           Zuschnitt (Ecken, kanten_trim, ggf. Label/Fenster-Box) +
+           belichtung_normalisieren. KEINE Perspektiv-Streckung als Normalfall
+           (Sven: „Don't distort, just straighten"). Perspektiv-Warp nur wenn
+           die Symmetrie-Gates greifen und Rotation allein nicht reicht.
+           Warp selbst: KEINE selektive Nachbearbeitung. KEIN rembg danach:
+           klares Case-Plastik sieht für BiRefNet wie Hintergrund aus —
+           Label und Karte schweben getrennt (Sven 07.08., CGC Pristine).
+           Tisch/Kork weg; hartes Plastik-Case (Rahmen + Label + Karte) bleibt.
   sleeve → Segmentierer (_cutout): nur die gedruckte Karte, ohne Hülle.
   raw    → Segmentierer (_cutout): die Karte, eng beschnitten.
   sonst  → ORIGINAL behalten. Nie ein schlechtes Bild speichern.
 
 Jedes Ergebnis läuft vor dem Speichern durch bild_ok() — fällt es durch,
 bleibt das Original stehen. Drei gescheiterte Kosmetik-Anläufe an einem Tag
-(Milchglas, Dunkel-Regeln, Schutzboxen) sind der Grund für diese Härte:
-Nachbearbeitung erzeugt Artefakte, der Warp nicht. Wer hier Kosmetik
-einbauen will, macht erst tests/test_render_standard.py grün.
+(Milchglas, Dunkel-Regeln, Schutzboxen) sind der Grund: Nachbearbeitung
+IM Warp erzeugt Artefakte. rembg ist nur für sleeve/raw und als Fallback,
+wenn der Warp bei einem Slab reißt — nie auf einem gelungenen Warp.
+Wer den Warp selbst anfasst, macht erst tests/test_render_standard.py grün.
 ═══════════════════════════════════════════════════════════════════════════
 
 - crop_photos: EIN Vision-Blick je Foto (detect_card), dann der Pfad laut
@@ -110,6 +116,9 @@ Reihenfolge [oben-links, oben-rechts, unten-rechts, unten-links].
   Bewertungslabel — der Slab gehört zum Sammlerstück und bleibt im Bild.
   Eine lose Schutzfolie oder Tüte UM den Case zählt NICHT: die Punkte liegen
   auf den harten Case-Kanten, die Folie bleibt draußen.
+  KRITISCH: Tisch, Holz, Kork, Stoff, Hände und Schatten gehören NICHT in die
+  Ecken. Lieber 1–2 % zu eng am Case als Tischfläche mitnehmen. Das Case soll
+  nach dem Zuschnitt den Rahmen füllen.
 - Bei "sleeve": die Kanten der GEDRUCKTEN KARTE SELBST — Hülle/Toploader-Ränder
   liegen AUSSERHALB der Punkte und werden weggeschnitten.
 - Bei "raw": die Kartenkanten.
@@ -181,44 +190,206 @@ def kanten_trim(warped):
 
     Die Vision-Ecken sitzen 2–3 % zu weit außen (Folie, Modell-Toleranz) —
     das Übermaß zeigt den Foto-Untergrund und stand als dunkler Rand auf
-    Svens Kacheln (03.08., 21:56). Nach dem Warp ist der Slab achsenparallel:
-    seine Kante ist der stärkste durchgehende Gradient im Randband. Der wird
-    hier gefunden und exakt geschnitten — reine Geometrie, kein Modell,
-    keine Pixel-Manipulation, bei jedem Foto gleich.
+    Svens Kacheln (03.08., 21:56). Nach dem Aufrichten ist der Slab
+    achsenparallel: seine Kante ist der stärkste durchgehende Gradient im
+    Randband. Der wird hier gefunden und exakt geschnitten — reine Geometrie,
+    kein Modell, keine Pixel-Manipulation, bei jedem Foto gleich.
+
+    Pro Zeile/Spalte stimmen (Median), damit eine Restneigung von 1–2° die
+    Kante nicht „verschmiert" und der Trim an den Seiten leer ausgeht.
     """
     import numpy as np
 
     H, W = warped.shape[:2]
     L = warped.mean(axis=2).astype(np.float32)
-    band_x, band_y = max(8, int(W * 0.12)), max(8, int(H * 0.12))
-    marge = 3
+    band_x, band_y = max(10, int(W * 0.22)), max(10, int(H * 0.22))
+    marge = 1
 
-    def peak(profil, innen_ab):
-        """Stärkste Kante im Band; nur wenn sie klar heraussticht."""
-        if len(profil) < 6:
+    def kante_von_rand(profil_2d, band, von_ende=False):
+        """Median der stärksten Kante je Zeile (oder Spalte) im Randband."""
+        # profil_2d: Zeilen × Band-Spalten (oder Spalten × Band-Zeilen)
+        if profil_2d.shape[1] < 6:
             return None
-        i = int(np.argmax(profil))
-        ref = float(np.median(profil)) + 1e-6
-        if profil[i] < 4.0 * ref or i < 2:
+        grads = np.abs(np.diff(profil_2d.astype(np.float32), axis=1))
+        peaks = grads.argmax(axis=1)
+        strengths = grads[np.arange(len(peaks)), peaks]
+        # Referenz: typische Gradienten-Stärke im Band (nicht der Peak-Median —
+        # der wäre ~Peak selbst und 2×Peak filtert alles weg).
+        ref = float(np.median(grads)) + 1e-6
+        ok = strengths >= max(4.0 * ref, 12.0)
+        if ok.sum() < max(12, len(ok) // 4):
+            return None
+        gewaehlt = peaks[ok]
+        # Eine echte Case-Kante liegt in den meisten Zeilen an derselben Stelle.
+        # Rauschen streut über das ganze Band — dann nicht schneiden.
+        if float(np.std(gewaehlt)) > max(6.0, band * 0.08):
+            return None
+        i = int(np.median(gewaehlt))
+        if i < 2:
             return None
         return i
 
-    # Gradient senkrecht zur jeweiligen Kante, aufsummiert entlang der Kante
-    gx = np.abs(np.diff(L, axis=1)).sum(axis=0)      # je Spaltenübergang
-    gy = np.abs(np.diff(L, axis=0)).sum(axis=1)      # je Zeilenübergang
-
-    li = peak(gx[:band_x], 0)
-    re = peak(gx[::-1][:band_x], 0)
-    ob = peak(gy[:band_y], 0)
-    un = peak(gy[::-1][:band_y], 0)
+    # Je Zeile: Gradienten im linken/rechten Band → Case-Seitenkante
+    li = kante_von_rand(L[:, :band_x], band_x)
+    re = kante_von_rand(L[:, -band_x:][:, ::-1], band_x)
+    # Je Spalte: Gradienten im oberen/unteren Band
+    ob = kante_von_rand(L[:band_y, :].T, band_y)
+    un = kante_von_rand(L[-band_y:, :][::-1, :].T, band_y)
 
     x0 = (li + 1 + marge) if li is not None else 0
     x1 = W - ((re + 1 + marge) if re is not None else 0)
     y0 = (ob + 1 + marge) if ob is not None else 0
     y1 = H - ((un + 1 + marge) if un is not None else 0)
-    if x1 - x0 < W * 0.7 or y1 - y0 < H * 0.7:
-        return warped                                # unplausibel — nicht schneiden
+    if x1 - x0 < W * 0.50 or y1 - y0 < H * 0.50:
+        return warped
     return warped[y0:y1, x0:x1]
+
+
+def tisch_trim(warped):
+    """Schneidet warmen Tisch/Kork/Holz am Rand weg — Case-Plastik bleibt.
+
+    Klares Case zeigt den Untergrund DURCH, ist aber an der Außenkante
+    kühler/dunkler (Lichtkante). Reiner Tisch ist warm (R−B groß). Vom Rand
+    nach innen: solange die Spalte/Zeile überwiegend warm ist, wegschneiden.
+    Greift nur, wenn der Lauf klar und nicht zu tief ist.
+    """
+    import numpy as np
+
+    H, W = warped.shape[:2]
+    if H < 80 or W < 60:
+        return warped
+    rgb = warped.astype(np.float32)
+    warm = (rgb[:, :, 0] - rgb[:, :, 2]) > 32.0
+    # Mittenband: Label (schwarz) und untere Glanzlichter nicht mitzählen
+    y0, y1 = int(H * 0.22), int(H * 0.88)
+    x0b, x1b = int(W * 0.12), int(W * 0.88)
+    wcol = warm[y0:y1, :].mean(axis=0)
+    wrow = warm[:, x0b:x1b].mean(axis=1)
+
+    def lauf(arr, thr=0.52, max_frac=0.20):
+        n = 0
+        limit = max(4, int(len(arr) * max_frac))
+        for v in arr:
+            if v >= thr and n < limit:
+                n += 1
+            else:
+                break
+        return n if n >= 3 else 0
+
+    left = lauf(wcol)
+    right = lauf(wcol[::-1])
+    top = lauf(wrow, max_frac=0.12)
+    bot = lauf(wrow[::-1], max_frac=0.18)
+    nx0, nx1 = left, W - right
+    ny0, ny1 = top, H - bot
+    if nx1 - nx0 < W * 0.55 or ny1 - ny0 < H * 0.55:
+        return warped
+    ar = (ny1 - ny0) / max(nx1 - nx0, 1)
+    if not (1.15 <= ar <= 2.05):
+        return warped
+    return warped[ny0:ny1, nx0:nx1]
+
+
+def _norm_winkel_45(angle: float) -> float:
+    """Winkel in (−45, 45] — kleinste Drehung zur Achsenparallelen."""
+    a = (angle + 180.0) % 180.0
+    if a > 90.0:
+        a -= 180.0
+    if a > 45.0:
+        a -= 90.0
+    elif a <= -45.0:
+        a += 90.0
+    return a
+
+
+def _slab_inhalt_winkel(img) -> float:
+    """Neigung des Slab aus langen Kanten (Hough) — ohne Perspektiv-Stretch.
+
+    Vision liefert oft ein achsenparalleles Eck-Rechteck UM einen schiefen
+    Slab; der Top-Kanten-Winkel der Ecken ist dann 0°, der Slab bleibt schief.
+    Lange Kanten im Bild verraten die echte Neigung.
+    """
+    import cv2
+    import numpy as np
+
+    H, W = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 45, 130)
+    min_len = max(40, int(min(H, W) * 0.28))
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=max(50, min(H, W) // 14),
+                            minLineLength=min_len, maxLineGap=max(8, min(H, W) // 40))
+    if lines is None:
+        return 0.0
+    gewichte, winkel = [], []
+    for x1, y1, x2, y2 in lines.reshape(-1, 4):
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        dx, dy = float(x2 - x1), float(y2 - y1)
+        L = float(np.hypot(dx, dy))
+        if L < min_len:
+            continue
+        ang = float(np.degrees(np.arctan2(dy, dx)))
+        # Nahe vertikal (±90°) oder horizontal (0°): Abweichung = Aufricht-Winkel
+        if abs(abs(ang) - 90.0) <= 22.0 or abs(ang) <= 22.0:
+            t = _norm_winkel_45(ang)
+            if abs(t) < 0.35:
+                continue
+            gewichte.append(L)
+            winkel.append(t)
+    if not winkel:
+        return 0.0
+    w = np.asarray(gewichte, dtype=np.float64)
+    a = np.asarray(winkel, dtype=np.float64)
+    # Längen-gewichteter Median
+    order = np.argsort(a)
+    a, w = a[order], w[order]
+    cum = np.cumsum(w)
+    mid = cum[-1] * 0.5
+    ang = float(a[int(np.searchsorted(cum, mid))])
+    if abs(ang) < 0.4 or abs(ang) > 18.0:
+        return 0.0
+    return ang
+
+
+def _affine_drehen(img, angle: float):
+    """Bild um angle Grad drehen (warpAffine) — nur Rotation, kein Zerren."""
+    import cv2
+    import numpy as np
+
+    H, W = img.shape[:2]
+    if abs(angle) < 0.35:
+        M = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float64)
+        return img, M
+    cx, cy = W / 2.0, H / 2.0
+    M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    cos_a, sin_a = abs(M[0, 0]), abs(M[0, 1])
+    nW = int(H * sin_a + W * cos_a)
+    nH = int(H * cos_a + W * sin_a)
+    M[0, 2] += nW / 2.0 - cx
+    M[1, 2] += nH / 2.0 - cy
+    # BORDER_REPLICATE: kein schwarzer Keil, der kanten_trim täuscht
+    out = cv2.warpAffine(img, M, (nW, nH), flags=cv2.INTER_CUBIC,
+                         borderMode=cv2.BORDER_REPLICATE)
+    return out, M
+
+
+def _pts_affine(pts, M):
+    import cv2
+    import numpy as np
+    return cv2.transform(np.asarray(pts, dtype=np.float32).reshape(-1, 1, 2), M).reshape(-1, 2)
+
+
+def _crop_ecken(img, pts, pad: int = 2):
+    import numpy as np
+    H, W = img.shape[:2]
+    xs, ys = pts[:, 0], pts[:, 1]
+    x0 = max(0, int(np.floor(xs.min())) - pad)
+    y0 = max(0, int(np.floor(ys.min())) - pad)
+    x1 = min(W, int(np.ceil(xs.max())) + pad)
+    y1 = min(H, int(np.ceil(ys.max())) + pad)
+    if x1 - x0 < 80 or y1 - y0 < 80:
+        return img, (0, 0)
+    return img[y0:y1, x0:x1], (x0, y0)
 
 
 def belichtung_normalisieren(warped):
@@ -375,13 +546,14 @@ def _studio_hintergrund(rgb, alpha, form=None, boxen=None):
 
 
 def _cutout(path: str, out_path: str) -> bool:
-    """PicsArt-Style Hintergrundentferner: KI-Segmentierung (rembg/isnet) findet das
-    Objekt (Karte, Slab, Toploader), danach Form-Reparatur — Karten sind konvexe
-    Rechtecke, also werden Löcher (dunkle Holo-Flächen) und Randbisse per
-    Zeilen-/Spalten-Spannen aufgefüllt. Ergebnis: transparentes PNG, eng beschnitten.
+    """PicsArt-Style Hintergrundentferner: KI-Segmentierung (rembg/BiRefNet)
+    findet das Objekt (Karte, Slab, Toploader), danach Form-Reparatur — Karten
+    sind konvexe Rechtecke, also werden Löcher (dunkle Holo-Flächen) und
+    Randbisse per Zeilen-/Spalten-Spannen aufgefüllt. Ergebnis: transparentes
+    PNG, eng beschnitten.
 
-    Läuft nur noch als FALLBACK (sleeve, raw, Warp-Fehlschlag) — Slabs nimmt
-    der Ecken-Warp in slab_recut (Svens Referenz-Look, 03.08.)."""
+    Einsatz: sleeve/raw direkt. Bei Slabs nur Fallback, wenn der Ecken-Warp
+    reißt — nie auf einem gelungenen Warp (klares Plastik = „Hintergrund")."""
     global _rembg_session
     try:
         import numpy as np
@@ -543,8 +715,9 @@ async def crop_photos(api_key: str, paths: list[str]) -> tuple[list[str], dict]:
                 log.warning("cardscan: Erkennungs-Blick fehlgeschlagen für %s: %s", p, e)
             # Slab? Dann ist der ECKEN-WARP der Normalfall (Svens Referenzbild
             # 03.08., 20:48: begradigt, Schnitt exakt an der Case-Kante, kein
-            # Schleier). Der Freisteller bleibt Fallback, wenn die
-            # Warp-Schutzchecks reißen.
+            # Schleier). KEIN rembg danach — klares Plastik wird sonst
+            # mitgefressen (Hen-Ei / Case-weg, 07.08.). Segmentierer nur
+            # Fallback, wenn die Warp-Schutzchecks reißen.
             if det1 and det1.get("kind") == "slab":
                 out = str(Path(p).with_name(Path(p).stem + "_cut.png"))
                 try:
@@ -565,14 +738,17 @@ async def crop_photos(api_key: str, paths: list[str]) -> tuple[list[str], dict]:
 async def slab_recut(api_key: str, src_path: str, out_path: str,
                      min_area_frac: float = 0.0,
                      det: dict | None = None) -> bool:
-    """Slab-Garantie: präzise Vision-Ecken des KOMPLETTEN Cases (inkl. Label),
-    aufgerichtet gewarpt — greift, wenn der Segmentierer nur die innere Karte sah.
+    """Slab-Garantie: Case-Ecken → aufrecht → eng zuschneiden.
+
+    Wenn gegenüberliegende Kanten fast gleich lang sind (Symmetrie-Gates),
+    richtet ein Perspektiv-Warp auf die Ecken auf — das ist für ein
+    Parallelogramm kein Zerren und schneidet eng. Sonst nur ROTATION
+    (warpAffine), nie strecken (Sven: „Don't distort, just straighten").
 
     min_area_frac: Flächenanteil am Rohbild, den das gefundene Case ÜBERTREFFEN
     muss. Der Aufrufer übergibt den Anteil des bisherigen Zuschnitts × Reserve —
-    so ersetzt der Warp nur dann, wenn der Segmentierer wirklich etwas
-    verschluckt hat (Svens Band 1: Label mit Alpha 0, Buch als einzige
-    Komponente), und lässt einen korrekten Studio-Freisteller in Ruhe."""
+    so ersetzt der Zuschnitt nur dann, wenn der Segmentierer wirklich etwas
+    verschluckt hat, und lässt einen korrekten Studio-Freisteller in Ruhe."""
     if det is None:
         # Eigenständiger Lauf (Rettungspfad nach der Analyse) — sonst reicht
         # der Aufrufer den Blick aus crop_photos durch und spart den Call.
@@ -587,6 +763,9 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         H, W = img.shape[:2]
         pts = np.array([[min(max(x, 0), 100) / 100 * W, min(max(y, 0), 100) / 100 * H]
                         for x, y in det["corners"]], dtype=np.float32)
+        # 2,5 % Einzug: Vision-Ecken sitzen oft knapp außerhalb am Tisch.
+        _c = pts.mean(axis=0)
+        pts = (_c + (pts - _c) * 0.975).astype(np.float32)
         if min_area_frac > 0:
             frac = float(cv2.contourArea(pts)) / max(W * H, 1)
             if frac < min_area_frac:
@@ -606,23 +785,71 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         if not (1.1 <= H2 / max(W2, 1) <= 2.0):
             log.warning("cardscan: slab_recut-Ecken unplausibel (%dx%d) — verworfen", W2, H2)
             return False
-        # Zerr-Schutz: gegenüberliegende Kanten müssen fast gleich lang sein,
-        # sonst würde der Warp das Bild sichtbar strecken (Svens Zerr-Befund).
         _top = np.linalg.norm(tr - tl); _bot = np.linalg.norm(br - bl)
         _lft = np.linalg.norm(bl - tl); _rgt = np.linalg.norm(br - tr)
-        if (abs(_top - _bot) / max(_top, _bot) > 0.08
-                or abs(_lft - _rgt) / max(_lft, _rgt) > 0.08):
-            log.warning("cardscan: slab_recut-Kanten unsymmetrisch — verworfen")
-            return False
-        M = cv2.getPerspectiveTransform(pts, np.float32([[0, 0], [W2, 0], [W2, H2], [0, H2]]))
-        warped = cv2.warpPerspective(img, M, (W2, H2), flags=cv2.INTER_CUBIC)
-        # BEWUSST keine Studio-Kosmetik mehr: Das Milchglas legte sich als
-        # hellgrauer Querstreifen über die Kacheln (Svens Screenshot 03.08.,
-        # 21:00). Der Warp allein IST der gewünschte Look — begradigt,
-        # Schnitt an der Case-Kante, Plastik wie fotografiert.
-        warped = kanten_trim(warped)     # Übermaß der Vision-Ecken exakt weg
+        asym_tb = abs(_top - _bot) / max(_top, _bot)
+        asym_lr = abs(_lft - _rgt) / max(_lft, _rgt)
+        # Perspektiv nur hinter Symmetrie-Gates (kein Zerren). Bei gutem
+        # Parallelogramm richtet der Warp den Slab auf UND schneidet eng auf
+        # die Ecken — Rotation+AABB lässt sonst Kork-Dreiecke stehen.
+        # Außerhalb der Gates: nur rotieren (Sven: „Don't distort, just straighten").
+        use_persp = asym_tb <= 0.12 and asym_lr <= 0.12
+
+        M_box = None  # 3×3 für perspectiveTransform der Label-/Fenster-Boxen
+        if use_persp:
+            M = cv2.getPerspectiveTransform(
+                pts, np.float32([[0, 0], [W2, 0], [W2, H2], [0, H2]]))
+            warped = cv2.warpPerspective(img, M, (W2, H2), flags=cv2.INTER_CUBIC)
+            M_box = M
+        else:
+            log.info("cardscan: slab_recut — Kanten asymmetrisch "
+                     "(tb=%.0f%% lr=%.0f%%), nur Rotation", asym_tb * 100, asym_lr * 100)
+            # ROTATION-ONLY: grober Ausschnitt → Winkel → drehen → Ecken-Crop.
+            # Vorzeichen: Top-Kante mit +θ (rechts höher) → Bild um −θ drehen.
+            rough, (rx, ry) = _crop_ecken(img, pts, pad=max(8, int(min(W, H) * 0.01)))
+            ang_ecken = _norm_winkel_45(float(np.degrees(np.arctan2(
+                (tr - tl)[1], (tr - tl)[0]))))
+            ang_inhalt = _slab_inhalt_winkel(rough)
+            if abs(ang_ecken) >= 0.5:
+                angle = -ang_ecken
+            elif abs(ang_inhalt) >= 0.4:
+                angle = -ang_inhalt
+            else:
+                angle = 0.0
+            _rect = cv2.minAreaRect(pts.reshape(-1, 1, 2))
+            _ra = float(_rect[2])
+            _rw, _rh = _rect[1]
+            if _rw > 0 and _rh > 0:
+                if _rw >= _rh:
+                    _ra = _ra + 90.0
+                _ra = _norm_winkel_45(_ra)
+                if abs(_ra) >= 0.5 and abs(angle) < 0.5:
+                    angle = -_ra
+            rotated, M_aff = _affine_drehen(img, angle)
+            pts_r = _pts_affine(pts, M_aff)
+            warped, (cx0, cy0) = _crop_ecken(rotated, pts_r, pad=2)
+            M_box = np.eye(3, dtype=np.float64)
+            M_box[:2, :] = M_aff
+            M_box[0, 2] -= cx0
+            M_box[1, 2] -= cy0
+
+        # Nachschnitt über Label- + Fenster-Box (eng am Case, Plastikrand bleibt).
+        warped = _case_nach_boxen(warped, det, pts, M_box, W, H)
+        # BEWUSST keine Studio-Kosmetik: Warp/Rotation allein IST der Look —
+        # aufrecht, Schnitt an der Case-Kante, Plastik wie fotografiert.
+        warped = kanten_trim(warped)     # Gradient an der Case-Kante
+        warped = tisch_trim(warped)      # warmen Tisch/Kork am Rand weg
+        # Kleine Restneigung (nur ≤3°): Holo-Kanten täuschen größere Winkel.
+        _fein = _slab_inhalt_winkel(warped)
+        if 0.6 <= abs(_fein) <= 3.0:
+            warped, _ = _affine_drehen(warped, -_fein)
+            warped = kanten_trim(warped)
+            warped = tisch_trim(warped)
         warped = belichtung_normalisieren(warped)
         W2, H2 = warped.shape[1], warped.shape[0]
+        if W2 < 100 or H2 < 100 or not (1.05 <= H2 / max(W2, 1) <= 2.1):
+            log.warning("cardscan: slab_recut-Ergebnis unplausibel (%dx%d)", W2, H2)
+            return False
         res = Image.fromarray(warped).convert("RGBA")
         rad = max(6, int(min(W2, H2) * 0.03))
         mask = Image.new("L", (W2, H2), 0)
@@ -636,6 +863,61 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
     except Exception as e:  # noqa: BLE001
         log.warning("cardscan: slab_recut fehlgeschlagen für %s: %s", src_path, e)
         return False
+
+
+def _case_nach_boxen(warped, det: dict, pts, M, W: int, H: int):
+    """Warped-Bild auf Label+Fenster (+ Plastikrand des Cases) nachschneiden.
+
+    Fällt zurück aufs unveränderte Bild, wenn Boxen fehlen oder der Zuschnitt
+    unplausibel klein wäre. M ist 3×3 (Perspektive oder Affine+Crop).
+    """
+    import cv2
+    import numpy as np
+
+    lb, wb = det.get("label_box"), det.get("window_box")
+    if not (isinstance(lb, (list, tuple)) and len(lb) == 4
+            and isinstance(wb, (list, tuple)) and len(wb) == 4):
+        return warped
+    if M is None:
+        return warped
+    M = np.asarray(M, dtype=np.float64)
+    if M.shape == (2, 3):
+        M3 = np.eye(3, dtype=np.float64)
+        M3[:2, :] = M
+        M = M3
+    elif M.shape != (3, 3):
+        return warped
+
+    def _map_box(b):
+        src = np.array([[b[0] / 100 * W, b[1] / 100 * H],
+                        [b[2] / 100 * W, b[1] / 100 * H],
+                        [b[2] / 100 * W, b[3] / 100 * H],
+                        [b[0] / 100 * W, b[3] / 100 * H]], dtype=np.float32)
+        t = cv2.perspectiveTransform(src.reshape(-1, 1, 2), M).reshape(-1, 2)
+        return float(t[:, 0].min()), float(t[:, 1].min()), float(t[:, 0].max()), float(t[:, 1].max())
+
+    try:
+        L, Win = _map_box(lb), _map_box(wb)
+    except Exception:  # noqa: BLE001
+        return warped
+    lx0, ly0, lx1, ly1 = L
+    wx0, wy0, wx1, wy1 = Win
+    Hh, Ww = warped.shape[:2]
+    # Plastik-Lippe um Label+Fenster: eng genug gegen Tisch, weit genug für Case.
+    # CGC-Rim ≈ 6–9 % der Labelbreite je Seite; oben ~0,45 Labelhöhe.
+    px = max(4.0, (lx1 - lx0) * 0.07)
+    pt = max(4.0, (ly1 - ly0) * 0.45)
+    pb = max(4.0, (wy1 - wy0) * 0.07)
+    cx0 = max(0, int(min(lx0, wx0) - px))
+    cx1 = min(Ww, int(max(lx1, wx1) + px))
+    cy0 = max(0, int(ly0 - pt))
+    cy1 = min(Hh, int(wy1 + pb))
+    if cx1 - cx0 < Ww * 0.50 or cy1 - cy0 < Hh * 0.50:
+        return warped
+    ar = (cy1 - cy0) / max(cx1 - cx0, 1)
+    if not (1.10 <= ar <= 2.10):
+        return warped
+    return warped[cy0:cy1, cx0:cx1]
 
 
 GROUP_PROMPT = """Du siehst {n} nummerierte Fotos (Foto 0 bis Foto {last}) aus einem

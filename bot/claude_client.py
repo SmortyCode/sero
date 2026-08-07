@@ -48,7 +48,10 @@ Marke → Produkt/Modell → Variante/Setnummer → wichtigstes Merkmal → Grö
 - Natürliche Käufersprache (was Käufer wirklich suchen), KEINE GROSSBUCHSTABEN-Wörter, keine \
 Füller wie "TOP", "RAR", "L@@K", "WOW", keine Sonderzeichen-Deko, kein Keyword-Stuffing.
 - Kategorie-Muster: Trading Card: "[TCG] [Kartenname] [Setnr.] [Set] [Sprache] [Grade oder NM]" \
-(z.B. "Pokémon Glurak ex 199/165 151 Deutsch PSA 10"). Elektronik: "[Marke] [Modell] [Speicher/\
+(z.B. "Pokémon Glurak ex 199/165 151 Deutsch PSA 10"). Bei CGC: wenn das Label \
+"PRISTINE" (schwarzes Label mit Goldkreis) oder "PERFECT" zeigt, MUSS das Wort \
+im Titel stehen — "… CGC Pristine 10" bzw. "… CGC Perfect 10", nie nur "CGC 10". \
+Weißes Label "GEM MINT 10" → "CGC 10" reicht. Elektronik: "[Marke] [Modell] [Speicher/\
 Variante] [Farbe] [Zustand]". Fashion/Sneaker: "[Marke] [Modell] [Colorway] [Größe]". \
 Plüsch/Spielzeug: "[Marke/Serie] [Figur] [Größe cm] [Merkmal]".
 
@@ -81,7 +84,7 @@ Schema:
   "auction_days": "Ganzzahl 1|3|5|7|10 — Auktionslaufzeit NUR wenn der Verkäufer sie nennt ('1 Tag', '3 Tage Auktion'), sonst 7. Nur relevant bei format=AUCTION.",
   "quantity": "Ganzzahl >= 1, Default 1. NUR wenn der Verkäufer MEHRERE identische Artikel oder Sets in EINEM Listing anbietet (z.B. '10 Stück verfügbar', '5er Pack Sleeves', '3 Sets à 3 Toploader'): verfügbare Stückzahl setzen. Titel und Beschreibung beschreiben dann EIN Exemplar/Set, der Preis gilt pro Exemplar/Set.",
   "main_image_index": "0-basierter Index des Fotos, das die VORDERSEITE des Produkts zeigt (bei Karten die Bildseite, bei Verpacktem die Front) — das wird das eBay-Hauptbild. Reihenfolge = Reihenfolge der angehängten Bilder. Im Zweifel 0.",
-  "graded_info": "NUR wenn die Karte/das Spiel sichtbar in einem Grading-Slab (Plastikgehäuse mit Bewertungslabel) steckt, sonst null: {\"grader\": \"PSA\", \"grade\": \"9.5\", \"cert_number\": \"12345678\"} — Werte exakt vom Slab-Label ablesen, nicht lesbare Felder null. Eine LOSE Karte ist NIEMALS graded.",
+  "graded_info": "NUR wenn die Karte/das Spiel sichtbar in einem Grading-Slab (Plastikgehäuse mit Bewertungslabel) steckt, sonst null: {\"grader\": \"PSA\", \"grade\": \"9.5\", \"cert_number\": \"12345678\", \"label_type\": null} — Werte exakt vom Slab-Label ablesen, nicht lesbare Felder null. label_type: bei CGC zwingend setzen, wenn erkennbar — \"pristine\" (schwarzes Label, Goldkreis PRISTINE), \"perfect\" (Perfect 10), \"gem_mint\" (weißes GEM MINT Label), sonst null. PSA/BGS: null außer Black Label sichtbar (\"black_label\"). Eine LOSE Karte ist NIEMALS graded.",
   "assumptions": "string oder null — knappe, ehrliche Annahmen bei der Erkennung (Modellvariante, unbekannte Speichergröße o.ä.). Wird dem Verkäufer in der Vorschau angezeigt.",
   "estimated_weight_grams": 300,
   "uncertain": false,
@@ -124,6 +127,7 @@ def parse_listing_json(text: str) -> dict:
         if field not in data:
             raise json.JSONDecodeError(f"Pflichtfeld fehlt: {field}", cleaned, 0)
     _grader_im_titel_richtigstellen(data)
+    _label_im_titel_sicherstellen(data)
     return data
 
 
@@ -133,6 +137,9 @@ def parse_listing_json(text: str) -> dict:
 # im Titel, obwohl das Label Beckett zeigte (Kürzel: BGS). Käufer suchen
 # nach dem richtigen Kürzel; ein falsches macht das Angebot unauffindbar.
 from web.slab import GRADER_KANON as _GRADER_KUERZEL  # noqa: E402
+from web.slab import (normalize_graded as _normalize_graded,
+                      label_display as _label_display,
+                      normalize_label_type as _normalize_label_type)
 
 
 def _fast_gleich(a: str, b: str) -> bool:
@@ -190,6 +197,46 @@ def _grader_im_titel_richtigstellen(data: dict) -> None:
     neu = _re.sub(r"\b[A-Za-z]{2,5}(?=\s*\d{1,2}(?:\.\d)?\b)", _tausch, titel)
     if neu != titel:
         data["title"] = neu
+
+
+def _label_im_titel_sicherstellen(data: dict) -> None:
+    """CGC Pristine/Perfect im Titel nachziehen, wenn nur „CGC 10" steht.
+
+    Das Modell liest oft Note+Cert, lässt aber „PRISTINE" auf dem Goldlabel
+    weg — dann zeigt die App schwarz/weißes Siegel statt Gold."""
+    info = data.get("graded_info")
+    if not isinstance(info, dict) or not data.get("title"):
+        return
+    info = _normalize_graded(info) or info
+    data["graded_info"] = info
+    lab = _normalize_label_type(
+        info.get("label_type"), info.get("grader"), data.get("title"))
+    if not lab:
+        # Titel kann das Wort tragen, auch wenn label_type fehlte
+        lab = _normalize_label_type(None, info.get("grader"), data["title"])
+        if lab:
+            info["label_type"] = lab
+            data["graded_info"] = info
+    wort = _label_display(lab)
+    if not wort or wort == "Gem Mint":
+        return
+    import re as _re
+    titel = data["title"]
+    if _re.search(rf"\b{_re.escape(wort)}\b", titel, _re.I):
+        return
+    grader = str(info.get("grader") or "").strip()
+    grade = str(info.get("grade") or "").strip()
+    if not grader or not grade:
+        return
+    # „CGC 10" → „CGC Pristine 10"
+    neu, n = _re.subn(
+        rf"\b({_re.escape(grader)})\s+({_re.escape(grade)})\b",
+        rf"\1 {wort} \2", titel, count=1, flags=_re.I)
+    if n:
+        data["title"] = neu
+        return
+    # Grader+Note fehlen im Titel — ans Ende hängen
+    data["title"] = f"{titel.rstrip()} {grader} {wort} {grade}".strip()
 
 
 class ClaudeAnalyzer:

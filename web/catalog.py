@@ -159,11 +159,18 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
     if row and not force and time.time() - (row.get("updated_at") or 0) < ttl:
         return row
     # Grader+Grade gehören IMMER in die Verkaufs-Suche (PSA 9 ≠ CGC 9!)
+    # CGC Pristine/Perfect mitführen — sonst mischen die Belege Gem-Mint-10er.
     if graded and graded.get("grade"):
-        gtag = f"{str(graded.get('grader') or '').strip()} {str(graded.get('grade')).strip()}".strip()
+        from web.slab import search_grade_tag
+        gtag = search_grade_tag(graded)
         if gtag and gtag.split()[0].lower() not in (query or "").lower():
             query = f"{query} {gtag}"
-
+        elif gtag:
+            low = (query or "").lower()
+            for w in ("pristine", "perfect", "black label"):
+                if w in gtag.lower() and w not in low:
+                    query = f"{query} {gtag}"
+                    break
     import asyncio as _aio
     from web.pricecharting import lookup_pc
     from web.sold import fetch_sold

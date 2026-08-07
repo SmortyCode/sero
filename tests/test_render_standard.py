@@ -5,7 +5,7 @@ erzeugten nacheinander schwarze Fetzen, ausgewaschene Cover und hellgraue
 Querstreifen — Sven musste jedes Mal korrigieren. Wörtlich: „Es kann ja
 nicht sein, dass ich dich immer korrigieren muss."
 
-Diese Datei ist der Vertrag: slab → Ecken-Warp OHNE Nachbearbeitung ·
+Diese Datei ist der Vertrag: slab → Ecken-Warp OHNE rembg/Nachbearbeitung ·
 sleeve/raw → Segmentierer · unbekannt → Original. Jedes Ergebnis passiert
 bild_ok(). Wer den Standard ändern will, macht ERST diese Tests grün —
 und holt sich Svens Ja.
@@ -42,6 +42,8 @@ def test_standard_steht_im_modul():
 
 @pytest.mark.asyncio
 async def test_slab_nimmt_den_warp(tmp_path, monkeypatch):
+    """Slab: nur Ecken-Warp. rembg steckt weder in slab_recut noch danach in
+    crop_photos — klares Plastik würde sonst als Hintergrund weggeschnitten."""
     foto = tmp_path / "slab.jpg"
     Image.new("RGB", (900, 1300), (120, 120, 130)).save(foto)
 
@@ -56,9 +58,13 @@ async def test_slab_nimmt_den_warp(tmp_path, monkeypatch):
         Image.new("RGB", (800, 1200), (90, 95, 100)).save(out)
         return True
 
+    def fake_cutout(src, out):
+        aufrufe["cutout"] += 1
+        return True
+
     monkeypatch.setattr(cardscan, "detect_card", fake_detect)
     monkeypatch.setattr(cardscan, "slab_recut", fake_recut)
-    monkeypatch.setattr(cardscan, "_cutout", lambda *a, **k: aufrufe.__setitem__("cutout", 1))
+    monkeypatch.setattr(cardscan, "_cutout", fake_cutout)
     monkeypatch.setattr(cardscan, "bild_ok", lambda p, k=None: True)
 
     res, info = await cardscan.crop_photos("key", [str(foto)])
@@ -165,8 +171,8 @@ def test_kanten_trim_entfernt_uebermass():
     bild[30:H - 30, 25:W - 25] = 225                        # der Case
     getrimmt = cardscan.kanten_trim(bild)
     th, tw = getrimmt.shape[:2]
-    # Übermaß (30/25 px) ist weg, bis auf die kleine Sicherheitsmarge
-    assert H - 70 <= th <= H - 52 and W - 60 <= tw <= W - 42
+    # Übermaß (30/25 px) ist weg, bis auf die kleine Sicherheitsmarge (1 px)
+    assert H - 66 <= th <= H - 56 and W - 56 <= tw <= W - 46
     # und der Rand ist jetzt CASE, nicht Untergrund
     assert getrimmt[0, :, 0].mean() > 150 and getrimmt[-1, :, 0].mean() > 150
 
@@ -179,6 +185,75 @@ def test_kanten_trim_laesst_sauberes_bild_in_ruhe():
     bild = rng.integers(80, 180, (1000, 700, 3), dtype=np.uint8).astype(np.uint8)
     getrimmt = cardscan.kanten_trim(bild)
     assert getrimmt.shape[0] >= 990 and getrimmt.shape[1] >= 690
+
+
+def test_slab_rotation_ohne_perspektiv_streckung():
+    """Aufrichten nur per Rotation (warpAffine) — kein Zerren der Proportionen."""
+    import numpy as np
+    H, W = 400, 300
+    img = np.full((H, W, 3), 40, dtype=np.uint8)
+    img[40:360, 60:240] = 200
+    # 7° schief simulieren, dann zurückdrehen — Seitenverhältnis bleibt
+    gedreht, M = cardscan._affine_drehen(img, 7.0)
+    assert abs(M[0, 1]) > 0.01          # echte Rotation, nicht Identity
+    zurueck, _ = cardscan._affine_drehen(gedreht, -7.0)
+    # Zentrum-Patch: Werte kommen zurück (keine Streckungs-Artefakte am Inhalt)
+    c0 = img[H // 2 - 20:H // 2 + 20, W // 2 - 20:W // 2 + 20].astype(float).mean()
+    c1 = zurueck[zurueck.shape[0] // 2 - 20:zurueck.shape[0] // 2 + 20,
+                 zurueck.shape[1] // 2 - 20:zurueck.shape[1] // 2 + 20].astype(float).mean()
+    assert abs(c0 - c1) < 15
+
+
+def test_slab_inhalt_winkel_findet_schiefe():
+    """Hough-Winkel erkennt einen bewusst gedrehten Slab im Bild."""
+    import cv2
+    import numpy as np
+    H, W = 600, 400
+    canvas = np.full((H, W, 3), 80, dtype=np.uint8)
+    slab = np.full((500, 280, 3), 210, dtype=np.uint8)
+    # dunkler Label-Balken = starke Kante
+    slab[20:90, 20:260] = 30
+    M = cv2.getRotationMatrix2D((140, 250), -6.0, 1.0)
+    rot = cv2.warpAffine(slab, M, (280, 500), borderValue=(80, 80, 80))
+    y0, x0 = 50, 60
+    canvas[y0:y0 + 500, x0:x0 + 280] = rot
+    ang = cardscan._slab_inhalt_winkel(canvas)
+    assert abs(ang) >= 2.0, f"erwartete ~6°, bekam {ang}"
+    assert abs(ang) <= 12.0
+
+
+def test_tisch_trim_entfernt_warmen_rand():
+    """Kork/Holz am Rand (warm: R≫B) fliegt, kühleres Case bleibt."""
+    import numpy as np
+    H, W = 1000, 700
+    bild = np.zeros((H, W, 3), dtype=np.uint8)
+    bild[:] = (180, 150, 100)          # warmer Tisch
+    bild[40:H - 50, 30:W - 60] = (110, 105, 105)  # kühleres Case
+    getrimmt = cardscan.tisch_trim(bild)
+    th, tw = getrimmt.shape[:2]
+    assert tw <= W - 50 and th <= H - 70
+    # Rand des Ergebnisses ist Case, nicht Tisch
+    assert getrimmt[:, 0, 0].mean() < 140
+
+
+def test_tisch_trim_laesst_ohne_tisch_in_ruhe():
+    import numpy as np
+    rng = np.random.default_rng(3)
+    # kühles, uneinheitliches Bild ohne warmen Rand
+    bild = rng.integers(70, 130, (900, 600, 3), dtype=np.uint8)
+    getrimmt = cardscan.tisch_trim(bild)
+    assert getrimmt.shape[0] >= 880 and getrimmt.shape[1] >= 580
+
+
+def test_warp_pfad_bevorzugt_rotation():
+    """slab_recut muss Rotation (warpAffine) als Normalfall haben — Perspektiv
+    nur als Fallback hinter den Symmetrie-Gates."""
+    quelle = inspect.getsource(cardscan.slab_recut)
+    assert "warpAffine" in quelle or "_affine_drehen" in quelle
+    assert "use_persp" in quelle
+    assert "rembg" not in quelle
+    assert "_studio_hintergrund" not in quelle
+    assert "tisch_trim" in quelle
 
 
 # ────────────────── Belichtung: global oder gar nicht ──────────────────
