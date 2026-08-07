@@ -2769,7 +2769,20 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                             if li.get("legacyItemId"):
                                 s.add(str(li["legacyItemId"]))
                 except Exception as e:  # noqa: BLE001
-                    log.warning("Sales-Sync: Orders für %s nicht lesbar: %s", uid, e)
+                    err = str(e)
+                    # 403 = Token ohne sell.fulfillment — einmal neu verbinden
+                    # reicht (Scope steckt schon in USER_SCOPES / Consent-URL).
+                    if "403" in err or "Forbidden" in err:
+                        store.kv_set(f"ebay_fulfillment_fehlt_{uid}", {
+                            "ts": time.time(),
+                            "detail": "Orders-API 403 — eBay neu verbinden",
+                        })
+                        log.warning(
+                            "Sales-Sync: Orders für %s nicht lesbar (403, Scope fehlt) "
+                            "— eBay neu verbinden (/verbinden bzw. Website). %s",
+                            uid, e)
+                    else:
+                        log.warning("Sales-Sync: Orders für %s nicht lesbar: %s", uid, e)
                 sold_skus[uid] = s
             return sold_skus[uid]
 

@@ -1,6 +1,6 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (Abend — Go-Live-Checkliste aus Audit).** Diese Datei
+**Stand: 7. August 2026 (Abend — Baustellen 1–5 abgearbeitet).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
@@ -12,15 +12,27 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | Punkt | Stand |
 |---|---|
 | `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot+Web am 07.08. Abend per `launchctl kickstart` neu gestartet (dry_run-Cache frisch). |
-| Scanner-WIP committen | erledigt (Warp-pur Slab, kein rembg auf Slabs, Pristine/`label_type`, Pins `sero.css?v=61` / `sero.js?v=107`) |
-| Alte CGC `_cut` → `slab_recut` | Glurak `b3042c764fee`, One Piece `47178a440f37`, Exeggutor `c9ae19782791` aus `photos_raw` neu → `*_slab.png` (Case komplett) |
-| `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint (Vision, Modell `cardscan.VISION_MODEL`) |
-| 4 Error-Entwürfe | Orphans ohne Titel/SKU/Offer (unterbrochene Pipelines) — gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
-| Sales-Sync 403 | **Rest extern:** Token von Telegram-Nutzer `5694742134` hat kein `sell.fulfillment`. Scope ist im Code schon in `USER_SCOPES`; wirksam erst nach erneutem eBay-Verbinden (`/verbinden`). Bis dahin loggt Sync weiter 403, Inventory-Offer-Check läuft weiter. |
-| Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-Dev ok). **Nicht** auf production gestellt — ohne HTTPS/Domain bricht Secure-Cookie das Handy-WLAN. Schritte in `.env.example` dokumentiert. |
-| E2E Handy Foto→Listen | **Sven selbst** — hier nur API/Auth/Collection prüfbar |
+| Scanner / Freisteller | Rotation-first (kein Zerren), `kanten_trim` + `tisch_trim` + `untergrund_trim` (Filz/Stoff). KEIN rembg auf Slabs. CGC-Stücke aus Rohfotos neu; beste Variante behalten. Pin `sero.js?v=108`. |
+| Alte CGC `_cut` → `slab_recut` | Neugeschnitten aus `00.jpg`/`01.jpg`; Auswahl prev/cur/new nach Score. Case komplett. |
+| `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint |
+| 4 Error-Entwürfe | Orphans gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
+| Sales-Sync 403 | **Code fertig, Sven muss einmal neu verbinden:** `USER_SCOPES` enthält `sell.fulfillment`. Consent-URL (`/verbinden` + Website `/connect/ebay`) fordert ihn an. Bei Orders-403 setzt Sync `ebay_fulfillment_fehlt_<uid>`; `/api/me` → `ebay_needs_reconnect`; Profil zeigt „Neu verbinden“. Flag fällt nach erfolgreichem OAuth. Token `5694742134` noch ohne Scope bis Sven verbindet. |
+| Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-HTTP ok). **Nicht** auf production gestellt — Secure-Cookie würde Handy-WLAN brechen. Schritte in `.env.example`. |
+| E2E Handy Foto→Listen | Checkliste `docs/E2E_HANDY.md`. API-Smoke: `/app/` 200, Collection/Me 401. Rest: Sven am Handy unter dry_run. |
+| GitHub Push | Remote `origin/master` — Push nach diesem Stand. |
+| CI | `.github/workflows/ci.yml` — pytest auf Push/PR (trivial). |
 
 Backup vor DB-Aktionen: `backups/data-18.db`.
+
+## Freisteller / Sales-Sync (07.08. spät abends)
+
+- **Slab enger + aufrecht ohne Zerren:** Perspektiv nur wenn Symmetrie-Gates
+  greifen UND der Slab schon nahezu aufrecht ist (sonst bleibt Schräge im
+  Vision-AABB). Sonst nur `warpAffine`. Neu: `untergrund_trim` für dunklen
+  Filz/Stoff (tisch_trim allein reichte nicht). Feinjustierung ≤4,5°.
+  Vertrag in `test_render_standard` (+ Tests für `untergrund_trim`).
+- **Sales-Sync 403 UX:** kv-Flag + Profil-Hinweis + klarere `/verbinden`-Texte.
+  Ein erneutes Verbinden reicht — kein Token-Refresh-Hack.
 
 ## Zweiter Durchgang (07.08. nachmittags): Roadmap-Punkte umgesetzt
 
@@ -40,7 +52,7 @@ Backup vor DB-Aktionen: `backups/data-18.db`.
 - **CGC Pristine + PicsArt-Freisteller (07.08.):** `graded.label_type`
   (pristine/perfect/gem_mint) — Gold-Siegel „CGC Pristine 10“, Titel + Verkaufssuche.
   Slab-Pfad siehe Punkt oben (PicsArt-Nachschritt zurückgenommen).
-  Pins `sero.css?v=61` / `sero.js?v=107`.
+  Pins `sero.css?v=61` / `sero.js?v=108`.
 - **Ein Ordner für die App (07.08. abends):** Frontend von `~/sero-app/web`
   nach `~/ebay-bot/frontend/` gezogen. `web/server.py` liefert `/app` jetzt
   aus demselben Repo (Default `SERO_APP_DIR` = `<repo>/frontend`). Website
@@ -87,9 +99,9 @@ Backup vor DB-Aktionen: `backups/data-18.db`.
   `market`-Dicts aus der KI-Ära werden geleert und im Frontend gefiltert,
   CSRF versteht X-Forwarded-Host/Default-Ports (Proxy-Betrieb), und
   `/api/ebay-setup` ist pro Nutzer serialisiert.
-- Suite: **340 passed, 1 xfailed**; Smoke grün; `sero.js?v=107`.
+- Suite: **340+ passed, 1 xfailed**; Smoke grün; `sero.js?v=108`.
 - Git: Basis-Commit + Umsetzungs-Commit in `~/ebay-bot` und `~/sero-app`;
-  `~/listo-website` ebenfalls versioniert.
+  `~/listo-website` ebenfalls versioniert. Remote `origin` aktiv.
 
 Hintergrund: Am 04.08. ging ein Dossier an externe Prüfer; der ChatGPT-Audit
 kam am 07.08. zurück und wurde teilweise umgesetzt (Details unten). Die
@@ -105,7 +117,7 @@ reduziert auf das, was für SERO wirklich zutrifft.
 | Tests | **340 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=107`, `sero.css?v=61` |
+| Frontend | `sero.js?v=108`, `sero.css?v=61` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)
@@ -172,14 +184,10 @@ schwerer macht.
   `_ensure_column` beim Start.
 - `app_api.py` (~3.680 Zeilen, eine Closure) und `sero.js` (~3.780 Zeilen)
   modularisieren — erst NACH den fachlichen P0-Punkten.
-- Kein CI. Vorschlag: GitHub Actions mit `pip install -r requirements.txt`
-  + `pytest` als Pflicht-Gate. (Lokal existiert kein Git-Remote — zuerst
-  Repo-Frage klären, siehe unten.)
+- CI: triviales GitHub-Actions-Workflow vorhanden (pytest). Ausbau später.
 
-### 3. Kein Git-REMOTE
-Lokale Repos existieren seit 07.08. — es fehlt ein Remote (GitHub o.ä.)
-als Backup und als CI-Grundlage. Vor dem Push: `git log` prüfen, dass keine
-Secrets enthalten sind (Basis-Commits sind geprüft sauber).
+### 3. Git-Remote
+Remote `origin` → `SmortyCode/sero`. Push nach Go-Live-Baustellen.
 
 ## Was der Nachfolger über die ChatGPT-Befunde wissen muss
 

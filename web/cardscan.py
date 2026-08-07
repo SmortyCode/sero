@@ -5,14 +5,16 @@ RENDER-STANDARD (Svens Dauer-Entscheid, 03.08.2026 — FEST, Änderung nur mit
 seinem ausdrücklichen Ja; Referenzbild: Exeggutor CGC 10):
 
   slab   → Aufrichten per ROTATION (minAreaRect/Hough + warpAffine) + enger
-           Zuschnitt (Ecken, kanten_trim, ggf. Label/Fenster-Box) +
-           belichtung_normalisieren. KEINE Perspektiv-Streckung als Normalfall
-           (Sven: „Don't distort, just straighten"). Perspektiv-Warp nur wenn
-           die Symmetrie-Gates greifen und Rotation allein nicht reicht.
-           Warp selbst: KEINE selektive Nachbearbeitung. KEIN rembg danach:
-           klares Case-Plastik sieht für BiRefNet wie Hintergrund aus —
-           Label und Karte schweben getrennt (Sven 07.08., CGC Pristine).
-           Tisch/Kork weg; hartes Plastik-Case (Rahmen + Label + Karte) bleibt.
+           Zuschnitt (Ecken, kanten_trim, tisch_trim, untergrund_trim,
+           ggf. Label/Fenster-Box) + belichtung_normalisieren.
+           KEINE Perspektiv-Streckung als Normalfall (Sven: „Don't distort,
+           just straighten"). Perspektiv nur wenn Symmetrie-Gates greifen
+           UND der Slab schon nahezu aufrecht ist (sonst bleibt die Schräge
+           im Vision-AABB stecken). Warp selbst: KEINE selektive Nachbearbeitung.
+           KEIN rembg danach: klares Case-Plastik sieht für BiRefNet wie
+           Hintergrund aus — Label und Karte schweben getrennt (Sven 07.08.,
+           CGC Pristine). Tisch/Kork/Filz weg; hartes Plastik-Case
+           (Rahmen + Label + Karte) bleibt.
   sleeve → Segmentierer (_cutout): nur die gedruckte Karte, ohne Hülle.
   raw    → Segmentierer (_cutout): die Karte, eng beschnitten.
   sonst  → ORIGINAL behalten. Nie ein schlechtes Bild speichern.
@@ -286,6 +288,91 @@ def tisch_trim(warped):
         return warped
     ar = (ny1 - ny0) / max(nx1 - nx0, 1)
     if not (1.15 <= ar <= 2.05):
+        return warped
+    return warped[ny0:ny1, nx0:nx1]
+
+
+def untergrund_trim(warped):
+    """Schneidet homogenen Foto-Untergrund am Rand (Filz, Stoff, Studio).
+
+    tisch_trim greift nur auf warmen Kork/Holz. Viele CGC-Fotos liegen auf
+    schwarzem Mikrofasertuch — dort bleibt ein Streifen stehen und der Slab
+    wirkt schief im Kachelrahmen. Hier: Spalte/Zeile fliegt, solange sie
+    deutlich dunkler ODER deutlich gleichmäßiger ist als das Case-Innere.
+    Kein Weichzeichnen, nur Zuschnitt.
+    """
+    import numpy as np
+
+    H, W = warped.shape[:2]
+    if H < 80 or W < 60:
+        return warped
+    rgb = warped.astype(np.float32)
+    L = rgb.mean(axis=2)
+    y0, y1 = int(H * 0.20), int(H * 0.85)
+    x0b, x1b = int(W * 0.15), int(W * 0.85)
+    innen = L[y0:y1, x0b:x1b]
+    if innen.size < 100:
+        return warped
+    ref_L = float(np.median(innen))
+    ref_std = float(innen.std()) + 1e-6
+
+    def spalte_ist_rand(x: int) -> bool:
+        col = L[y0:y1, x]
+        m, s = float(col.mean()), float(col.std())
+        lim = min(ref_L - 15.0, 105.0)
+        dark_frac = float((col < lim).mean())
+        # Mehrheit der Zeile ist Untergrund ODER Spalte klar dunkler/flacher
+        if dark_frac >= 0.55:
+            return True
+        if m < ref_L - 18 and m < 115:
+            return True
+        if s < max(10.0, ref_std * 0.55) and abs(m - ref_L) > 12:
+            return True
+        return False
+
+    def zeile_ist_rand(y: int) -> bool:
+        row = L[y, x0b:x1b]
+        m, s = float(row.mean()), float(row.std())
+        lim = min(ref_L - 15.0, 105.0)
+        dark_frac = float((row < lim).mean())
+        if dark_frac >= 0.55:
+            return True
+        if m < ref_L - 18 and m < 115:
+            return True
+        if s < max(10.0, ref_std * 0.55) and abs(m - ref_L) > 12:
+            return True
+        return False
+
+    def lauf_x(von_rechts=False, max_frac=0.22):
+        limit = max(4, int(W * max_frac))
+        xs = range(W - 1, W - 1 - limit, -1) if von_rechts else range(limit)
+        n = 0
+        for x in xs:
+            if spalte_ist_rand(x):
+                n += 1
+            else:
+                break
+        return n if n >= 2 else 0
+
+    def lauf_y(von_unten=False, max_frac=0.16):
+        limit = max(4, int(H * max_frac))
+        ys = range(H - 1, H - 1 - limit, -1) if von_unten else range(limit)
+        n = 0
+        for y in ys:
+            if zeile_ist_rand(y):
+                n += 1
+            else:
+                break
+        return n if n >= 2 else 0
+
+    left, right = lauf_x(), lauf_x(von_rechts=True)
+    top, bot = lauf_y(max_frac=0.12), lauf_y(von_unten=True, max_frac=0.18)
+    nx0, nx1 = left, W - right
+    ny0, ny1 = top, H - bot
+    if nx1 - nx0 < W * 0.55 or ny1 - ny0 < H * 0.55:
+        return warped
+    ar = (ny1 - ny0) / max(nx1 - nx0, 1)
+    if not (1.12 <= ar <= 2.08):
         return warped
     return warped[ny0:ny1, nx0:nx1]
 
@@ -763,9 +850,9 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         H, W = img.shape[:2]
         pts = np.array([[min(max(x, 0), 100) / 100 * W, min(max(y, 0), 100) / 100 * H]
                         for x, y in det["corners"]], dtype=np.float32)
-        # 2,5 % Einzug: Vision-Ecken sitzen oft knapp außerhalb am Tisch.
+        # 4 % Einzug: Vision-Ecken sitzen oft am Tisch außerhalb der Case-Kante.
         _c = pts.mean(axis=0)
-        pts = (_c + (pts - _c) * 0.975).astype(np.float32)
+        pts = (_c + (pts - _c) * 0.96).astype(np.float32)
         if min_area_frac > 0:
             frac = float(cv2.contourArea(pts)) / max(W * H, 1)
             if frac < min_area_frac:
@@ -789,11 +876,17 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         _lft = np.linalg.norm(bl - tl); _rgt = np.linalg.norm(br - tr)
         asym_tb = abs(_top - _bot) / max(_top, _bot)
         asym_lr = abs(_lft - _rgt) / max(_lft, _rgt)
-        # Perspektiv nur hinter Symmetrie-Gates (kein Zerren). Bei gutem
-        # Parallelogramm richtet der Warp den Slab auf UND schneidet eng auf
-        # die Ecken — Rotation+AABB lässt sonst Kork-Dreiecke stehen.
-        # Außerhalb der Gates: nur rotieren (Sven: „Don't distort, just straighten").
-        use_persp = asym_tb <= 0.12 and asym_lr <= 0.12
+        # Vorab: steckt der Slab schief in einem Vision-AABB? Dann zieht
+        # Perspektiv die Schräge NICHT raus — Rotation zuerst.
+        rough0, _ = _crop_ecken(img, pts, pad=max(8, int(min(W, H) * 0.01)))
+        ang_ecken0 = _norm_winkel_45(float(np.degrees(np.arctan2(
+            (tr - tl)[1], (tr - tl)[0]))))
+        ang_inhalt0 = _slab_inhalt_winkel(rough0)
+        # Perspektiv nur hinter engen Symmetrie-Gates UND wenn schon nahezu
+        # aufrecht (sonst: Vision-Rechteck um schiefen Slab → Schräge bleibt).
+        # Sven: „Don't distort, just straighten" → Rotation ist der Normalfall.
+        use_persp = (asym_tb <= 0.08 and asym_lr <= 0.08
+                     and abs(ang_ecken0) < 1.2 and abs(ang_inhalt0) < 1.2)
 
         M_box = None  # 3×3 für perspectiveTransform der Label-/Fenster-Boxen
         if use_persp:
@@ -802,14 +895,13 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
             warped = cv2.warpPerspective(img, M, (W2, H2), flags=cv2.INTER_CUBIC)
             M_box = M
         else:
-            log.info("cardscan: slab_recut — Kanten asymmetrisch "
-                     "(tb=%.0f%% lr=%.0f%%), nur Rotation", asym_tb * 100, asym_lr * 100)
-            # ROTATION-ONLY: grober Ausschnitt → Winkel → drehen → Ecken-Crop.
+            log.info("cardscan: slab_recut — nur Rotation "
+                     "(tb=%.0f%% lr=%.0f%% ecken=%.1f° inhalt=%.1f°)",
+                     asym_tb * 100, asym_lr * 100, ang_ecken0, ang_inhalt0)
+            # ROTATION-ONLY: Winkel → drehen → Ecken-Crop. Kein Zerren.
             # Vorzeichen: Top-Kante mit +θ (rechts höher) → Bild um −θ drehen.
-            rough, (rx, ry) = _crop_ecken(img, pts, pad=max(8, int(min(W, H) * 0.01)))
-            ang_ecken = _norm_winkel_45(float(np.degrees(np.arctan2(
-                (tr - tl)[1], (tr - tl)[0]))))
-            ang_inhalt = _slab_inhalt_winkel(rough)
+            ang_ecken = ang_ecken0
+            ang_inhalt = ang_inhalt0
             if abs(ang_ecken) >= 0.5:
                 angle = -ang_ecken
             elif abs(ang_inhalt) >= 0.4:
@@ -825,6 +917,13 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
                 _ra = _norm_winkel_45(_ra)
                 if abs(_ra) >= 0.5 and abs(angle) < 0.5:
                     angle = -_ra
+            # Inhalt gewinnt, wenn Hough klar schiefer als Vision-Ecken
+            # (Vision liefert oft ein leicht geneigtes AABB um den Slab).
+            if abs(ang_inhalt) >= 0.8 and abs(ang_inhalt) > abs(angle) + 0.5:
+                angle = -ang_inhalt
+            # Kappe: Holo-Reflexe erzeugen Fantasie-Winkel >8°.
+            if abs(angle) > 8.0:
+                angle = 0.0
             rotated, M_aff = _affine_drehen(img, angle)
             pts_r = _pts_affine(pts, M_aff)
             warped, (cx0, cy0) = _crop_ecken(rotated, pts_r, pad=2)
@@ -839,12 +938,14 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         # aufrecht, Schnitt an der Case-Kante, Plastik wie fotografiert.
         warped = kanten_trim(warped)     # Gradient an der Case-Kante
         warped = tisch_trim(warped)      # warmen Tisch/Kork am Rand weg
-        # Kleine Restneigung (nur ≤3°): Holo-Kanten täuschen größere Winkel.
+        warped = untergrund_trim(warped)  # Filz/Stoff/Studio-Rand weg
+        # Restneigung (≤4,5°): ein Pass. Darüber = oft Holo-Artefakt.
         _fein = _slab_inhalt_winkel(warped)
-        if 0.6 <= abs(_fein) <= 3.0:
+        if 0.5 <= abs(_fein) <= 4.5:
             warped, _ = _affine_drehen(warped, -_fein)
             warped = kanten_trim(warped)
             warped = tisch_trim(warped)
+            warped = untergrund_trim(warped)
         warped = belichtung_normalisieren(warped)
         W2, H2 = warped.shape[1], warped.shape[0]
         if W2 < 100 or H2 < 100 or not (1.05 <= H2 / max(W2, 1) <= 2.1):

@@ -245,6 +245,28 @@ def test_tisch_trim_laesst_ohne_tisch_in_ruhe():
     assert getrimmt.shape[0] >= 880 and getrimmt.shape[1] >= 580
 
 
+def test_untergrund_trim_entfernt_filz_rand():
+    """Schwarzes Mikrofasertuch am Rand (Sven CGC-Fotos) fliegt, Case bleibt."""
+    import numpy as np
+    H, W = 1000, 700
+    bild = np.full((H, W, 3), 18, dtype=np.uint8)          # Filz
+    bild[35:H - 55, 28:W - 40] = (120, 115, 118)           # Case-Plastik
+    # etwas Struktur innen, sonst greift der Flachheits-Check falsch
+    bild[200:280, 100:600] = 40
+    getrimmt = cardscan.untergrund_trim(bild)
+    th, tw = getrimmt.shape[:2]
+    assert tw <= W - 50 and th <= H - 60
+    assert getrimmt[:, 0, 0].mean() > 80
+
+
+def test_untergrund_trim_laesst_sauberes_case_in_ruhe():
+    import numpy as np
+    rng = np.random.default_rng(11)
+    bild = rng.integers(90, 160, (900, 600, 3), dtype=np.uint8)
+    getrimmt = cardscan.untergrund_trim(bild)
+    assert getrimmt.shape[0] >= 880 and getrimmt.shape[1] >= 580
+
+
 def test_warp_pfad_bevorzugt_rotation():
     """slab_recut muss Rotation (warpAffine) als Normalfall haben — Perspektiv
     nur als Fallback hinter den Symmetrie-Gates."""
@@ -254,6 +276,7 @@ def test_warp_pfad_bevorzugt_rotation():
     assert "rembg" not in quelle
     assert "_studio_hintergrund" not in quelle
     assert "tisch_trim" in quelle
+    assert "untergrund_trim" in quelle
 
 
 # ────────────────── Belichtung: global oder gar nicht ──────────────────

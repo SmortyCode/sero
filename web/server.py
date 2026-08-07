@@ -494,6 +494,12 @@ async def me(request: Request):
     plan_limits = {"starter": 30, "reseller": 200, "shop": None}
     limit = plan_limits.get(account["plan"])
     used = store.listings_this_month(uid)
+    # Sales-Sync 403: Token ohne sell.fulfillment — Nutzer muss neu verbinden.
+    fulfillment_fehlt = bool(
+        store.kv_get(f"ebay_fulfillment_fehlt_{uid}")
+        or (account.get("telegram_id")
+            and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}"))
+    )
     return {
         "email": account["email"],
         "username": account.get("username"),
@@ -509,6 +515,7 @@ async def me(request: Request):
         "trial_days_left": trial_days,
         "active": store.account_active(account),
         "ebay_connected": has_token,
+        "ebay_needs_reconnect": has_token and fulfillment_fehlt,
         "telegram_linked": bool(account.get("telegram_id")),
         "setup_ready": bool(user and user.get("status") == "ready"),
         "bot_username": BOT_USERNAME,
@@ -534,6 +541,10 @@ async def _store_ebay_token(account: dict, code: str) -> None:
     # Telegram schon verknüpft? Token direkt dem Telegram-Nutzer zuordnen.
     if account.get("telegram_id"):
         store.kv_set(_token_key(account["telegram_id"]), store.kv_get(_token_key(uid)))
+        # Alte 403-Marke vom Sales-Sync löschen — neuer Consent hat
+        # sell.fulfillment (USER_SCOPES).
+        store.kv_set(f"ebay_fulfillment_fehlt_{account['telegram_id']}", None)
+    store.kv_set(f"ebay_fulfillment_fehlt_{uid}", None)
 
 
 @app.get("/callback/ebay")

@@ -774,6 +774,8 @@ async def complete_ebay_connection(app: Application, chat_id: int, code: str) ->
     status = await app.bot.send_message(chat_id, "⏳ Verbinde dein eBay-Konto…")
     try:
         await ebay.exchange_code(code, chat_id)
+        # Neuer Consent enthält sell.fulfillment — 403-Marke vom Sales-Sync weg.
+        store.kv_set(f"ebay_fulfillment_fehlt_{chat_id}", None)
         await continue_account_setup(app, chat_id, status)
     except (EbayAuthError, AccountSetupError) as e:
         log.exception("Onboarding-Fehler für %s", chat_id)
@@ -907,12 +909,14 @@ async def cmd_verbinden(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         store.upsert_user(chat_id, status="connecting")
     url = _ctx(app)["ebay"].build_consent_url()
     await update.message.reply_text(
-        "🔗 So verbindest du dein eBay-Konto (30 Sekunden):\n\n"
+        "So verbindest du dein eBay-Konto (30 Sekunden):\n\n"
         "1. Öffne den Link unten\n"
         "2. Logge dich mit DEM eBay-Konto ein, auf dem deine Listings erscheinen sollen\n"
-        "3. Bestätige den Zugriff\n"
+        "3. Bestätige den Zugriff (inkl. Bestellungen lesen — braucht der Verkaufs-Abgleich)\n"
         "4. Kopiere danach die KOMPLETTE Adresse aus der Browser-Adresszeile "
         "und schick sie mir hierher\n\n"
+        "Wichtig: Einmal neu verbinden, wenn Verkäufe nicht erkannt werden "
+        "(Fehler 403 / Scope sell.fulfillment).\n\n"
         "Ich sehe dabei nie dein Passwort — der Login passiert direkt bei eBay."
     )
     await update.message.reply_text(url)

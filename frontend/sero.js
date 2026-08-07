@@ -692,6 +692,8 @@ const STR_EN = {
   "Vorhandene Verkaufsrichtlinien aus deinem eBay-Konto werden übernommen — es wird nichts doppelt angelegt.": "Existing selling policies from your eBay account are reused — nothing is created twice.",
   "Setup abschließen": "Finish setup",
   "eBay verbinden": "Connect eBay",
+  "Neu verbinden": "Reconnect",
+  "Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).": "So sales are detected correctly, reconnect eBay once on the website (Connect with eBay).",
   "Bevor das Setup starten kann, verbinde zuerst dein eBay-Konto auf der Website.": "Before setup can start, connect your eBay account on the website first.",
   "Öffne die Website, melde dich mit derselben E-Mail an und tippe auf „Mit eBay verbinden“. Danach kommst du hierher zurück.": "Open the website, sign in with the same email and tap “Connect with eBay”. Then come back here.",
   "Website öffnen": "Open website",
@@ -2750,10 +2752,14 @@ async function renderProfile() {
     </button>
     <div class="section-label">Verbindungen</div>
     <div class="ilist">
-      ${row("link", "#3478f6", "eBay-Konto", rv(me.ebay_connected ? "Verbunden" : "Nicht verbunden"))}
+      ${row("link", "#3478f6", "eBay-Konto", rv(
+        me.ebay_needs_reconnect ? L("Neu verbinden")
+          : (me.ebay_connected ? L("Verbunden") : L("Nicht verbunden"))),
+        "profEbay", !!me.ebay_needs_reconnect || !me.ebay_connected)}
       ${row("bubble", "var(--green)", "Telegram", rv(me.telegram_linked ? "Verknüpft" : "—"))}
       ${row("gear", "var(--icon-neutral)", "Setup", rv(me.setup_ready ? "Bereit" : "Unvollständig"), "profSetup", !me.setup_ready)}
     </div>
+    ${me.ebay_needs_reconnect ? `<p class="sheet-hint" style="margin:8px 16px 0;font-size:13px;line-height:1.45;opacity:.85">${L("Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).")}</p>` : ""}
     <div class="section-label">App</div>
     <div class="ilist">
       ${row("gear", "#3478f6", "Erscheinungsbild", "", "setTheme", true)}
@@ -2802,6 +2808,14 @@ async function renderProfile() {
   $("profEdit").onclick = () => openProfileSheet(me);
   const ps = $("profSetup");
   if (ps && !me.setup_ready) ps.onclick = () => openSetupSheet(me);
+  const pe = $("profEbay");
+  if (pe) pe.onclick = () => openSheet(
+    L("eBay verbinden"),
+    me.ebay_needs_reconnect
+      ? L("Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).")
+      : L("Bevor das Setup starten kann, verbinde zuerst dein eBay-Konto auf der Website."),
+    `<p class="sheet-hint" style="font-size:15px;line-height:1.55;margin:0">${L("Öffne die Website, melde dich mit derselben E-Mail an und tippe auf „Mit eBay verbinden“. Danach kommst du hierher zurück.")}</p>`,
+    null);
   const links = { profHelp: "/hilfe.html", profPrivacy: "/datenschutz.html", profTerms: "/agb.html" };
   Object.entries(links).forEach(([id, url]) => {
     const b = $(id); if (b) b.onclick = () => window.open(url, "_blank");
