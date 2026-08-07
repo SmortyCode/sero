@@ -495,10 +495,13 @@ async def me(request: Request):
     limit = plan_limits.get(account["plan"])
     used = store.listings_this_month(uid)
     # Sales-Sync 403: Token ohne sell.fulfillment — Nutzer muss neu verbinden.
+    # Alle UID-Varianten prüfen: Telegram, synthetisch, und die aktuell
+    # wirksame uid (Claude-Review B2).
     fulfillment_fehlt = bool(
         store.kv_get(f"ebay_fulfillment_fehlt_{uid}")
         or (account.get("telegram_id")
             and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}"))
+        or store.kv_get(f"ebay_fulfillment_fehlt_{ACCOUNT_UID_OFFSET + account['id']}")
     )
     return {
         "email": account["email"],

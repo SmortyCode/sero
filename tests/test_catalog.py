@@ -80,6 +80,20 @@ def test_fehlmatch_set_groesse_wird_erkannt():
     assert catalog.card_passt_zu_info(falsch, info) is False
 
 
+def test_secret_rare_official_set_total():
+    """Iono 199/165: TCGdex total=207 (mit Secrets), Analyse liefert official 165.
+    set_total muss gegen total ODER official passen (Claude-Review A2)."""
+    card = {"number": "199", "total": 207, "official": 165, "ref_id": "sv03.5-199"}
+    info = {"number": "199", "set_total": "165"}
+    assert catalog.card_passt_zu_info(card, info) is True
+    # Nur total ohne official — 207 ≠ 165 → False
+    nur_total = {"number": "199", "total": 207}
+    assert catalog.card_passt_zu_info(nur_total, info) is False
+    # Passt über total (wenn Analyse total 207 liefert)
+    info_total = {"number": "199", "set_total": "207"}
+    assert catalog.card_passt_zu_info(nur_total, info_total) is True
+
+
 def test_gleiche_karte_gleicher_schluessel():
     """Ohne Referenz-ID entscheidet der Inhalt — zweimal dasselbe Stück muss
     denselben Schlüssel ergeben, sonst teilt der Katalog nichts."""

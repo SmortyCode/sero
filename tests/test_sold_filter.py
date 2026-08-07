@@ -89,6 +89,34 @@ def test_kurzform_dampft_auf_den_kern_ein():
     assert "printing" not in k and "graded" not in k and "1997" not in k
 
 
+def test_kurzform_haelt_sprache():
+    """JP und DE dürfen keinen gemeinsamen Sold-Cache teilen (A3)."""
+    from web.sold import kurzform
+    jp = kurzform("Pokemon Mega Charizard X ex 223/193 Japanese CGC 10")
+    de = kurzform("Pokemon Mega Charizard X ex 223/193 German CGC 10")
+    assert "japanese" in jp
+    assert "german" in de
+    assert jp != de
+
+
+def test_grader_num_matcht_cgc_pristine():
+    """CGC Pristine 10 muss als Note 10 erkannt werden (B1)."""
+    from web.sold import _GRADER_NUM, _canon
+    m = _GRADER_NUM.search(_canon("Umbreon CGC Pristine 10"))
+    assert m and m.group(1).lower() == "cgc" and m.group(2) == "10"
+
+
+def test_fits_pristine_ungleich_gem_mint():
+    """CGC Pristine 10 ≠ CGC Gem Mint 10 — verschiedene Label-Typen (B1)."""
+    q = "Pokemon Umbreon ex Japanese CGC Pristine 10"
+    assert fits(q, "Pokemon Umbreon ex CGC Pristine 10 Japanese") is True
+    assert fits(q, "Pokemon Umbreon ex CGC 10 Gem Mint Japanese") is False
+    assert fits(q, "Pokemon Umbreon ex CGC Gem Mint 10 Japanese") is False
+    # Umgekehrt: Gem Mint-Suche nimmt keinen Pristine-Beleg
+    q2 = "Pokemon Umbreon ex Japanese CGC 10"
+    assert fits(q2, "Pokemon Umbreon ex CGC Pristine 10 Japanese") is False
+
+
 def test_gleicher_kern_teilt_sold_cache(monkeypatch):
     """Charizard-Fall: zwei Formulierungen derselben Suche müssen denselben
     Verkaufs-Cache treffen — sonst divergiert der globale Katalogpreis."""

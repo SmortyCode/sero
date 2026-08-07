@@ -427,3 +427,14 @@ def test_me_setup_ready_auch_ohne_telegram():
     block = q[start:q.index("def ", start + 10)]
     assert "account_token_uid" in block
     assert 'store.get_user(uid)' in block
+
+
+def test_me_prueft_fulfillment_flag_auch_synthetisch():
+    """Reconnect-Hinweis muss auch unter ACCOUNT_UID_OFFSET+id greifen (B2)."""
+    q = _server_quelle()
+    start = q.index("async def me(")
+    # Bis zum nächsten Top-Level-Def (connect/ebay)
+    ende = q.index("@app.get(\"/connect/ebay\")", start)
+    block = q[start:ende]
+    assert "ebay_fulfillment_fehlt_" in block
+    assert "ACCOUNT_UID_OFFSET" in block

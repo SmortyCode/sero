@@ -53,6 +53,10 @@ def card_passt_zu_info(card: dict | None, card_info: dict | None) -> bool:
     zwei gleiche Stücke verschiedene Preise, obwohl der Katalog geteilt ist.
     Ohne card_info gibt es nichts zum Widersprechen → True.
     Ohne card → False (kein Treffer zum Nutzen).
+
+    Set-Größe: TCGdex „total" zählt Secret Rares mit (199/165 → total 207).
+    Die Analyse liefert die offizielle Nenner-Zahl (165). Passt set_total zu
+    total ODER official, ist der Treffer ok (Claude-Review A2).
     """
     if not card:
         return False
@@ -63,8 +67,13 @@ def card_passt_zu_info(card: dict | None, card_info: dict | None) -> bool:
     if info_num and card_num and info_num != card_num:
         return False
     info_total = str(card_info.get("set_total") or "").lstrip("0")
-    card_total = str(card.get("total") or "").lstrip("0")
-    if info_total and card_total and info_total != card_total:
+    if not info_total:
+        return True
+    card_totals = {
+        str(card.get("total") or "").lstrip("0"),
+        str(card.get("official") or "").lstrip("0"),
+    } - {""}
+    if card_totals and info_total not in card_totals:
         return False
     return True
 

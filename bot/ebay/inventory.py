@@ -396,12 +396,11 @@ def best_offer_enabled_from_offer(data: dict) -> bool:
     return bool(terms.get("bestOfferEnabled"))
 
 
-async def get_active_buyer_offers(client: EbayClient, user_id: int) -> list[dict]:
+async def get_active_buyer_offers(client: EbayClient, user_id: int) -> list[dict] | None:
     """Aktive Käufer-Preisvorschläge (Trading API GetBestOffers).
 
-    Die REST Inventory-API liefert keine eingehenden Best Offers — nur der
-    klassische Trading-Call. Scheitert der Call (Scope/Netz), kommt [] zurück;
-    der Aufrufer zeigt dann ehrlich nichts und synct weiter nur den Listenpreis.
+    Erfolg: Liste (kann leer sein). Fehler/Timeout: None — Aufrufer behält
+    den letzten bekannten Stand (Claude-Review B3).
     """
     import xml.etree.ElementTree as ET
 
@@ -428,16 +427,16 @@ async def get_active_buyer_offers(client: EbayClient, user_id: int) -> list[dict
         )
     except Exception as e:  # noqa: BLE001
         log.warning("GetBestOffers fehlgeschlagen für %s: %s", user_id, e)
-        return []
+        return None
     if resp.status_code != 200:
         log.warning("GetBestOffers HTTP %s für %s: %s",
                     resp.status_code, user_id, (resp.text or "")[:300])
-        return []
+        return None
     try:
         root = ET.fromstring(resp.text)
     except ET.ParseError:
         log.warning("GetBestOffers: ungültiges XML für %s", user_id)
-        return []
+        return None
     ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
     ack = (root.findtext("e:Ack", default="", namespaces=ns)
            or root.findtext("Ack", default=""))
@@ -447,8 +446,7 @@ async def get_active_buyer_offers(client: EbayClient, user_id: int) -> list[dict
                or root.findtext(".//e:ShortMessage", default="", namespaces=ns)
                or "")
         log.warning("GetBestOffers Ack=%s für %s: %s", ack, user_id, err[:200])
-        return []
-
+        return None
     def _find_first(node, *paths: str):
         for p in paths:
             el = node.find(p, ns) if ":" in p else node.find(p)

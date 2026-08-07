@@ -48,7 +48,6 @@ from bot.ebay.browse import research_price
 from bot.ebay.inventory import (
     AUCTION_DURATIONS,
     InventoryError,
-    best_offer_enabled_from_offer,
     create_inventory_item,
     create_offer,
     generate_sku,
@@ -1539,7 +1538,12 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 quantity=quantity, best_offer=draft.get("best_offer"),
                 auction_days=int(draft.get("auction_days") or 7),
                     title=listing.get("title"))
-            store.update_draft(draft_id, draft)
+            # Frisch lesen — Sync kann inzwischen Felder gesetzt haben.
+            frisch = store.get_draft(draft_id) or draft
+            frisch["price"] = draft.get("price")
+            frisch.pop("price_dirty", None)
+            frisch["ebay_price"] = draft.get("price")
+            store.update_draft(draft_id, frisch)
             chat_set(status_id, {"text": "Änderungen sind live", "done": True})
             chat_add(aid, "bot", "published",
                      {"draft_id": draft_id, "title": listing["title"], "price": draft["price"],
@@ -1589,6 +1593,9 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             if not price:
                 return JSONResponse({"error": "Kein gültiger Preis. Beispiel: 16,90"}, status_code=400)
             draft["price"] = price
+            # Lokal geändert — Sales-Sync darf den eBay-Preis nicht zurückholen,
+            # bis „Speichern" den neuen Preis live geschickt hat (Claude-Review A1).
+            draft["price_dirty"] = True
         elif action == "title":
             if not value or len(value) > 80:
                 return JSONResponse({"error": f"Titel: 1–80 Zeichen (aktuell {len(value)})."},
@@ -2603,6 +2610,10 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         item = col_get(item_id, account)
         if not item:
             return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        if item.get("status") == "analyzing":
+            return JSONResponse(
+                {"error": "Die Analyse läuft noch — bitte warten, bevor du Fotos änderst."},
+                status_code=409)
         files = files[:8]
         folder = COL_DIR / item_id
         folder.mkdir(parents=True, exist_ok=True)
@@ -2648,6 +2659,10 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         item = col_get(item_id, account)
         if not item:
             return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        if item.get("status") == "analyzing":
+            return JSONResponse(
+                {"error": "Die Analyse läuft noch — bitte warten, bevor du freistellst."},
+                status_code=409)
         roh = [p for p in (item.get("photos_raw") or item.get("photos") or [])
                if Path(p).exists()]
         if not roh:
@@ -2688,6 +2703,10 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         item = col_get(item_id, account)
         if not item:
             return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        if item.get("status") == "analyzing":
+            return JSONResponse(
+                {"error": "Die Analyse läuft noch — bitte warten, bevor du drehst."},
+                status_code=409)
         photos = [p for p in (item.get("photos") or []) if Path(p).exists()]
         idx = int(body.index or 0)
         if not photos or not 0 <= idx < len(photos):
@@ -2995,19 +3014,23 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                                 s.add(str(li["legacyItemId"]))
                 except Exception as e:  # noqa: BLE001
                     err = str(e)
-                    # 403 = Token ohne sell.fulfillment — einmal neu verbinden
-                    # reicht (Scope steckt schon in USER_SCOPES / Consent-URL).
-                    if "403" in err or "Forbidden" in err:
+                    # 403 = typisch Scope fehlt. Marke bei Erfolg wieder löschen (B2).
+                    if "403" in err or "Forbidden" in err or "forbidden" in err.lower():
                         store.kv_set(f"ebay_fulfillment_fehlt_{uid}", {
                             "ts": time.time(),
                             "detail": "Orders-API 403 — eBay neu verbinden",
                         })
                         log.warning(
-                            "Sales-Sync: Orders für %s nicht lesbar (403, Scope fehlt) "
-                            "— eBay neu verbinden (/verbinden bzw. Website). %s",
-                            uid, e)
+                            "Sales-Sync: Orders für %s nicht lesbar (403) "
+                            "— eBay neu verbinden. %s", uid, e)
                     else:
                         log.warning("Sales-Sync: Orders für %s nicht lesbar: %s", uid, e)
+                else:
+                    with store._lock:  # noqa: SLF001
+                        store._conn.execute(  # noqa: SLF001
+                            "DELETE FROM kv WHERE key = ?",
+                            (f"ebay_fulfillment_fehlt_{uid}",))
+                        store._conn.commit()  # noqa: SLF001
                 sold_skus[uid] = s
             return sold_skus[uid]
 
@@ -3059,51 +3082,68 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 log.warning("Sales-Sync: Offer %s nicht prüfbar: %s", draft.get("offer_id"), e)
                 continue
             if status in ("ACTIVE", "PUBLISHED"):
+                # Nach den awaits FRISCH lesen — sonst überschreibt der Sync
+                # eingetippte Preise / Status (AGENTS.md + Claude-Review A1).
+                frisch = store.get_draft(r["id"])
+                if not frisch:
+                    continue
+                st = frisch.get("status") or ""
+                if st in ("ended", "publishing", "ending"):
+                    continue
                 dirty = False
                 live_price = live_price_from_offer(data) if data else None
-                if live_price and str(draft.get("price") or "") != live_price:
-                    draft["price"] = live_price
+                if (live_price and not frisch.get("price_dirty")
+                        and str(frisch.get("price") or "") != live_price):
+                    frisch["price"] = live_price
+                    frisch["ebay_price"] = live_price
                     dirty = True
-                # listing_id ggf. nachziehen (für Best-Offer-Zuordnung)
+                elif live_price and not frisch.get("ebay_price"):
+                    frisch["ebay_price"] = live_price
+                    dirty = True
                 lid = str((data.get("listing") or {}).get("listingId")
-                          or draft.get("listing_id") or draft.get("item_id") or "")
-                if lid and str(draft.get("listing_id") or "") != lid:
-                    draft["listing_id"] = lid
+                          or frisch.get("listing_id") or frisch.get("item_id") or "")
+                if lid and str(frisch.get("listing_id") or "") != lid:
+                    frisch["listing_id"] = lid
                     dirty = True
-                # Käufer-Preisvorschläge für dieses Listing
                 all_bo = await offers_for(uid)
-                mine = [o for o in all_bo
-                        if not o.get("listing_id") or str(o.get("listing_id")) == lid]
-                # Ohne listing_id am Offer (flache Antwort) nicht raten —
-                # lieber leer als falsch zuordnen.
-                if all_bo and not any(o.get("listing_id") for o in all_bo):
-                    mine = []
-                prev = draft.get("buyer_offers") or []
+                # Nochmal frisch — GetBestOffers kann dauern
+                frisch = store.get_draft(r["id"]) or frisch
+                if (frisch.get("status") or "") in ("ended", "publishing", "ending"):
+                    continue
+                if all_bo is None:
+                    # Call fehlgeschlagen — angezeigte Vorschläge behalten (B3)
+                    mine = frisch.get("buyer_offers") or []
+                else:
+                    mine = [o for o in all_bo
+                            if o.get("listing_id") and str(o.get("listing_id")) == lid]
+                prev = frisch.get("buyer_offers") or []
                 if mine != prev:
-                    draft["buyer_offers"] = mine
+                    frisch["buyer_offers"] = mine
                     dirty = True
-                elif not mine and prev:
-                    draft["buyer_offers"] = []
-                    dirty = True
-                bo_on = best_offer_enabled_from_offer(data) if data else False
-                if bo_on and not draft.get("best_offer"):
-                    draft["best_offer"] = {"enabled": True, "min_price": None}
-                    dirty = True
-                draft["ebay_synced_at"] = time.time()
+                frisch["ebay_synced_at"] = time.time()
+                store.update_draft(r["id"], frisch)
                 if dirty:
-                    store.update_draft(r["id"], draft)
                     changed += 1
                     if uid >= 10 ** 15:
                         notify(uid - 10 ** 15, "sales")
                 continue
+            # Listing nicht mehr aktiv — frisch lesen, Endzustände respektieren
+            frisch = store.get_draft(r["id"])
+            if not frisch:
+                continue
+            if (frisch.get("status") or "") in ("ended", "publishing"):
+                continue
             skus = await skus_for(uid)
+            frisch = store.get_draft(r["id"]) or frisch
+            if (frisch.get("status") or "") in ("ended", "publishing"):
+                continue
             is_sold = (status == "OUT_OF_STOCK"
-                       or draft.get("sku") in skus
-                       or str(draft.get("listing_id") or draft.get("item_id") or "") in skus)
-            draft["status"] = "ended"
-            draft["ended_reason"] = "Verkauft" if is_sold else f"Beendet ({status})"
-            draft["buyer_offers"] = []
-            store.update_draft(r["id"], draft)
+                       or frisch.get("sku") in skus
+                       or str(frisch.get("listing_id") or frisch.get("item_id") or "") in skus)
+            frisch["status"] = "ended"
+            frisch["ended_reason"] = "Verkauft" if is_sold else f"Beendet ({status})"
+            frisch["buyer_offers"] = []
+            store.update_draft(r["id"], frisch)
             if is_sold:
                 mark_item_sold(r["id"])
             changed += 1
@@ -3667,7 +3707,8 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         reconnect = bool(
             store.kv_get(f"ebay_fulfillment_fehlt_{uid}")
             or (account.get("telegram_id")
-                and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}")))
+                and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}"))
+            or store.kv_get(f"ebay_fulfillment_fehlt_{ACCOUNT_UID_OFFSET + account['id']}"))
         return {"drafts": buckets["draft"], "active": buckets["active"], "ended": buckets["ended"],
                 "stats": {"active": len(buckets["active"]), "value_active": round(value_active, 2),
                           "drafts": len(buckets["draft"]), "published_30d": published_30d},

@@ -281,6 +281,30 @@ def test_case_kontur_nachschnitt_entfernt_rand():
     assert getrimmt.mean() > 80
 
 
+def test_case_kontur_schuetzt_label_zone():
+    """Kontur die nur das Kartenfenster findet (Label oben weg) → ablehnen (A4)."""
+    import numpy as np
+    H, W = 1000, 650
+    # Volles Case
+    bild = np.full((H, W, 3), 25, dtype=np.uint8)
+    bild[40:H - 40, 40:W - 40] = 180
+    # Label oben dunkel
+    bild[50:200, 60:W - 60] = 35
+    # Künstliche „Fenster"-Kontur: nur unterer Teil hell mit Kante —
+    # wenn der Algorithmus den oberen Teil (Label) abschneiden will (>12%),
+    # muss der Schutz greifen. Simuliere: Crop-Kandidat wäre y0=180.
+    # Wir prüfen den Schutz indirekt über ein Bild, dessen stärkste Kontur
+    # das Fenster unter dem Label ist.
+    fenster = bild.copy()
+    # Schwache Außenkante, starke Innenkante am Fensterbeginn
+    fenster[180:H - 50, 55:W - 55] = 210
+    fenster[50:180, 55:W - 55] = 40  # Label-Zone
+    raus = cardscan.case_kontur_nachschnitt(fenster)
+    # Höhe muss Label behalten: nicht unter 80% der Originalhöhe
+    assert raus.shape[0] >= int(H * 0.80), (
+        f"Label-Schutz versagt: Höhe {raus.shape[0]} < {int(H * 0.80)}")
+
+
 def test_case_kontur_nachschnitt_laesst_volle_flaeche_in_ruhe():
     """Kein klarer Innen-Fall → Bild unverändert (Kontur = Rahmen)."""
     import numpy as np

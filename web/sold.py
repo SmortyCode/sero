@@ -105,7 +105,19 @@ def _parse_rows(text: str) -> list[dict]:
 GRADERS = ("psa", "cgc", "bgs", "sgc", "beckett", "wata", "vga", "cga", "ace")
 # Note: WATA und VGA vergeben 9.8, 9.6, 9.4 — nicht nur ganze und halbe Stufen.
 # Die alte Regex las „WATA 9.8" als „9" und verglich damit den falschen Grad.
-_GRADER_NUM = re.compile(r"\b(psa|cgc|bgs|sgc|beckett|wata|vga|cga|ace)\s*(10(?:\.0)?|\d(?:\.\d)?)\b")
+_GRADER_NUM = re.compile(
+    r"\b(psa|cgc|bgs|sgc|beckett|wata|vga|cga|ace)"
+    r"(?:\s+(?:pristine|perfect|gem\s*mint|black\s*label))?"
+    r"\s*(10(?:\.0)?|\d(?:\.\d)?)\b",
+    re.I,
+)
+# Label-Wort zwischen Grader und Note (für Pristine-Trennung in fits).
+_GRADER_LABEL = re.compile(
+    r"\b(psa|cgc|bgs|sgc|beckett|wata|vga|cga|ace)\s+"
+    r"(pristine|perfect|gem\s*mint|black\s*label)\s+"
+    r"(10(?:\.0)?|\d(?:\.\d)?)\b",
+    re.I,
+)
 # Dieselbe Firma, zwei Schreibweisen: Beckett Grading Services heißt auf eBay
 # fast immer „BGS". Wer nach „Beckett 8.5" sucht, muss BGS-Slabs finden —
 # sonst bleibt ein 3.000-€-Manga ohne einen einzigen Beleg (Svens Fall 03.08.).
@@ -136,15 +148,20 @@ _FUELLWOERTER = frozenset((
     "manga", "comic", "book", "vol", "volume", "band", "nr", "no", "the",
 ))
 
+# Sprache/Auflage gehören in den Cache-Schlüssel — sonst erbt JP deutsche Belege (A3).
+_SPRACHE_AUFLAGE = frozenset((
+    "deutsch", "german", "japanisch", "japanese", "englisch", "english",
+    "koreanisch", "korean", "chinesisch", "chinese", "franzoesisch", "französisch",
+    "french", "italienisch", "italian", "spanisch", "spanish",
+    "shadowless", "unlimited", "holo", "reverse",
+))
+
 
 def kurzform(query: str) -> str:
-    """Die Anfrage auf ihren Kern eindampfen: Produktname, die entscheidende
-    Zahl, Grader und Note.
+    """Kern einer Verkaufs-Anfrage für den Cache: Name, Zahlen, Sprache, Grader+Note.
 
-    „One Piece Volume 1 1997 first printing Japanese graded Beckett 8.5" findet
-    bei der Verkaufsquelle NICHTS — zu viele Wörter, die kein Verkäufer so in
-    den Titel schreibt. „One Piece 1 bgs 8.5" findet dieselbe Ware sofort
-    (Svens Manga, Belege zwischen 1.500 und 5.000 €).
+    „One Piece Volume 1 … Beckett 8.5" → „one piece 1 bgs 8.5". Sprache/Auflage
+    bleiben drin, damit JP und DE nicht denselben Cache teilen (A3).
     """
     ql = _canon(query)
     tok = re.findall(r"[a-z0-9./-]+", ql)
@@ -158,10 +175,16 @@ def kurzform(query: str) -> str:
     zahlen = [t for t in tok
               if any(c.isdigit() for c in t) and not jahr(t) and t != note]
     namen = [t for t in tok
-             if t.isalpha() and t not in _FUELLWOERTER and t not in GRADERS][:3]
-    teile = namen + zahlen[:2]
+             if t.isalpha() and t not in _FUELLWOERTER and t not in GRADERS
+             and t not in _SPRACHE_AUFLAGE][:3]
+    sprache = [t for t in tok if t in _SPRACHE_AUFLAGE]
+    teile = namen + zahlen[:2] + sprache
+    lab = _GRADER_LABEL.search(ql)
     if grader and note:
-        teile += [grader, note]
+        if lab:
+            teile += [grader, re.sub(r"\s+", " ", lab.group(2).lower()), note]
+        else:
+            teile += [grader, note]
     return " ".join(teile)
 
 
@@ -200,6 +223,16 @@ def fits(query: str, title: str) -> bool:
         # Gleicher Grader Pflicht (Beckett==BGS bereits normalisiert). Ein Titel
         # ganz ohne Grader-Angabe zählt NICHT als Beleg für einen Slab.
         if qgrader not in tgraders:
+            return False
+        # CGC Pristine 10 ≠ CGC Gem Mint 10 (Claude-Review B1)
+        qlab = _GRADER_LABEL.search(ql)
+        tlab = _GRADER_LABEL.search(tl)
+        q_pristine = bool(qlab and "pristine" in qlab.group(2).lower())
+        t_pristine = bool(tlab and "pristine" in tlab.group(2).lower()) or (
+            "pristine" in tl and qgrader == "cgc")
+        if q_pristine and not t_pristine:
+            return False
+        if not q_pristine and t_pristine:
             return False
     elif tgraders or _word("graded", tl) or _word("gem", tl):
         return False

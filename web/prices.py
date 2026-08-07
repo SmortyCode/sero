@@ -216,6 +216,7 @@ async def price_pokemon_tcgdex(card: dict) -> dict | None:
             "set_name": (d.get("set") or {}).get("name"),
             "number": d.get("localId"),
             "total": (d.get("set") or {}).get("cardCount", {}).get("total"),
+            "official": (d.get("set") or {}).get("cardCount", {}).get("official"),
             "rarity": d.get("rarity"), "ref_id": d.get("id"),
             "image": f"{d['image']}/high.webp" if d.get("image") else None,
             "illustrator": d.get("illustrator"),

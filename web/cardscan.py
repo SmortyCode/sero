@@ -385,9 +385,9 @@ def case_kontur_nachschnitt(warped):
     Vision-Ecken und Trims lassen oft Schräge/Tisch. Hier die stärkste
     Außenkontur (Canny) — nur Rotation + AABB. Kein Perspektiv-Zerren, kein rembg.
 
-    Schutz: nie das Bewertungslabel abschneiden (Höhe darf nicht stark
-    schrumpfen, während die Breite gleich bleibt — typischer Fehlgriff aufs
-    Kartenfenster statt Case).
+    Schutz: nie das Bewertungslabel abschneiden (Höhe darf nicht unter ~80 %
+    schrumpfen; oberer Zuschnitt in die Label-Zone ~12–22 % wird abgelehnt;
+    Höhe stark weg bei gleichbleibender Breite = Fenster statt Case).
     """
     import cv2
     import numpy as np
@@ -431,7 +431,7 @@ def case_kontur_nachschnitt(warped):
     else:
         angle = _norm_winkel_45(ang)
     rot = -angle
-    if abs(rot) > 7.0:
+    if abs(rot) > 18.0:
         rot = 0.0
     out = warped
     if abs(rot) >= 0.45:
@@ -454,15 +454,20 @@ def case_kontur_nachschnitt(warped):
     ar = ch / max(cw, 1)
     if not (1.20 <= ar <= 2.15):
         return out if abs(rot) >= 0.45 else warped
-    # Label-Schutz: Höhe stark weg, Breite kaum → Fenster statt Case
+    # Label-Schutz (A4): Bewertungslabel sitzt oben (~12–22%).
+    # Höhe stark weg + Breite kaum → Fenster statt Case.
     if ch < H * 0.82 and cw > W * 0.90:
         return out if abs(rot) >= 0.45 else warped
     if ch * cw < H * W * 0.45:
         return out if abs(rot) >= 0.45 else warped
+    # Gesamthöhe darf nicht stark schrumpfen (Case inkl. Label).
+    if ch < H * 0.80:
+        return out if abs(rot) >= 0.45 else warped
+    # Oberer Zuschnitt in die Label-Zone bei spürbarer Höhenreduktion → Label weg.
+    top_frac = y0 / max(Hh, 1)
+    if top_frac >= 0.12 and ch < Hh * 0.92:
+        return out if abs(rot) >= 0.45 else warped
     # Nur croppen, wenn der abgeschnittene Rand überwiegend Untergrund ist
-    L = warped.mean(axis=2)
-    band = max(3, int(min(H, W) * 0.02))
-    # Nach Rotation: Rand-Check auf out
     L2 = out.mean(axis=2)
     strips = []
     if y0 > 2:
@@ -572,7 +577,7 @@ def _slab_kontur_winkel(img) -> float:
     if _rw >= _rh:
         _ra = _ra + 90.0
     ang = _norm_winkel_45(_ra)
-    if abs(ang) < 0.6 or abs(ang) > 8.0:
+    if abs(ang) < 0.6 or abs(ang) > 18.0:
         return 0.0
     return ang
 
@@ -1064,7 +1069,7 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
             if abs(ang_kontur) >= 0.6 and abs(ang_kontur) > abs(angle) + 0.3:
                 angle = -ang_kontur
             # Kappe: Holo-Reflexe erzeugen Fantasie-Winkel >8°.
-            if abs(angle) > 8.0:
+            if abs(angle) > 18.0:
                 angle = 0.0
             rotated, M_aff = _affine_drehen(img, angle)
             pts_r = _pts_affine(pts, M_aff)

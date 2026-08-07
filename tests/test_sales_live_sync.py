@@ -88,3 +88,20 @@ def test_photo_rotate_endpoint_im_quelltext():
     assert "buyer_offers" in quelle
     assert "live_price_from_offer" in quelle
     assert "get_active_buyer_offers" in quelle
+
+
+def test_sync_respektiert_price_dirty():
+    """Sales-Sync darf manuell gesetzte Preise nicht überschreiben (A1)."""
+    quelle = open("web/app_api.py", encoding="utf-8").read()
+    assert "price_dirty" in quelle
+    assert "not frisch.get(\"price_dirty\")" in quelle or "not frisch.get('price_dirty')" in quelle
+
+
+def test_foto_endpunkte_sperren_waehrend_analyse():
+    """Während status=analyzing → 409 auf photos/recrop/rotate (B4)."""
+    quelle = open("web/app_api.py", encoding="utf-8").read()
+    for fn in ("async def item_photos", "async def recrop_item", "async def rotate_item_photo"):
+        start = quelle.index(fn)
+        block = quelle[start:start + 1200]
+        assert 'status") == "analyzing"' in block or "status') == 'analyzing'" in block
+        assert "409" in block

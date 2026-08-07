@@ -541,3 +541,57 @@ def test_loeschen_reisst_keine_laufenden_ab_und_schont_fremde():
         r = subprocess.run([sys.executable, "-c", ABSTURZ_TEST], env=env,
                            cwd=WURZEL, capture_output=True, text=True, timeout=120)
         assert "RACE-OK" in r.stdout, f"\nSTDOUT: {r.stdout}\nSTDERR: {r.stderr[-2500:]}"
+
+
+PHOTO_ANALYZING_TEST = r"""
+import io, json, time, uuid
+from fastapi.testclient import TestClient
+from PIL import Image
+from web.server import app, store, signer
+
+client = TestClient(app)
+acc = store.create_account("foto409@example.org")
+client.cookies.set("listo_session", signer.dumps(acc["id"]))
+
+# Stück mit existierendem Foto, Status analyzing
+iid = uuid.uuid4().hex[:12]
+from pathlib import Path
+import os
+col = Path(os.environ["SERO_COL_DIR"]) / iid
+col.mkdir(parents=True)
+foto = col / "a.jpg"
+Image.new("RGB", (200, 280), (40, 50, 60)).save(foto, "JPEG")
+store._conn.execute(
+    "INSERT INTO collection_items (id, account_id, created_at, updated_at, data) VALUES (?,?,?,?,?)",
+    (iid, acc["id"], time.time(), time.time(),
+     json.dumps({"status": "analyzing", "name": "X", "photos": [str(foto)]})))
+store._conn.commit()
+
+buf = io.BytesIO()
+Image.new("RGB", (200, 280), (10, 20, 30)).save(buf, "JPEG")
+buf.seek(0)
+r = client.post(f"/api/app/collection/item/{iid}/photos",
+                files={"files": ("n.jpg", buf, "image/jpeg")},
+                data={"replace": "0"})
+assert r.status_code == 409, f"photos: {r.status_code} {r.text[:200]}"
+assert "Analyse" in r.json()["error"]
+
+r = client.post(f"/api/app/collection/item/{iid}/recrop")
+assert r.status_code == 409, f"recrop: {r.status_code}"
+
+r = client.post(f"/api/app/collection/item/{iid}/rotate",
+                json={"index": 0, "degrees": 90})
+assert r.status_code == 409, f"rotate: {r.status_code}"
+
+print("PHOTO409-OK")
+"""
+
+
+def test_foto_aenderungen_waehrend_analyse_geben_409():
+    """Claude-Review B4: photos/recrop/rotate während analyzing → 409."""
+    with tempfile.TemporaryDirectory() as td:
+        env = {**os.environ, "SERO_DB": str(Path(td) / "p409.db"),
+               "SERO_COL_DIR": str(Path(td) / "fotos")}
+        r = subprocess.run([sys.executable, "-c", PHOTO_ANALYZING_TEST], env=env,
+                           cwd=WURZEL, capture_output=True, text=True, timeout=120)
+        assert "PHOTO409-OK" in r.stdout, f"\nSTDOUT: {r.stdout}\nSTDERR: {r.stderr[-3000:]}"

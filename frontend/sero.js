@@ -2522,8 +2522,13 @@ function openLightbox(urls, start) {
 
 function photoIdxNow() {
   const det = state.detail;
-  if (det && typeof det.photoIdx === "number") return det.photoIdx;
-  return 0;
+  if (det && typeof det.photoIdx === "number" && det.photoIdx >= 0) return det.photoIdx;
+  const strip = document.querySelector(".d-photos");
+  if (!strip) return 0;
+  const n = strip.querySelectorAll("img").length;
+  if (n < 2) return 0;
+  const max = Math.max(1, strip.scrollWidth - strip.clientWidth);
+  return Math.round(strip.scrollLeft / max * (n - 1));
 }
 
 function openItemPhotoMenu(item) {
@@ -2568,7 +2573,8 @@ function pickItemPhoto(itemId) {
     try {
       const fd = new FormData();
       picked.slice(0, 8).forEach((f) => fd.append("files", f));
-      fd.append("replace", "1");
+      // Anhängen, nicht alles ersetzen (Claude-Review B4)
+      fd.append("replace", "0");
       await api(`/api/app/collection/item/${itemId}/photos`, { method: "POST", body: fd });
       toast(L("Foto gespeichert"), "check");
       await post(`/api/app/collection/item/${itemId}/recrop`).catch(() => {});
@@ -3533,7 +3539,10 @@ function renderDetail(det) {
   }
   if (item && seg === "overview") {
     const fullUrls = item.photos.map((u) => thumb(u, 1600));
-    const openLb = (idx) => openLightbox(fullUrls, idx || 0);
+    const openLb = (idx) => {
+      det.photoIdx = idx || 0;
+      openLightbox(fullUrls, idx || 0);
+    };
     body.querySelectorAll(".d-photos img").forEach((img, idx) => {
       img.style.cursor = "zoom-in";
       img.onclick = (ev) => { ev.stopPropagation(); openLb(idx); };

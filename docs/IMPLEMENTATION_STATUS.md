@@ -1,9 +1,25 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (Abend — Verkauf Live-Sync + Foto-Menü).** Diese Datei
+**Stand: 7. August 2026 (Nacht — Claude-Review-Fixes A1–B4).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
+
+## Claude-Review-Fixes A1–B4 (07.08. Nacht)
+
+Paket aus dem Claude-Code-Review, fertiggestellt und getestet:
+
+| ID | Thema | Stand |
+|---|---|---|
+| A1 | Sales-Sync: frisch lesen nach await, `price_dirty` schützt Listenpreis, Best-Offer ohne min_price nicht erfinden, `get_active_buyer_offers` → None bei Fehler | DONE |
+| A2 | `card_passt_zu_info`: set_total gegen total ODER official (Secret Rare 199/165) | DONE |
+| A3/B1 | `kurzform` hält Sprache/Auflage; `_GRADER_NUM`/`fits` trennen CGC Pristine ≠ Gem Mint | DONE |
+| A4 | Slab: 18°-Cap; `case_kontur_nachschnitt` Label-Schutz (Höhe ≥80 %, Top-Zone ≥12 %) | DONE |
+| B2 | Reconnect-Flag: Orders-Erfolg löscht Flag; `/api/me` prüft auch `ACCOUNT_UID_OFFSET+id` | DONE |
+| B4 | Foto-Endpunkte → 409 während `analyzing`; „Neues Foto“ hängt an (`replace=0`); `photoIdxNow` robuster | DONE |
+
+Pins `sero.js?v=111`. Suite: **362 passed, 1 xfailed**; Smoke grün. `dry_run=true`.
+Noch manuell (Sven): eBay neu verbinden (Scope `sell.fulfillment`), Handy-E2E.
 
 ## Verkauf Live-Preis + Preisvorschläge / Foto-Menü (07.08. Abend)
 
@@ -16,8 +32,8 @@ diese Datei aktualisieren.
 - **Sammlung Detail:** Fotos deutlich größer (`d-photos large`); ⋯-Menü oben
   rechts mit Zuschneiden (`/recrop`), Drehen 90° (`/rotate`), Neues Foto,
   Vollbild. Endpunkte `POST .../photos`, `/recrop`, `/rotate`.
-- Pins `sero.css?v=62` / `sero.js?v=110`. Tests: 353 passed, 1 xfailed; Smoke grün.
-  `dry_run=true`.
+- Pins `sero.css?v=62` / `sero.js?v=111` (JS-Pin nach Review-Fixes). Tests: siehe
+  Abschnitt oben. `dry_run=true`.
 
 ## Preis-Divergenz gleiche Karte (07.08. Abend)
 
