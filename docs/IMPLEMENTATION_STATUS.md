@@ -1,9 +1,23 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (Abend — Preis-Divergenz Charizard behoben).** Diese Datei
+**Stand: 7. August 2026 (Abend — Verkauf Live-Sync + Foto-Menü).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
+
+## Verkauf Live-Preis + Preisvorschläge / Foto-Menü (07.08. Abend)
+
+- **Verkauf-Tab:** Sync zieht den echten Listenpreis aus dem eBay-Offer
+  (`pricingSummary`) und aktive Käufer-Preisvorschläge (Trading API
+  `GetBestOffers`). Anzeige als Chip in der Liste und Block im Listing-Detail.
+  Poll alle 60 s solange der Verkauf-Tab offen ist; Server-Throttle 90 s
+  (mit `?refresh=1` 30 s); Hintergrundjob alle 30 Min. Reconnect-Hinweis
+  bleibt, wenn `sell.fulfillment` fehlt — Preise synct trotzdem über Inventory.
+- **Sammlung Detail:** Fotos deutlich größer (`d-photos large`); ⋯-Menü oben
+  rechts mit Zuschneiden (`/recrop`), Drehen 90° (`/rotate`), Neues Foto,
+  Vollbild. Endpunkte `POST .../photos`, `/recrop`, `/rotate`.
+- Pins `sero.css?v=62` / `sero.js?v=110`. Tests: 353 passed, 1 xfailed; Smoke grün.
+  `dry_run=true`.
 
 ## Preis-Divergenz gleiche Karte (07.08. Abend)
 
@@ -24,7 +38,7 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | Punkt | Stand |
 |---|---|
 | `kv['dry_run']=true` (Üben) | **DONE** — `true`. Vor echtem Live: `/dryrun off` + Bot-Kickstart. |
-| Scanner / Freisteller | **DONE** — Warp-pur, Case bleibt, kein rembg auf Slabs. Stichprobe CGC-Fotos ok (kein weiterer Recut). Pin `sero.js?v=109`. |
+| Scanner / Freisteller | **DONE** — Warp-pur, Case bleibt, kein rembg auf Slabs. Stichprobe CGC-Fotos ok (kein weiterer Recut). Pin `sero.js?v=110`. |
 | Alte CGC `_cut` → `slab_recut` | **DONE** — Case komplett, Label geschützt. |
 | `label_type` nachziehen | **DONE** — pristine/gem_mint gesetzt. |
 | 4 Error-Entwürfe | **DONE** — 0 übrig. |
@@ -50,8 +64,8 @@ cd ~/ebay-bot && git add .github/workflows/ci.yml && \
 - `.github/workflows/ci.yml`: pytest auf Python 3.13 + `node --check frontend/sero.js`.
   Datei lokal vorhanden; Push blockiert ohne Scope `workflow` (Auth-Refresh braucht Browser).
 - Verkauf-Tab zeigt Reconnect-Hinweis (`ebay_needs_reconnect`); Profil-Wert orange.
-  Pin `sero.js?v=109`. Consent-URL baut `USER_SCOPES` inkl. `sell.fulfillment`.
-- Verifikation 07.08. Nacht: dry_run=true; web+bot running; 344 passed / 1 xfailed;
+  Pin `sero.js?v=110`. Consent-URL baut `USER_SCOPES` inkl. `sell.fulfillment`.
+- Verifikation 07.08. Nacht: dry_run=true; web+bot running; 353 passed / 1 xfailed;
   Smoke folgt; API-E2E mit Testkonto grün (kein eBay-Publish).
 
 ## Freisteller / Sales-Sync (07.08. spät abends)
@@ -145,10 +159,10 @@ reduziert auf das, was für SERO wirklich zutrifft.
 
 | | |
 |---|---|
-| Tests | **344 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` |
+| Tests | **353 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=109`, `sero.css?v=61` (Stand Push a362ccd) |
+| Frontend | `sero.js?v=110`, `sero.css?v=62` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)

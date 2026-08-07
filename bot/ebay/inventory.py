@@ -375,6 +375,141 @@ async def get_offer(client: EbayClient, offer_id: str, user_id: int) -> Optional
     return resp.json() if resp.status_code == 200 else None
 
 
+def live_price_from_offer(data: dict) -> Optional[str]:
+    """Listenpreis aus einer getOffer-Antwort — nur echte eBay-Zahlen, nie geraten."""
+    ps = data.get("pricingSummary") or {}
+    obj = ps.get("price") or ps.get("auctionStartPrice") or {}
+    val = obj.get("value")
+    if val is None or val == "":
+        return None
+    try:
+        f = float(str(val).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if f <= 0:
+        return None
+    return f"{f:.2f}"
+
+
+def best_offer_enabled_from_offer(data: dict) -> bool:
+    terms = ((data.get("listingPolicies") or {}).get("bestOfferTerms") or {})
+    return bool(terms.get("bestOfferEnabled"))
+
+
+async def get_active_buyer_offers(client: EbayClient, user_id: int) -> list[dict]:
+    """Aktive Käufer-Preisvorschläge (Trading API GetBestOffers).
+
+    Die REST Inventory-API liefert keine eingehenden Best Offers — nur der
+    klassische Trading-Call. Scheitert der Call (Scope/Netz), kommt [] zurück;
+    der Aufrufer zeigt dann ehrlich nichts und synct weiter nur den Listenpreis.
+    """
+    import xml.etree.ElementTree as ET
+
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<GetBestOffersRequest xmlns="urn:ebay:apis:eBLBaseComponents">'
+        "<BestOfferStatus>Active</BestOfferStatus>"
+        "<DetailLevel>ReturnAll</DetailLevel>"
+        "</GetBestOffersRequest>"
+    )
+    try:
+        token = await client.get_user_token(user_id)
+        resp = await client.request(
+            "POST", "https://api.ebay.com/ws/api.dll",
+            auth="user", user_id=user_id,
+            headers={
+                "X-EBAY-API-COMPATIBILITY-LEVEL": "1155",
+                "X-EBAY-API-CALL-NAME": "GetBestOffers",
+                "X-EBAY-API-SITEID": "77",
+                "X-EBAY-API-IAF-TOKEN": token,
+                "Content-Type": "text/xml",
+            },
+            content=body.encode("utf-8"),
+        )
+    except Exception as e:  # noqa: BLE001
+        log.warning("GetBestOffers fehlgeschlagen für %s: %s", user_id, e)
+        return []
+    if resp.status_code != 200:
+        log.warning("GetBestOffers HTTP %s für %s: %s",
+                    resp.status_code, user_id, (resp.text or "")[:300])
+        return []
+    try:
+        root = ET.fromstring(resp.text)
+    except ET.ParseError:
+        log.warning("GetBestOffers: ungültiges XML für %s", user_id)
+        return []
+    ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
+    ack = (root.findtext("e:Ack", default="", namespaces=ns)
+           or root.findtext("Ack", default=""))
+    if ack not in ("Success", "Warning"):
+        err = (root.findtext(".//e:LongMessage", default="", namespaces=ns)
+               or root.findtext(".//LongMessage", default="")
+               or root.findtext(".//e:ShortMessage", default="", namespaces=ns)
+               or "")
+        log.warning("GetBestOffers Ack=%s für %s: %s", ack, user_id, err[:200])
+        return []
+
+    def _find_first(node, *paths: str):
+        for p in paths:
+            el = node.find(p, ns) if ":" in p else node.find(p)
+            if el is not None:
+                return el
+        return None
+
+    def _txt(node, *names: str) -> str:
+        for n in names:
+            v = node.findtext(f"e:{n}", default="", namespaces=ns) or node.findtext(n, default="")
+            if v:
+                return v.strip()
+        return ""
+
+    def _parse_bo(bo, listing_id: str) -> dict | None:
+        price_el = _find_first(bo, "e:Price", "Price")
+        price = (price_el.text or "").strip() if price_el is not None else ""
+        currency = (price_el.attrib.get("currencyID", "") if price_el is not None else "") or "EUR"
+        status = _txt(bo, "Status")
+        if status and status.upper() not in ("ACTIVE", "PENDING", ""):
+            return None
+        try:
+            eur = float(price.replace(",", ".")) if price else None
+        except ValueError:
+            return None
+        if eur is None:
+            return None
+        try:
+            qty = int(_txt(bo, "Quantity") or "1") or 1
+        except ValueError:
+            qty = 1
+        return {
+            "listing_id": listing_id,
+            "price": f"{eur:.2f}",
+            "currency": currency,
+            "quantity": qty,
+            "buyer": _txt(bo, "UserID") or None,
+            "expires": _txt(bo, "ExpirationTime") or None,
+            "status": status or "Active",
+            "best_offer_id": _txt(bo, "BestOfferID") or None,
+        }
+
+    out: list[dict] = []
+    blocks = root.findall(".//e:ItemBestOffers", ns) or root.findall(".//ItemBestOffers")
+    if blocks:
+        for block in blocks:
+            item_el = _find_first(block, "e:Item", "Item")
+            listing_id = _txt(item_el, "ItemID") if item_el is not None else ""
+            bos = block.findall(".//e:BestOffer", ns) or block.findall(".//BestOffer")
+            for bo in bos:
+                row = _parse_bo(bo, listing_id)
+                if row:
+                    out.append(row)
+    else:
+        for bo in (root.findall(".//e:BestOffer", ns) or root.findall(".//BestOffer")):
+            row = _parse_bo(bo, "")
+            if row:
+                out.append(row)
+    return out
+
+
 async def create_offer(client: EbayClient, policies: dict, sku: str, *,
                        user_id: int,
                        category_id: str, price_eur: str, listing_description: str,

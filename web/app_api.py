@@ -48,10 +48,13 @@ from bot.ebay.browse import research_price
 from bot.ebay.inventory import (
     AUCTION_DURATIONS,
     InventoryError,
+    best_offer_enabled_from_offer,
     create_inventory_item,
     create_offer,
     generate_sku,
+    get_active_buyer_offers,
     get_inventory_item,
+    live_price_from_offer,
     publish_offer,
     update_offer,
     withdraw_offer,
@@ -142,6 +145,11 @@ class MatchBody(BaseModel):
     number: str | None = None
     ref_id: str | None = None
     tcgcsv: dict | None = None
+
+
+class RotateBody(BaseModel):
+    index: int = 0
+    degrees: int = 90  # 90 | 180 | 270 (Uhrzeigersinn)
 
 
 # Sammlungs-Fotos NICHT in TMP_DIR: der Bot-Cleanup räumt dort verwaiste Ordner ab.
@@ -308,6 +316,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             "auction_days": int(draft.get("auction_days") or 7),
             "quantity": int(draft.get("quantity") or 1),
             "best_offer": draft.get("best_offer"),
+            "buyer_offers": draft.get("buyer_offers") or [],
             "fee": fee,
             "photos": photo_info,
             "description_plain": desc_plain,
@@ -2573,6 +2582,178 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         enqueue_scan(account, item_id)
         return {"ok": True}
 
+    def _clear_thumbs_neben(path: str) -> None:
+        p = Path(path)
+        stem = p.stem
+        for tp in p.parent.glob(stem + "_w*"):
+            tp.unlink(missing_ok=True)
+
+    @router.post("/collection/item/{item_id}/photos")
+    async def item_photos(request: Request, item_id: str,
+                          files: list[UploadFile] = File(...),
+                          replace: str = Form("1")):
+        """Fotos am Stück ersetzen oder anhängen (max. 8). Keine Analyse —
+        nur Dateien; Freistellen läuft über /recrop."""
+        account = require_account(request)
+        if isinstance(account, JSONResponse):
+            return account
+        limited = app_bremse(account, "item-photos", 20)
+        if limited:
+            return limited
+        item = col_get(item_id, account)
+        if not item:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        files = files[:8]
+        folder = COL_DIR / item_id
+        folder.mkdir(parents=True, exist_ok=True)
+        new_paths: list[str] = []
+        for i, f in enumerate(files):
+            raw = await _read_limited(f, 20 * 1024 * 1024)
+            if raw is None:
+                return JSONResponse({"error": f"Bild {i + 1} ist zu groß (max. 20 MB)."},
+                                    status_code=400)
+            path = folder / f"u{int(time.time())}_{i:02d}.jpg"
+            try:
+                await asyncio.to_thread(_to_jpeg, raw, path)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Neues Item-Foto nicht lesbar (%s)", type(e).__name__)
+                return JSONResponse({"error": "Dieses Foto-Format kann SERO nicht lesen."},
+                                    status_code=400)
+            new_paths.append(str(path))
+        if not new_paths:
+            return JSONResponse({"error": "Kein verwertbares Foto angekommen."}, status_code=400)
+        frisch = col_get(item_id, account)
+        if frisch is None:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        if (replace or "1").strip() not in ("0", "false", "False"):
+            frisch["photos"] = new_paths
+            frisch.pop("photos_raw", None)
+        else:
+            alt = [p for p in (frisch.get("photos") or []) if Path(p).exists()]
+            frisch["photos"] = (alt + new_paths)[:8]
+            frisch.pop("photos_raw", None)
+        col_save(item_id, account["id"], frisch)
+        return {"ok": True, "photo_count": len(frisch["photos"]),
+                "item": item_public(frisch, account)}
+
+    @router.post("/collection/item/{item_id}/recrop")
+    async def recrop_item(request: Request, item_id: str):
+        """Freisteller erneut: nur Hintergrund weg und gerade ziehen — keine Kosmetik."""
+        account = require_account(request)
+        if isinstance(account, JSONResponse):
+            return account
+        limited = app_bremse(account, "recrop", 30)
+        if limited:
+            return limited
+        item = col_get(item_id, account)
+        if not item:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        roh = [p for p in (item.get("photos_raw") or item.get("photos") or [])
+               if Path(p).exists()]
+        if not roh:
+            return JSONResponse({"error": "Keine Fotos zum Freistellen vorhanden."},
+                                status_code=400)
+        from web import cardscan
+        try:
+            cropped, cinfo = await cardscan.crop_photos(cfg.anthropic_api_key, roh)
+        except Exception:  # noqa: BLE001
+            log.exception("Recrop fehlgeschlagen für %s", item_id)
+            return JSONResponse({"error": "Freistellen ist fehlgeschlagen — bitte nochmal versuchen."},
+                                status_code=500)
+        frisch = col_get(item_id, account)
+        if frisch is None:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        if cinfo.get("cropped"):
+            frisch["photos_raw"] = list(roh)
+            frisch["photos"] = cropped
+        else:
+            frisch["photos"] = list(roh)
+            frisch.pop("photos_raw", None)
+        for p in frisch["photos"]:
+            _clear_thumbs_neben(p)
+        col_save(item_id, account["id"], frisch)
+        return {"ok": True, "cropped": bool(cinfo.get("cropped")),
+                "item": item_public(frisch, account)}
+
+    @router.post("/collection/item/{item_id}/rotate")
+    async def rotate_item_photo(request: Request, item_id: str, body: RotateBody):
+        """Foto um 90°-Schritte drehen (Uhrzeigersinn). Schreibt neue Datei,
+        kein Weichzeichnen/Aufhellen — nur Rotation."""
+        account = require_account(request)
+        if isinstance(account, JSONResponse):
+            return account
+        limited = app_bremse(account, "rotate", 60)
+        if limited:
+            return limited
+        item = col_get(item_id, account)
+        if not item:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        photos = [p for p in (item.get("photos") or []) if Path(p).exists()]
+        idx = int(body.index or 0)
+        if not photos or not 0 <= idx < len(photos):
+            return JSONResponse({"error": "Foto nicht gefunden."}, status_code=400)
+        deg = int(body.degrees or 90)
+        if deg not in (90, 180, 270, -90, -180, -270):
+            return JSONResponse({"error": "Nur 90-, 180- oder 270-Grad-Schritte."},
+                                status_code=400)
+        # PIL: positiv = gegen Uhrzeigersinn → Uhrzeigersinn = negativ
+        pil_deg = -deg if deg > 0 else abs(deg)
+
+        def _rotate_file(src: str) -> str:
+            from PIL import Image, ImageOps
+            src_p = Path(src)
+            img = ImageOps.exif_transpose(Image.open(src_p))
+            # RGBA behalten (Freisteller mit Alpha), sonst RGB/JPEG
+            has_alpha = img.mode in ("RGBA", "LA") or (
+                img.mode == "P" and "transparency" in img.info)
+            if has_alpha:
+                img = img.convert("RGBA")
+                out = src_p.with_name(f"{src_p.stem}_r{int(time.time())}.png")
+                img.rotate(pil_deg, expand=True, resample=Image.Resampling.BICUBIC).save(
+                    out, "PNG")
+            else:
+                img = img.convert("RGB")
+                out = src_p.with_name(f"{src_p.stem}_r{int(time.time())}.jpg")
+                img.rotate(pil_deg, expand=True, resample=Image.Resampling.BICUBIC).save(
+                    out, "JPEG", quality=92)
+            _clear_thumbs_neben(str(src_p))
+            return str(out)
+
+        try:
+            new_path = await asyncio.to_thread(_rotate_file, photos[idx])
+        except Exception:  # noqa: BLE001
+            log.exception("Rotate fehlgeschlagen für %s/%s", item_id, idx)
+            return JSONResponse({"error": "Drehen ist fehlgeschlagen."}, status_code=500)
+
+        frisch = col_get(item_id, account)
+        if frisch is None:
+            return JSONResponse({"error": "Artikel nicht gefunden."}, status_code=404)
+        # photos-Liste inkl. fehlender Pfade neu aufbauen und Index ersetzen
+        all_photos = list(frisch.get("photos") or [])
+        # Index bezieht sich auf existierende Fotos — denselben Slot finden
+        exist_i = -1
+        slot = None
+        for i, p in enumerate(all_photos):
+            if Path(p).exists():
+                exist_i += 1
+                if exist_i == idx:
+                    slot = i
+                    break
+        if slot is None:
+            return JSONResponse({"error": "Foto nicht gefunden."}, status_code=400)
+        all_photos[slot] = new_path
+        frisch["photos"] = all_photos
+        # Rohfoto am gleichen Index mitdrehen, falls vorhanden
+        raw = list(frisch.get("photos_raw") or [])
+        if slot < len(raw) and Path(raw[slot]).exists():
+            try:
+                raw[slot] = await asyncio.to_thread(_rotate_file, raw[slot])
+                frisch["photos_raw"] = raw
+            except Exception:  # noqa: BLE001
+                log.warning("Rohfoto-Rotate übersprungen für %s", item_id)
+        col_save(item_id, account["id"], frisch)
+        return {"ok": True, "index": idx, "item": item_public(frisch, account)}
+
     @router.post("/collection/item/{item_id}/refresh-price")
     async def refresh_price(request: Request, item_id: str):
         account = require_account(request)
@@ -2783,9 +2964,12 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         store.kv_set(f"scans_{account['id']}", {"n": max(0, cur - n)})
 
     async def sync_sales_status(only_account: dict | None = None) -> int:
-        """Verkaufs-Routine: prüft published-Listings gegen eBay — verkaufte oder
-        beendete Angebote werden auf 'ended' gestellt (Stück wandert automatisch
-        zurück in die Sammlung, Push informiert alle Geräte)."""
+        """Verkaufs-Routine: published-Listings gegen eBay abgleichen.
+
+        - Listenpreis aus dem eBay-Offer übernehmen (keine Schätzungen)
+        - Aktive Käufer-Preisvorschläge (Best Offer) laden
+        - Verkaufte/beendete Angebote auf 'ended' stellen
+        """
         from bot.config import EBAY_API
         rows = store._conn.execute(  # noqa: SLF001
             "SELECT id FROM drafts WHERE status IN ('published', 'ended')").fetchall()
@@ -2793,6 +2977,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         # Verkaufte SKUs je Nutzer über die Bestell-API (das unterscheidet
         # „wirklich verkauft" von „nur abgelaufen")
         sold_skus: dict[int, set] = {}
+        buyer_offers_cache: dict[int, list] = {}
 
         async def skus_for(uid: int) -> set:
             if uid not in sold_skus:
@@ -2826,6 +3011,11 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 sold_skus[uid] = s
             return sold_skus[uid]
 
+        async def offers_for(uid: int) -> list:
+            if uid not in buyer_offers_cache:
+                buyer_offers_cache[uid] = await get_active_buyer_offers(ebay, uid)
+            return buyer_offers_cache[uid]
+
         def mark_item_sold(draft_id: str) -> None:
             row2 = store._conn.execute(  # noqa: SLF001
                 "SELECT id, account_id, data FROM collection_items").fetchall()
@@ -2834,6 +3024,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 if d2.get("draft_id") == draft_id and not d2.get("sold_ts"):
                     d2["sold_ts"] = time.time()
                     col_save(it["id"], it["account_id"], d2)
+
         for r in rows:
             draft = store.get_draft(r["id"])
             if not draft or not draft.get("offer_id"):
@@ -2858,6 +3049,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                     user_id=uid)
                 if resp.status_code == 404:
                     status = "GONE"
+                    data = {}
                 else:
                     resp.raise_for_status()
                     data = resp.json()
@@ -2867,6 +3059,42 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 log.warning("Sales-Sync: Offer %s nicht prüfbar: %s", draft.get("offer_id"), e)
                 continue
             if status in ("ACTIVE", "PUBLISHED"):
+                dirty = False
+                live_price = live_price_from_offer(data) if data else None
+                if live_price and str(draft.get("price") or "") != live_price:
+                    draft["price"] = live_price
+                    dirty = True
+                # listing_id ggf. nachziehen (für Best-Offer-Zuordnung)
+                lid = str((data.get("listing") or {}).get("listingId")
+                          or draft.get("listing_id") or draft.get("item_id") or "")
+                if lid and str(draft.get("listing_id") or "") != lid:
+                    draft["listing_id"] = lid
+                    dirty = True
+                # Käufer-Preisvorschläge für dieses Listing
+                all_bo = await offers_for(uid)
+                mine = [o for o in all_bo
+                        if not o.get("listing_id") or str(o.get("listing_id")) == lid]
+                # Ohne listing_id am Offer (flache Antwort) nicht raten —
+                # lieber leer als falsch zuordnen.
+                if all_bo and not any(o.get("listing_id") for o in all_bo):
+                    mine = []
+                prev = draft.get("buyer_offers") or []
+                if mine != prev:
+                    draft["buyer_offers"] = mine
+                    dirty = True
+                elif not mine and prev:
+                    draft["buyer_offers"] = []
+                    dirty = True
+                bo_on = best_offer_enabled_from_offer(data) if data else False
+                if bo_on and not draft.get("best_offer"):
+                    draft["best_offer"] = {"enabled": True, "min_price": None}
+                    dirty = True
+                draft["ebay_synced_at"] = time.time()
+                if dirty:
+                    store.update_draft(r["id"], draft)
+                    changed += 1
+                    if uid >= 10 ** 15:
+                        notify(uid - 10 ** 15, "sales")
                 continue
             skus = await skus_for(uid)
             is_sold = (status == "OUT_OF_STOCK"
@@ -2874,6 +3102,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                        or str(draft.get("listing_id") or draft.get("item_id") or "") in skus)
             draft["status"] = "ended"
             draft["ended_reason"] = "Verkauft" if is_sold else f"Beendet ({status})"
+            draft["buyer_offers"] = []
             store.update_draft(r["id"], draft)
             if is_sold:
                 mark_item_sold(r["id"])
@@ -2892,7 +3121,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 await sync_sales_status()
             except Exception:  # noqa: BLE001
                 log.exception("Sales-Sync-Runde fehlgeschlagen")
-            await asyncio.sleep(2 * 3600)
+            await asyncio.sleep(30 * 60)
 
     async def ki_gesundheitswache():
         """Prüft eine ausgefallene KI-Quelle aktiv auf Genesung.
@@ -3370,14 +3599,15 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         }
 
     @router.get("/sales")
-    async def sales(request: Request):
+    async def sales(request: Request, refresh: int = 0):
         """Verkaufs-Hub: alle Listing-Entwürfe/aktiven/beendeten Verkäufe."""
         account = require_account(request)
         if isinstance(account, JSONResponse):
             return account
-        # Beim Reinschauen frisch abgleichen (gedrosselt auf alle 10 min)
+        # Beim Reinschauen frisch abgleichen (Standard 90 s; mit refresh=1 alle 30 s)
         last = store.kv_get(f"sales_sync_ts_{account['id']}") or {}
-        if time.time() - last.get("t", 0) > 600:
+        throttle = 30 if refresh else 90
+        if time.time() - last.get("t", 0) > throttle:
             store.kv_set(f"sales_sync_ts_{account['id']}", {"t": time.time()})
             _spawn(sync_sales_status(account))
         uid = uid_for(account)
@@ -3406,11 +3636,22 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 photo = d["image_urls"][0]
             elif item and item.get("photos"):
                 photo = f"/api/app/citem-photo/{item['id']}/0"
+            buyer_offers = d.get("buyer_offers") or []
+            top_offer = None
+            if buyer_offers:
+                try:
+                    top_offer = max(float(o.get("price") or 0) for o in buyer_offers)
+                except (TypeError, ValueError):
+                    top_offer = None
             entry = {
                 "draft_id": d["id"], "title": d["listing"].get("title"),
                 "price": d.get("price"), "format": d.get("format", "FIXED_PRICE"),
                 "status": status, "photo": photo, "item_url": d.get("item_url"),
                 "item_id": item["id"] if item else None,
+                "buyer_offers": buyer_offers,
+                "offer_count": len(buyer_offers),
+                "top_offer": f"{top_offer:.2f}" if top_offer else None,
+                "ebay_synced_at": d.get("ebay_synced_at"),
             }
             buckets[bucket].append(entry)
             if bucket == "active":
@@ -3423,9 +3664,15 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         published_30d = store._conn.execute(  # noqa: SLF001
             "SELECT COUNT(*) FROM listings WHERE telegram_id = ? AND dry_run = 0 AND created_at > ?",
             (uid, month_start)).fetchone()[0]
+        reconnect = bool(
+            store.kv_get(f"ebay_fulfillment_fehlt_{uid}")
+            or (account.get("telegram_id")
+                and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}")))
         return {"drafts": buckets["draft"], "active": buckets["active"], "ended": buckets["ended"],
                 "stats": {"active": len(buckets["active"]), "value_active": round(value_active, 2),
-                          "drafts": len(buckets["draft"]), "published_30d": published_30d}}
+                          "drafts": len(buckets["draft"]), "published_30d": published_30d},
+                "ebay_needs_reconnect": reconnect,
+                "synced_at": (store.kv_get(f"sales_sync_ts_{account['id']}") or {}).get("t")}
 
     @router.post("/collection/item/{item_id}/alert")
     async def set_alert(request: Request, item_id: str, body: AlertBody):

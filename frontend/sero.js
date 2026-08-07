@@ -11,6 +11,7 @@ const state = {
   colPollTimer: null, scanPollTimer: null,
   detail: null,
   addFiles: [], dryRun: false, salesBucket: "active",
+  salesPollTimer: null,
 };
 
 /* ═══════════════════ Icons (SF-Symbols-Stil) ═══════════════════ */
@@ -60,6 +61,8 @@ function icon(name, size = 20) {
     download: '<path d="M12 4.5V15M7.5 11L12 15.5 16.5 11"/><path d="M5 19.5h14"/>',
     crown: '<path d="M5 17h14l1-8-4.3 2.6L12 6.5 8.3 11.6 4 9z"/>',
     copies: '<rect x="7.5" y="7.5" width="12" height="12" rx="2.5"/><path d="M16.5 5H7A2.5 2.5 0 0 0 4.5 7.5V17"/>',
+    ellipsis: '<circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/>',
+    crop: '<path d="M7 3v14h14"/><path d="M3 7h14v14"/>',
   };
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${P[name] || ""}</svg>`;
 }
@@ -80,6 +83,7 @@ function mountStaticIcons() {
   $("btnFilter").innerHTML = icon("sliders", 18);
   $("detailClose").innerHTML = icon("chevdown", 20);
   $("detailTrash").innerHTML = icon("trash", 18);
+  if ($("detailMore")) $("detailMore").innerHTML = icon("ellipsis", 18);
   $("emptyAdd").innerHTML = icon("scanframe", 18) + "<span>" + L("Erstes Stück scannen") + "</span>";
   $("scanHeroIcon").innerHTML = icon("scanframe", 44);
   $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Scannen") + "</span>";
@@ -1032,6 +1036,32 @@ const STR_EN = {
   "Startpreis · Auktion": "Starting price · auction",
   "{0} Tage": "{0} days", "Altersfreigabe": "Age rating", "USK ab {0}": "USK {0}+",
   "Keine Angabe": "Not specified", "Preisvorschlag": "Best offer",
+  "1 Preisvorschlag": "1 offer",
+  "{0} Preisvorschläge": "{0} offers",
+  "Preisvorschlag {0}": "Offer {0}",
+  "{0} Preisvorschläge · bis {1}": "{0} offers · up to {1}",
+  "Offene Preisvorschläge": "Pending offers",
+  "offen bis": "open until",
+  "Käufer": "Buyer",
+  "Damit Verkäufe und Preisvorschläge korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).":
+    "So sales and offers are detected correctly, reconnect eBay once on the website (Connect with eBay).",
+  "Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).":
+    "So sales are detected correctly, reconnect eBay once on the website (Connect with eBay).",
+  "Fotos": "Photos",
+  "Zuschneiden": "Crop",
+  "Drehen": "Rotate",
+  "Neues Foto": "New photo",
+  "Vollbild": "Full screen",
+  "Zuschneiden stellt die Karte frei. Drehen dreht um 90 Grad.":
+    "Crop cuts out the card. Rotate turns it by 90 degrees.",
+  "Stelle Karte frei …": "Cutting out card …",
+  "Zuschneiden fertig": "Crop finished",
+  "Foto wird gedreht …": "Rotating photo …",
+  "Foto gedreht": "Photo rotated",
+  "Foto gespeichert": "Photo saved",
+  "Schließen": "Close",
+  "Zurück": "Back",
+  "Weiter": "Next",
   "Änderungen speichern": "Save changes", "Auf eBay listen": "List on eBay",
   "Titel": "Title", "Text": "Text", "Bilder": "Images", "Neu erstellen": "Regenerate",
   "Beenden": "End", "Verwerfen": "Discard",
@@ -1354,7 +1384,8 @@ function switchTab(id) {
   page.classList.add(prev >= 0 && next >= 0 && next < prev ? "page-enter-l" : "page-enter-r");
   if (id === "tabHome") loadDashboard();
   if (id === "tabCollection") loadCollection();
-  if (id === "tabSales") loadSales();
+  if (id === "tabSales") { loadSales(true); startSalesPoll(); }
+  else stopSalesPoll();
   if (id === "tabScan") renderScan();
   if (id === "tabProfile") renderProfile();
 }
@@ -1742,10 +1773,12 @@ document.addEventListener("visibilitychange", () => {
        der Server hielt den Slot dann als Zombie, bis 5 Zombies das Konto
        blockierten. */
     if (syncES) { syncES.close(); syncES = null; }
+    stopSalesPoll();
     return;
   }
   startSync();
   loadCollection(); if (!$("tabHome").hidden) loadDashboard();
+  if (!$("tabSales").hidden) { loadSales(true); startSalesPoll(); }
   pruefeAblage();
 });
 window.addEventListener("pagehide", () => { if (syncES) { syncES.close(); syncES = null; } });
@@ -2451,6 +2484,123 @@ function openAddSheet() {
 
 }
 
+/* ── Foto-Vollbild + Menü (Zuschneiden / Drehen / Neues Foto) ── */
+function openLightbox(urls, start) {
+  if (!urls || !urls.length) return;
+  let i = Math.max(0, Math.min(start || 0, urls.length - 1));
+  let lb = $("lightbox");
+  if (!lb) {
+    lb = document.createElement("div");
+    lb.id = "lightbox";
+    lb.hidden = true;
+    lb.innerHTML = `<button type="button" class="lb-close" id="lbClose" aria-label="${esc(L("Schließen"))}">${icon("xmark", 18)}</button>
+      <button type="button" class="lb-nav lb-prev" id="lbPrev" aria-label="${esc(L("Zurück"))}">‹</button>
+      <img id="lbImg" alt="">
+      <button type="button" class="lb-nav lb-next" id="lbNext" aria-label="${esc(L("Weiter"))}">›</button>
+      <div class="lb-meta" id="lbMeta"></div>`;
+    document.body.appendChild(lb);
+  }
+  const show = () => {
+    $("lbImg").src = urls[i];
+    $("lbMeta").textContent = urls.length > 1 ? `${i + 1} / ${urls.length}` : "";
+    $("lbPrev").hidden = urls.length < 2;
+    $("lbNext").hidden = urls.length < 2;
+  };
+  show();
+  lb.hidden = false;
+  document.body.classList.add("lb-open");
+  const close = () => {
+    lb.hidden = true;
+    document.body.classList.remove("lb-open");
+    lb.onclick = null;
+  };
+  $("lbClose").onclick = (e) => { e.stopPropagation(); close(); };
+  $("lbPrev").onclick = (e) => { e.stopPropagation(); i = (i - 1 + urls.length) % urls.length; show(); };
+  $("lbNext").onclick = (e) => { e.stopPropagation(); i = (i + 1) % urls.length; show(); };
+  lb.onclick = (e) => { if (e.target === lb) close(); };
+}
+
+function photoIdxNow() {
+  const det = state.detail;
+  if (det && typeof det.photoIdx === "number") return det.photoIdx;
+  return 0;
+}
+
+function openItemPhotoMenu(item) {
+  if (!item) return;
+  const hasLocal = (item.photos || []).some((p) => String(p).startsWith("/api/app/citem-photo"));
+  openSheet(L("Fotos"), L("Zuschneiden stellt die Karte frei. Drehen dreht um 90 Grad."), `
+    <div class="opt-list">
+      <button class="opt" id="optPhotoCrop" ${hasLocal ? "" : "disabled"}><span style="display:flex;align-items:center;gap:10px">${icon("crop", 17)} ${L("Zuschneiden")}</span></button>
+      <button class="opt" id="optPhotoRotate" ${hasLocal ? "" : "disabled"}><span style="display:flex;align-items:center;gap:10px">${icon("refresh", 17)} ${L("Drehen")}</span></button>
+      <button class="opt" id="optPhotoNew"><span style="display:flex;align-items:center;gap:10px">${icon("camera", 17)} ${L("Neues Foto")}</span></button>
+      <button class="opt" id="optPhotoFull" ${(item.photos || []).length ? "" : "disabled"}><span style="display:flex;align-items:center;gap:10px">${icon("photo", 17)} ${L("Vollbild")}</span></button>
+    </div>`, null);
+  const crop = $("optPhotoCrop");
+  if (crop) crop.onclick = () => { closeSheet(); recropItemPhoto(item.id); };
+  const rot = $("optPhotoRotate");
+  if (rot) rot.onclick = () => { closeSheet(); rotateItemPhoto(item.id, photoIdxNow()); };
+  const neu = $("optPhotoNew");
+  if (neu) neu.onclick = () => { closeSheet(); pickItemPhoto(item.id); };
+  const full = $("optPhotoFull");
+  if (full) full.onclick = () => {
+    closeSheet();
+    openLightbox((item.photos || []).map((u) => thumb(u, 1600)), photoIdxNow());
+  };
+}
+
+function pickItemPhoto(itemId) {
+  let inp = $("itemPhotoInput");
+  if (!inp) {
+    inp = document.createElement("input");
+    inp.id = "itemPhotoInput";
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.multiple = true;
+    inp.hidden = true;
+    document.body.appendChild(inp);
+  }
+  inp.onchange = async () => {
+    const picked = [...inp.files];
+    inp.value = "";
+    if (!picked.length) return;
+    toast(L("Foto wird hochgeladen …"), "camera");
+    try {
+      const fd = new FormData();
+      picked.slice(0, 8).forEach((f) => fd.append("files", f));
+      fd.append("replace", "1");
+      await api(`/api/app/collection/item/${itemId}/photos`, { method: "POST", body: fd });
+      toast(L("Foto gespeichert"), "check");
+      await post(`/api/app/collection/item/${itemId}/recrop`).catch(() => {});
+      refreshDetail(true);
+      loadCollection();
+    } catch (e) { toast(e.message); }
+  };
+  inp.click();
+}
+
+async function recropItemPhoto(itemId, btn) {
+  if (btn) btn.disabled = true;
+  toast(L("Stelle Karte frei …"), "crop");
+  try {
+    await post(`/api/app/collection/item/${itemId}/recrop`);
+    toast(L("Zuschneiden fertig"), "check");
+    refreshDetail(true);
+    loadCollection();
+  } catch (e) { toast(e.message); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+async function rotateItemPhoto(itemId, index) {
+  toast(L("Foto wird gedreht …"), "refresh");
+  try {
+    await post(`/api/app/collection/item/${itemId}/rotate`, { index: index || 0, degrees: 90 });
+    toast(L("Foto gedreht"), "check");
+    refreshDetail(true);
+    loadCollection();
+  } catch (e) { toast(e.message); }
+}
+
 /* Schnellmenü aus dem Grid (Long-Press) — der kürzeste Weg zum Verkauf */
 function openItemMenu(i) {
   const hasLocal = i.photos.some((p) => p.startsWith("/api/app/citem-photo"));
@@ -2519,10 +2669,23 @@ function renderScan() {
 
 /* ═══════════════════ Verkauf ═══════════════════ */
 
-async function loadSales() {
+function stopSalesPoll() {
+  if (state.salesPollTimer) { clearInterval(state.salesPollTimer); state.salesPollTimer = null; }
+}
+function startSalesPoll() {
+  stopSalesPoll();
+  state.salesPollTimer = setInterval(() => {
+    if ($("tabSales") && !$("tabSales").hidden && !document.hidden) loadSales(true);
+  }, 60000);
+}
+
+async function loadSales(forceRefresh = false) {
   let r;
-  try { r = await api("/api/app/sales"); } catch { return; }
+  try {
+    r = await api("/api/app/sales" + (forceRefresh ? "?refresh=1" : ""));
+  } catch { return; }
   state.sales = r;
+  if (r.ebay_needs_reconnect && state.me) state.me.ebay_needs_reconnect = true;
   renderSales();
 }
 
@@ -2563,6 +2726,14 @@ function renderSales() {
     : st === "error" ? `<span class="schip err">Fehler</span>`
     : st === "uncertain" ? `<span class="schip warn">Rückfrage</span>`
     : `<span class="schip">Entwurf</span>`;
+  const offerChip = (r) => {
+    const n = r.offer_count || (r.buyer_offers || []).length || 0;
+    if (!n) return "";
+    const top = r.top_offer ? money(parseFloat(String(r.top_offer))) : "";
+    return `<span class="schip offer">${n === 1
+      ? (top ? LF("Preisvorschlag {0}", top) : L("1 Preisvorschlag"))
+      : (top ? LF("{0} Preisvorschläge · bis {1}", n, top) : LF("{0} Preisvorschläge", n))}</span>`;
+  };
   const gridMode = (localStorage.getItem("sero_sales_view") || "list") !== "list";
   // Nur Entwürfe zählen, die das Backend auch wirklich veröffentlicht —
   // „Fehler" und „Rückfrage" brauchen erst eine Entscheidung.
@@ -2585,27 +2756,33 @@ function renderSales() {
     const host = $("salesBulk") || $("salesList");
     if (host && host.parentNode) host.parentNode.insertBefore(reconnectEl, host);
   }
-  if (state.me && state.me.ebay_needs_reconnect) {
+  const needsReconnect = (state.me && state.me.ebay_needs_reconnect) || s.ebay_needs_reconnect;
+  if (needsReconnect) {
     reconnectEl.hidden = false;
-    reconnectEl.textContent = L("Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).");
+    reconnectEl.textContent = L("Damit Verkäufe und Preisvorschläge korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).");
   } else {
     reconnectEl.hidden = true;
     reconnectEl.textContent = "";
   }
-  $("salesList").innerHTML = rows.map((r) => gridMode ? `
+  $("salesList").innerHTML = rows.map((r) => {
+    const oc = offerChip(r);
+    return gridMode ? `
     <button class="sale-tile" data-draft="${r.draft_id}" data-item="${r.item_id || ""}">
       ${r.photo ? `<img src="${esc(thumb(r.photo, 480))}" loading="lazy" alt="">` : `<span class="gph-none">${MONO_PH}</span>`}
-      ${chip(r.status)}
+      ${chip(r.status)}${oc}
       <span class="st-t">${esc(r.title)}</span>
       <span class="st-p">${r.price ? money(parseFloat(String(r.price))) : "—"}</span>
     </button>` : `
     <button class="sale-row" data-draft="${r.draft_id}" data-item="${r.item_id || ""}">
       ${r.photo ? `<img src="${r.photo}" loading="lazy" alt="">` : `<span class="mv-ph">${MONO_PH}</span>`}
       <span class="sr-body"><span class="sr-t">${esc(r.title)}</span>
-        <span class="sr-m">${r.price ? money(parseFloat(String(r.price))) : "—"} · ${r.format === "AUCTION" ? "Auktion" : "Festpreis"}</span></span>
+        <span class="sr-m">${r.price ? money(parseFloat(String(r.price))) : "—"} · ${r.format === "AUCTION" ? "Auktion" : "Festpreis"}${
+          (r.offer_count || 0) ? ` · ${LF("{0} Preisvorschläge", r.offer_count)}` : ""}</span>
+        ${oc ? `<span class="sr-offers">${oc}</span>` : ""}</span>
       ${chip(r.status)}
       <span class="chev">${icon("chevron", 15)}</span>
-    </button>`).join("");
+    </button>`;
+  }).join("");
   $("salesEmpty").hidden = rows.length > 0;
   if (!rows.length) {
     const v = state.salesBucket;
@@ -3014,6 +3191,11 @@ function renderDetail(det) {
   $("detailTitle").textContent = item ? (item.category || "") : "Listing";
   $("detailTrash").hidden = !item;
   $("detailFav").hidden = !item;
+  const moreBtn = $("detailMore");
+  if (moreBtn) {
+    moreBtn.hidden = !(item && (det.seg || "overview") === "overview");
+    moreBtn.onclick = () => openItemPhotoMenu(item);
+  }
   if (item) {
     $("detailFav").innerHTML = icon(item.favorite ? "starfill" : "star", 18);
     $("detailFav").style.color = item.favorite ? "#f5a623" : "";
@@ -3025,7 +3207,7 @@ function renderDetail(det) {
     if (dup) dup.onclick = () => openItemDetail(dup.dataset.dup);
   }
 
-  const photoUrls = item ? item.photos.map((u) => thumb(u, 1100))
+  const photoUrls = item ? item.photos.map((u) => thumb(u, 1600))
     : (d ? d.photos.map((p) => p.url).filter(Boolean) : []);
   // Nur EIGENE Fotos im Karussell — der Katalog-Scan war zu oft die falsche
   // Karte; er lebt jetzt allein im Korrektur-Flow („Falsche Karte? Suchen")
@@ -3042,7 +3224,14 @@ function renderDetail(det) {
       <button data-s="overview" class="${seg === "overview" ? "on" : ""}">Übersicht</button>
       <button data-s="sell" class="${seg === "sell" ? "on" : ""}">Verkaufen${sellTag}</button></div>`;
   }
-  if (!item || seg === "overview") html += photos ? `<div class="d-photos">${photos}</div>${photoUrls.length > 1 ? `<div class="d-dots">${photoUrls.map((_, di) => `<i class="${di === 0 ? "on" : ""}"></i>`).join("")}</div>` : ""}` : "";
+  if (!item || seg === "overview") {
+    if (photos) {
+      html += `<div class="d-photos large">${photos}</div>`;
+      if (photoUrls.length > 1) {
+        html += `<div class="d-dots">${photoUrls.map((_, di) => `<i class="${di === 0 ? "on" : ""}"></i>`).join("")}</div>`;
+      }
+    }
+  }
 
   if (item && seg === "overview") {
     html += `<div class="d-name">${esc(item.name)}</div>
@@ -3339,7 +3528,20 @@ function renderDetail(det) {
       const max = Math.max(1, _strip.scrollWidth - _strip.clientWidth);
       const di = Math.round(_strip.scrollLeft / max * (_dots.length - 1));
       _dots.forEach((d2, n) => d2.classList.toggle("on", n === di));
+      det.photoIdx = di;
     }, { passive: true });
+  }
+  if (item && seg === "overview") {
+    const fullUrls = item.photos.map((u) => thumb(u, 1600));
+    const openLb = (idx) => openLightbox(fullUrls, idx || 0);
+    body.querySelectorAll(".d-photos img").forEach((img, idx) => {
+      img.style.cursor = "zoom-in";
+      img.onclick = (ev) => { ev.stopPropagation(); openLb(idx); };
+    });
+    body.querySelectorAll(".holo-wrap").forEach((w, idx) => {
+      w.style.cursor = "zoom-in";
+      w.addEventListener("click", (ev) => { ev.stopPropagation(); openLb(idx); });
+    });
   }
   // Holo-Tilt: Karte neigt sich zum Zeiger, Glanz wandert mit
   const holoWraps = body.querySelectorAll(".holo-wrap");
@@ -3498,6 +3700,19 @@ function renderDraftSection(d) {
   const price = eur(d.price);
 
   if (d.published) html += `<span class="live-pill">LIVE auf eBay</span>`;
+  const bos = d.buyer_offers || [];
+  if (d.published && bos.length) {
+    html += `<div class="buyer-offers"><div class="section-label" style="margin-top:12px">${L("Offene Preisvorschläge")}</div><div class="ilist">`
+      + bos.slice(0, 5).map((o) => `
+        <div class="irow">
+          <span class="ric" style="background:#5a9aa8">${icon("percent", 15)}</span>
+          <span class="rlabel">${esc(o.buyer || L("Käufer"))}${o.expires
+            ? `<br><i style="color:var(--label-2);font-style:normal;font-size:11.5px">${L("offen bis")} ${esc(String(o.expires).slice(0, 16).replace("T", " "))}</i>`
+            : ""}</span>
+          <span class="rvalue" style="font-weight:750;color:var(--tint)">${money(parseFloat(String(o.price)))}</span>
+        </div>`).join("")
+      + `</div></div>`;
+  }
   if (d.stage && !d.stage.done) {
     html += `<div class="stage-line"><span class="spinner"></span> ${esc(d.stage.text)}</div>`;
   }
