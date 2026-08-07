@@ -773,13 +773,21 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             ci = dict(card_info)
             ci["set_hint"] = " ".join(x for x in [ci.get("set_hint"), item.get("name")] if x)
             src = await lookup_card_price(ci, store)
-            if src:
+            from web import catalog as _cat_chk
+            if src and _cat_chk.card_passt_zu_info(src.get("card"), card_info):
                 item["card"] = src["card"]
                 item["est_value"] = src["value"]
                 item["price_source"] = src["source"]
                 item["price_label"] = src["source_label"]
                 item["price_detail"] = src["detail"]
                 updated = True
+            elif src:
+                # DB-Treffer widerspricht Nummer/Set-Größe — nicht übernehmen
+                # (sonst landet z. B. deutsches #013 unter japanisch #223).
+                log.warning("Karten-DB-Treffer verworfen (passt nicht zu card_info): %s vs %s",
+                            (src.get("card") or {}).get("ref_id"),
+                            f"{card_info.get('name')} #{card_info.get('number')}")
+                src = None
             elif item.get("price_source") == "tcgplayer":
                 # Der lokale TCGplayer-Index liefert deterministisch — kein Treffer mehr
                 # heißt: die alte Zuordnung war falsch. Verwerfen, eBay/Schätzung übernimmt.
@@ -788,13 +796,31 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 item["price_source"] = None
                 item["price_label"] = None
                 item["est_value"] = None
+        # Sticky-Fehl-Match entsorgen: alte card mit anderer Nummer als card_info
+        # würde einen fremden card_key erzeugen (Charizard-Fall 07.08.: me02-013
+        # vs. h:… für dieselbe JP-#223).
+        try:
+            from web import catalog as _cat_sticky
+            if item.get("card") and card_info and not _cat_sticky.card_passt_zu_info(
+                    item.get("card"), card_info):
+                log.warning("Alte Karten-Zuordnung verworfen für %s: %s ≠ #%s",
+                            item.get("id"), (item.get("card") or {}).get("ref_id"),
+                            card_info.get("number"))
+                item["card"] = None
+        except Exception:  # noqa: BLE001
+            pass
         # Globaler Preis-Katalog: EINE Karte, EIN Preis — geteilt über alle Items
         # und Nutzer. Extern wird nur bei abgelaufenem TTL (24 h) oder auf Svens
         # Refresh-Knopf (force) gefragt; sonst ist das ein reiner Datenbank-Read.
         try:
             from web import catalog
             from web.prices import usd_eur
-            card_ref = dict(item.get("card") or card_info or {})
+            # Nur passende DB-Treffer dürfen den Schlüssel bestimmen — sonst
+            # card_info (Hash), damit gleiche Identifikation denselben Preis teilt.
+            _card_ok = (item.get("card")
+                        if catalog.card_passt_zu_info(item.get("card"), card_info)
+                        else None)
+            card_ref = dict(_card_ok or card_info or {})
             # NICHT setdefault: card_info trägt oft {"name": null} — der
             # Schlüssel existiert dann, setdefault tut nichts, und card_key_of
             # sah keine Identität. Folge waren 239 Wegwerf-Schlüssel im
@@ -1016,12 +1042,22 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 ci = dict(card_info)
                 ci["set_hint"] = " ".join(x for x in [ci.get("set_hint"), title] if x)
                 src = await lookup_card_price(ci, store)
+                from web import catalog as _cat_an
+                if src and not _cat_an.card_passt_zu_info(src.get("card"), card_info):
+                    log.warning("Analyse: Karten-DB-Treffer verworfen (%s ≠ #%s)",
+                                (src.get("card") or {}).get("ref_id"),
+                                card_info.get("number"))
+                    src = None
             if src:
                 item["card"] = src["card"]
                 item["est_value"] = src["value"]
                 item["price_source"] = src["source"]
                 item["price_label"] = src["source_label"]
                 item["price_detail"] = src["detail"]
+            elif item.get("card") and card_info:
+                from web import catalog as _cat_clr
+                if not _cat_clr.card_passt_zu_info(item.get("card"), card_info):
+                    item["card"] = None
 
             # 2) eBay-Vergleichsangebote (als Zweitmeinung bzw. Fallback)
             item["status_text"] = "Recherchiere eBay-Angebote …"
@@ -1048,7 +1084,11 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             try:
                 from web import catalog
                 from web.prices import usd_eur
-                card_ref = dict(item.get("card") or item.get("card_info") or {})
+                _cinfo = item.get("card_info")
+                _card_ok = (item.get("card")
+                            if catalog.card_passt_zu_info(item.get("card"), _cinfo)
+                            else None)
+                card_ref = dict(_card_ok or _cinfo or {})
                 # NICHT setdefault — card_info liefert oft {"name": null},
                 # siehe refresh_item_price (Befund 03.08.)
                 if not card_ref.get("name"):

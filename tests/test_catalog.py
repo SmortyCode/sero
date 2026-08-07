@@ -60,6 +60,26 @@ def test_referenz_id_schlaegt_den_hash():
     assert k == k2
 
 
+def test_fehlmatch_nummer_wird_erkannt():
+    """Charizard-Fall 07.08.: deutsches Fatale-Flammen-#013 darf nicht als
+    Treffer für japanisch Mega-Dream-#223 gelten — sonst zwei Preise."""
+    falsch = {"game": "pokemon", "name": "Mega-Glurak X-ex", "number": "013",
+              "total": 130, "ref_id": "me02-013"}
+    info = {"name": "Mega Charizard X ex", "number": "223", "set_total": "193"}
+    assert catalog.card_passt_zu_info(falsch, info) is False
+    assert catalog.card_passt_zu_info(
+        {"number": "223", "total": 193}, info) is True
+    assert catalog.card_passt_zu_info(None, info) is False
+    assert catalog.card_passt_zu_info(falsch, None) is True
+
+
+def test_fehlmatch_set_groesse_wird_erkannt():
+    """Gyarados-Fall: TURBOfieber (126) passt nicht zu Scarlet ex (78)."""
+    falsch = {"number": "14", "total": 126, "ref_id": "xy9-26"}
+    info = {"number": "14", "set_total": "78"}
+    assert catalog.card_passt_zu_info(falsch, info) is False
+
+
 def test_gleiche_karte_gleicher_schluessel():
     """Ohne Referenz-ID entscheidet der Inhalt — zweimal dasselbe Stück muss
     denselben Schlüssel ergeben, sonst teilt der Katalog nichts."""

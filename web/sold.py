@@ -224,7 +224,11 @@ async def fetch_sold(store, query: str, usd_rate: float | None) -> dict | None:
     query = (query or "").strip()
     if not query:
         return None
-    key = "sold9_" + hashlib.sha1(query.lower().encode()).hexdigest()[:16]
+    # Cache-Schlüssel = Kern der Anfrage (kurzform), NICHT die freie Formulierung.
+    # Sonst erzeugen „… Mega Dream Japanese CGC 10" und „… CGC 10 Japanese"
+    # zwei Caches und zwei Katalogpreise für dieselbe Karte (Charizard 07.08.).
+    kurz = kurzform(query) or query
+    key = "sold10_" + hashlib.sha1(kurz.lower().encode()).hexdigest()[:16]
     cached = store.kv_get(key)
     if cached and time.time() - cached.get("ts", 0) < TTL:
         return cached.get("v")
@@ -241,7 +245,6 @@ async def fetch_sold(store, query: str, usd_rate: float | None) -> dict | None:
         # Nichts gefunden? Dann war die Anfrage vermutlich zu ausführlich.
         # Ein zweiter Anlauf mit dem Kern — der Filter bleibt streng, es kommt
         # also nichts Fremdes durch, nur mehr echte Belege.
-        kurz = kurzform(query)
         if not rows and kurz and kurz != _canon(query):
             log.info("sold: nichts zu %r — zweiter Anlauf mit %r", query[:50], kurz)
             r2 = await _post(kurz)

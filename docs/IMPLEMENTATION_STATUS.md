@@ -1,9 +1,21 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (Nacht — Push ohne CI, Verifikation grün).** Diese Datei
+**Stand: 7. August 2026 (Abend — Preis-Divergenz Charizard behoben).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
+
+## Preis-Divergenz gleiche Karte (07.08. Abend)
+
+Zwei Mega Charizard X ex JP #223 CGC 10 zeigten 101,95 € vs. 151,62 €.
+Ursache zweistufig: (1) Sticky TCGdex-Fehl-Match (deutsches Fatale-Flammen
+`me02-013` statt JP #223) erzeugte einen anderen `card_key` als der Hash aus
+`card_info`. (2) Verkaufs-Cache war an die freie Suchformulierung gebunden —
+zwei gleichwertige Queries → zwei Caches → Katalog-Überschreiben mit alten
+Belegen. Fix: `catalog.card_passt_zu_info` entsorgt Fehl-Matches in Scan und
+Refresh; Sold-Cache-Schlüssel = `kurzform` (`sold10_`). Beide Charizards und
+das parallele Gyarados-Paar auf denselben Schlüssel/Preis gebracht
+(~102 € belegt). Backup: `backups/data-20.db`.
 
 ## Go-Live-Checkliste (07.08. abends)
 
@@ -22,7 +34,7 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | GitHub Push | **DONE** — `origin/master` = `a362ccd` (Reconnect-UX + Doku). |
 | CI | **LOKAL READY / BLOCKED Push** — `.github/workflows/ci.yml` untracked lokal. Push braucht `workflow`-Scope. Befehl unten. |
 
-Backup vor DB-Aktionen: `backups/data-18.db`.
+Backup vor DB-Aktionen: `backups/data-20.db`.
 
 ### CI-Push (nur Sven, einmalig)
 

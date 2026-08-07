@@ -47,9 +47,20 @@ def test_altdaten_estimate_wird_beim_refresh_verworfen():
     nächsten Refresh neu bewertet werden, nicht ewig stehen bleiben."""
     quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
     start = quelle.index("async def refresh_item_price")
-    block = quelle[start:start + 1500]
+    block = quelle[start:start + 2500]
     assert 'price_source") == "estimate"' in block
     assert "ki_schaetzung_verworfen" in block
+
+
+def test_fehlmatch_card_wird_beim_refresh_entsorgt():
+    """Quelltext-Wache (Charizard 07.08.): ein sticky DB-Fehl-Match darf den
+    card_key nicht weiter vergiften — sonst zwei Preise für dieselbe Karte."""
+    quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
+    assert "card_passt_zu_info" in quelle
+    start = quelle.index("async def refresh_item_price")
+    block = quelle[start:start + 3500]
+    assert "card_passt_zu_info" in block
+    assert "Alte Karten-Zuordnung verworfen" in block
 
 
 def test_iqr_trim_removes_fantasy_price():

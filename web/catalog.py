@@ -45,6 +45,30 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
 
 
+def card_passt_zu_info(card: dict | None, card_info: dict | None) -> bool:
+    """Ob ein Karten-DB-Treffer zur Identifikation passt (Nummer / Set-Größe).
+
+    Ein alter Fehl-Match (z. B. deutsches Fatale-Flammen-#013 statt japanisch
+    Mega-Dream-#223) darf den globalen card_key nicht vergiften — sonst zeigen
+    zwei gleiche Stücke verschiedene Preise, obwohl der Katalog geteilt ist.
+    Ohne card_info gibt es nichts zum Widersprechen → True.
+    Ohne card → False (kein Treffer zum Nutzen).
+    """
+    if not card:
+        return False
+    if not card_info:
+        return True
+    info_num = str(card_info.get("number") or "").lstrip("0")
+    card_num = str(card.get("number") or "").lstrip("0")
+    if info_num and card_num and info_num != card_num:
+        return False
+    info_total = str(card_info.get("set_total") or "").lstrip("0")
+    card_total = str(card.get("total") or "").lstrip("0")
+    if info_total and card_total and info_total != card_total:
+        return False
+    return True
+
+
 def card_key_of(card: dict, solo_id: str | None = None) -> str:
     """Stabile globale Identität: Referenz-ID der Quell-Datenbank, sonst
     Inhalts-Hash über Name/Nummer/Set/Sprache/Auflage. Auch Sealed und
@@ -264,6 +288,14 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
         # nicht taufrisch (typisch bei seltenen Sammlerstücken).
         label = (f"Ø letzte {sold['n_avg']} eBay-Verkäufe (älter als 90 Tage)"
                  if sold.get("stale") else f"Ø letzte {sold['n_avg']} eBay-Verkäufe")
+        # Frischen Katalogeintrag nicht durch eine schlechtere/ältere Abfrage
+        # überschreiben (zwei Formulierungen derselben Karte, Charizard 07.08.).
+        if (sold.get("stale") and row and row.get("source") == "ebay_sold"
+                and row.get("value_eur") is not None
+                and not ((row.get("detail") or {}).get("sold") or {}).get("stale")):
+            log.info("catalog: frische Belege für %s %s behalten — neue Suche nur alt",
+                     card_key, grade)
+            return row
     elif eu and not (pc and pc_trusted and eu > pc["value"] * 4):
         value, source = eu, "ebay_eu"
         label = f"eBay-DE-Markt ({grade})" if grade != "raw" else "eBay-DE-Markt"

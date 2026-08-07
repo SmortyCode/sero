@@ -89,6 +89,70 @@ def test_kurzform_dampft_auf_den_kern_ein():
     assert "printing" not in k and "graded" not in k and "1997" not in k
 
 
+def test_gleicher_kern_teilt_sold_cache(monkeypatch):
+    """Charizard-Fall: zwei Formulierungen derselben Suche müssen denselben
+    Verkaufs-Cache treffen — sonst divergiert der globale Katalogpreis."""
+    import asyncio
+    import hashlib
+    from web import sold as sold_mod
+    from web.sold import kurzform
+
+    q1 = "Pokemon Mega Charizard X ex 223/193 Mega Dream Japanese CGC 10"
+    q2 = "Pokemon Mega Charizard X ex 223/193 CGC 10 Japanese"
+    assert kurzform(q1) == kurzform(q2)
+
+    class KvStore:
+        def __init__(self):
+            self._kv = {}
+        def kv_get(self, key):
+            return self._kv.get(key)
+        def kv_set(self, key, value):
+            self._kv[key] = value
+
+    store = KvStore()
+    calls = []
+
+    async def fake_post(query):
+        calls.append(query)
+        class R:
+            status_code = 200
+            text = ""
+            def raise_for_status(self):
+                return None
+        return R()
+
+    async def no_insights(query):
+        return []
+
+    monkeypatch.setenv("SERO_QUELLE_130POINT", "1")
+    monkeypatch.setattr(sold_mod, "_post", fake_post)
+    monkeypatch.setattr(sold_mod, "_parse_rows", lambda t: [
+        {"price": 100.0, "currency": "USD", "title":
+         "Pokemon Mega Charizard X ex 223/193 Japanese Mega Dream CGC 10",
+         "date": "31 Jul 2026", "url": None, "image": None},
+        {"price": 110.0, "currency": "USD", "title":
+         "Pokemon Mega Charizard X ex 223/193 Japanese CGC 10",
+         "date": "29 Jul 2026", "url": None, "image": None},
+        {"price": 105.0, "currency": "USD", "title":
+         "Mega Charizard X ex 223/193 Mega Dream Japanese CGC 10",
+         "date": "07 Jul 2026", "url": None, "image": None},
+    ])
+    monkeypatch.setattr("web.ebay_insights.insights_rows", no_insights)
+
+    async def run():
+        a = await sold_mod.fetch_sold(store, q1, 0.87)
+        b = await sold_mod.fetch_sold(store, q2, 0.87)
+        return a, b
+
+    a, b = asyncio.run(run())
+    assert a and b and a["avg3"] == b["avg3"]
+    # Zweiter Aufruf darf nicht nochmal gegen 130point gehen
+    assert len(calls) == 1
+    kurz = kurzform(q1)
+    key = "sold10_" + hashlib.sha1(kurz.lower().encode()).hexdigest()[:16]
+    assert store.kv_get(key) is not None
+
+
 def test_grader_kuerzel_im_titel_wird_korrigiert():
     """Die Analyse schrieb „BGC 8.5" — dieses Kürzel gibt es nicht, Käufer
     suchen nach BGS."""
