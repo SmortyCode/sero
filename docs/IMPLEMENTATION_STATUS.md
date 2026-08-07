@@ -16,8 +16,8 @@ diese Datei aktualisieren.
   gibt es KEINEN Preisvorschlag — der Nutzer trägt selbst ein). Die
   est_low/est_high-Felder entstehen nicht mehr; Altbestände mit
   `price_source=estimate` werden beim nächsten Refresh verworfen und neu
-  bewertet. Der Rohpreis am Slab bleibt als ehrlich gekennzeichnete Spanne
-  (`ROHPREIS_SLAB`) sichtbar, ist aber als Listing-Preisbasis GESPERRT.
+  bewertet. Der Rohpreis am Slab gilt als „unbekannt" (`ROHPREIS_SLAB`,
+  siehe Review-Absatz unten) und ist als Listing-Preisbasis GESPERRT.
   Quelltext-Wachen in `tests/test_pricing.py` schreiben all das fest.
   Verlorene Nebenwirkung (bewusst): der alte „Apfelschorle-Wächter"
   (LLM-Spanne validierte Comps-Median) — Ausreißer fängt jetzt nur noch der
@@ -35,7 +35,23 @@ diese Datei aktualisieren.
   (fremder Origin → 403, live verifiziert; Requests ohne Origin passieren,
   weil die Angriffsklasse browserbasiert ist und Origin immer trägt).
   Content-Security-Policy-Header auf allen Antworten.
-- Suite: **329 passed, 1 xfailed**; Smoke grün; `sero.js?v=105`.
+- **Adversarieller Review (3 unabhängige Lese-Agenten) + Fixes:** Der Review
+  fand am eigenen P0.2-Umbau zwei kritische Löcher, beide geschlossen:
+  (a) Der Katalog-Kanal war offen — `source=estimate` konnte als base/anker/
+  Cache-Row zurückkommen; jetzt in `catalog.py` an vier Stellen hart
+  ausgeschlossen (Test: `test_estimate_basis_ist_ueberall_tabu`).
+  (b) Ein CGC-10-Slab wäre über alte Belege mit einem 0-€-Scheinverkauf für
+  4,11 € listbar gewesen — 0-€-Verkäufe fliegen aus dem Schnitt, Slab+alte
+  Belege sind als Listing-Basis gesperrt. Außerdem: Scryfall/YGOPRODeck
+  zählen jetzt korrekt als „belegt" (sonst hätten Magic/Yu-Gi-Oh ihren
+  Listing-Preis verloren), `ROHPREIS_SLAB` ist ehrlich „unbekannt" (Wert nur
+  noch als Untergrenze im Detail, nicht mehr in Portfolio/Alarm), alte
+  `market`-Dicts aus der KI-Ära werden geleert und im Frontend gefiltert,
+  CSRF versteht X-Forwarded-Host/Default-Ports (Proxy-Betrieb), und
+  `/api/ebay-setup` ist pro Nutzer serialisiert.
+- Suite: **330 passed, 1 xfailed**; Smoke grün; `sero.js?v=106`.
+- Git: Basis-Commit + Umsetzungs-Commit in `~/ebay-bot` und `~/sero-app`;
+  `~/listo-website` ebenfalls versioniert.
 
 Hintergrund: Am 04.08. ging ein Dossier an externe Prüfer; der ChatGPT-Audit
 kam am 07.08. zurück und wurde teilweise umgesetzt (Details unten). Die
@@ -48,10 +64,10 @@ reduziert auf das, was für SERO wirklich zutrifft.
 
 | | |
 |---|---|
-| Tests | **329 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
+| Tests | **330 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=105`, `sero.css?v=60` |
+| Frontend | `sero.js?v=106`, `sero.css?v=60` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)
