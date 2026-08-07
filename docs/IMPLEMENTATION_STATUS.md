@@ -11,7 +11,7 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 
 | Punkt | Stand |
 |---|---|
-| `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot-Prozess danach neu starten (`launchctl kickstart …bot`), sonst cached er den alten Wert. |
+| `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot+Web am 07.08. Abend per `launchctl kickstart` neu gestartet (dry_run-Cache frisch). |
 | Scanner-WIP committen | erledigt (Warp-pur Slab, kein rembg auf Slabs, Pristine/`label_type`, Pins `sero.css?v=61` / `sero.js?v=107`) |
 | Alte CGC `_cut` → `slab_recut` | Glurak `b3042c764fee`, One Piece `47178a440f37`, Exeggutor `c9ae19782791` aus `photos_raw` neu → `*_slab.png` (Case komplett) |
 | `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint (Vision, Modell `cardscan.VISION_MODEL`) |
