@@ -267,6 +267,30 @@ def test_untergrund_trim_laesst_sauberes_case_in_ruhe():
     assert getrimmt.shape[0] >= 880 and getrimmt.shape[1] >= 580
 
 
+def test_case_kontur_nachschnitt_entfernt_rand():
+    """Kontur um ein helles Case auf dunklem Grund → enger Zuschnitt."""
+    import numpy as np
+    H, W = 1000, 700
+    bild = np.full((H, W, 3), 20, dtype=np.uint8)
+    bild[80:H - 90, 70:W - 80] = 200
+    # starke Kante (Label)
+    bild[100:180, 90:W - 100] = 30
+    getrimmt = cardscan.case_kontur_nachschnitt(bild)
+    th, tw = getrimmt.shape[:2]
+    assert tw <= W - 100 and th <= H - 120
+    assert getrimmt.mean() > 80
+
+
+def test_case_kontur_nachschnitt_laesst_volle_flaeche_in_ruhe():
+    """Kein klarer Innen-Fall → Bild unverändert (Kontur = Rahmen)."""
+    import numpy as np
+    rng = np.random.default_rng(5)
+    bild = rng.integers(60, 180, (900, 600, 3), dtype=np.uint8)
+    getrimmt = cardscan.case_kontur_nachschnitt(bild)
+    # entweder unberührt oder nur minimal
+    assert getrimmt.shape[0] >= 700 and getrimmt.shape[1] >= 450
+
+
 def test_warp_pfad_bevorzugt_rotation():
     """slab_recut muss Rotation (warpAffine) als Normalfall haben — Perspektiv
     nur als Fallback hinter den Symmetrie-Gates."""
@@ -277,6 +301,7 @@ def test_warp_pfad_bevorzugt_rotation():
     assert "_studio_hintergrund" not in quelle
     assert "tisch_trim" in quelle
     assert "untergrund_trim" in quelle
+    assert "case_kontur_nachschnitt" in quelle
 
 
 # ────────────────── Belichtung: global oder gar nicht ──────────────────

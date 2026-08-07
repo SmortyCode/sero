@@ -12,7 +12,7 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | Punkt | Stand |
 |---|---|
 | `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot+Web am 07.08. Abend per `launchctl kickstart` neu gestartet (dry_run-Cache frisch). |
-| Scanner / Freisteller | Rotation-first (kein Zerren), `kanten_trim` + `tisch_trim` + `untergrund_trim` (Filz/Stoff). KEIN rembg auf Slabs. CGC-Stücke aus Rohfotos neu; beste Variante behalten. Pin `sero.js?v=108`. |
+| Scanner / Freisteller | Rotation-first + `untergrund_trim` + `case_kontur_nachschnitt` (Label-Schutz). KEIN rembg. CGC neu aus Rohfotos, beste Variante. Pin `sero.js?v=108`. Rest-Schräge/Tisch bei schwierigen Fotos möglich — Code-Pfad für neue Scans verbessert. |
 | Alte CGC `_cut` → `slab_recut` | Neugeschnitten aus `00.jpg`/`01.jpg`; Auswahl prev/cur/new nach Score. Case komplett. |
 | `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint |
 | 4 Error-Entwürfe | Orphans gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
@@ -27,10 +27,11 @@ Backup vor DB-Aktionen: `backups/data-18.db`.
 ## Freisteller / Sales-Sync (07.08. spät abends)
 
 - **Slab enger + aufrecht ohne Zerren:** Perspektiv nur wenn Symmetrie-Gates
-  greifen UND der Slab schon nahezu aufrecht ist (sonst bleibt Schräge im
-  Vision-AABB). Sonst nur `warpAffine`. Neu: `untergrund_trim` für dunklen
-  Filz/Stoff (tisch_trim allein reichte nicht). Feinjustierung ≤4,5°.
-  Vertrag in `test_render_standard` (+ Tests für `untergrund_trim`).
+  greifen UND der Slab schon nahezu aufrecht ist. Sonst nur `warpAffine`.
+  Neu: `untergrund_trim` (Filz), `case_kontur_nachschnitt` (Kontur-Drehung/
+  Crop mit Label-Schutz), `_slab_kontur_winkel` als dritte Stimme neben
+  Vision-Ecken und Hough. Feinjustierung ≤4,5°. Vertrag in
+  `test_render_standard`.
 - **Sales-Sync 403 UX:** kv-Flag + Profil-Hinweis + klarere `/verbinden`-Texte.
   Ein erneutes Verbinden reicht — kein Token-Refresh-Hack.
 

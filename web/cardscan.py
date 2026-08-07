@@ -6,7 +6,8 @@ seinem ausdrücklichen Ja; Referenzbild: Exeggutor CGC 10):
 
   slab   → Aufrichten per ROTATION (minAreaRect/Hough + warpAffine) + enger
            Zuschnitt (Ecken, kanten_trim, tisch_trim, untergrund_trim,
-           ggf. Label/Fenster-Box) + belichtung_normalisieren.
+           case_kontur_nachschnitt, ggf. Label/Fenster-Box) +
+           belichtung_normalisieren.
            KEINE Perspektiv-Streckung als Normalfall (Sven: „Don't distort,
            just straighten"). Perspektiv nur wenn Symmetrie-Gates greifen
            UND der Slab schon nahezu aufrecht ist (sonst bleibt die Schräge
@@ -119,8 +120,9 @@ Reihenfolge [oben-links, oben-rechts, unten-rechts, unten-links].
   Eine lose Schutzfolie oder Tüte UM den Case zählt NICHT: die Punkte liegen
   auf den harten Case-Kanten, die Folie bleibt draußen.
   KRITISCH: Tisch, Holz, Kork, Stoff, Hände und Schatten gehören NICHT in die
-  Ecken. Lieber 1–2 % zu eng am Case als Tischfläche mitnehmen. Das Case soll
-  nach dem Zuschnitt den Rahmen füllen.
+  Ecken. Die vier Punkte liegen ENG auf der harten Case-Außenkante — nach dem
+  Zuschnitt soll das Case den Rahmen füllen (höchstens 1–2 % Luft). Lieber
+  2 % zu eng am Plastik als 5 % Tischfläche mitnehmen.
 - Bei "sleeve": die Kanten der GEDRUCKTEN KARTE SELBST — Hülle/Toploader-Ränder
   liegen AUSSERHALB der Punkte und werden weggeschnitten.
 - Bei "raw": die Kartenkanten.
@@ -377,6 +379,106 @@ def untergrund_trim(warped):
     return warped[ny0:ny1, nx0:nx1]
 
 
+def case_kontur_nachschnitt(warped):
+    """Nach dem Aufrichten: Case-Kontur → kleine Rest-Drehung + vorsichtiger Crop.
+
+    Vision-Ecken und Trims lassen oft Schräge/Tisch. Hier die stärkste
+    Außenkontur (Canny) — nur Rotation + AABB. Kein Perspektiv-Zerren, kein rembg.
+
+    Schutz: nie das Bewertungslabel abschneiden (Höhe darf nicht stark
+    schrumpfen, während die Breite gleich bleibt — typischer Fehlgriff aufs
+    Kartenfenster statt Case).
+    """
+    import cv2
+    import numpy as np
+
+    H, W = warped.shape[:2]
+    if H < 100 or W < 80:
+        return warped
+    gray = cv2.cvtColor(warped, cv2.COLOR_RGB2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 40, 120)
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    edges = cv2.dilate(edges, k, iterations=2)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, k, iterations=3)
+    cnts, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return warped
+    # Kontur wählen, die am ehesten ein Slab ist (Fläche + Seitenverhältnis)
+    best, best_score = None, -1.0
+    for c in cnts:
+        area = float(cv2.contourArea(c))
+        frac = area / max(H * W, 1)
+        if frac < 0.40 or frac > 0.98:
+            continue
+        rx, ry, rw, rh = cv2.boundingRect(c)
+        ar = rh / max(rw, 1)
+        if not (1.20 <= ar <= 2.10):
+            continue
+        # Score: große Fläche, AR nahe typischem Slab (~1.55)
+        score = frac - abs(ar - 1.55) * 0.15
+        if score > best_score:
+            best_score, best = score, c
+    if best is None:
+        return warped
+    c = best
+    rect = cv2.minAreaRect(c)
+    (_cx, _cy), (rw, rh), ang = rect
+    if rw < 40 or rh < 40:
+        return warped
+    if rw > rh:
+        angle = _norm_winkel_45(ang + 90.0)
+    else:
+        angle = _norm_winkel_45(ang)
+    rot = -angle
+    if abs(rot) > 7.0:
+        rot = 0.0
+    out = warped
+    if abs(rot) >= 0.45:
+        out, M = _affine_drehen(out, rot)
+        pts = cv2.transform(c.astype(np.float32), M)
+    else:
+        pts = c.astype(np.float32)
+    xs = pts.reshape(-1, 2)[:, 0]
+    ys = pts.reshape(-1, 2)[:, 1]
+    Hh, Ww = out.shape[:2]
+    pad = 4
+    x0 = max(0, int(np.floor(xs.min())) - pad)
+    y0 = max(0, int(np.floor(ys.min())) - pad)
+    x1 = min(Ww, int(np.ceil(xs.max())) + pad)
+    y1 = min(Hh, int(np.ceil(ys.max())) + pad)
+    if x1 - x0 < Ww * 0.55 or y1 - y0 < Hh * 0.55:
+        return out if abs(rot) >= 0.45 else warped
+    crop = out[y0:y1, x0:x1]
+    ch, cw = crop.shape[:2]
+    ar = ch / max(cw, 1)
+    if not (1.20 <= ar <= 2.15):
+        return out if abs(rot) >= 0.45 else warped
+    # Label-Schutz: Höhe stark weg, Breite kaum → Fenster statt Case
+    if ch < H * 0.82 and cw > W * 0.90:
+        return out if abs(rot) >= 0.45 else warped
+    if ch * cw < H * W * 0.45:
+        return out if abs(rot) >= 0.45 else warped
+    # Nur croppen, wenn der abgeschnittene Rand überwiegend Untergrund ist
+    L = warped.mean(axis=2)
+    band = max(3, int(min(H, W) * 0.02))
+    # Nach Rotation: Rand-Check auf out
+    L2 = out.mean(axis=2)
+    strips = []
+    if y0 > 2:
+        strips.append(L2[:y0, :].mean())
+    if Hh - y1 > 2:
+        strips.append(L2[y1:, :].mean())
+    if x0 > 2:
+        strips.append(L2[:, :x0].mean())
+    if Ww - x1 > 2:
+        strips.append(L2[:, x1:].mean())
+    if strips and float(np.mean(strips)) > 110:
+        # heller „Rand" = wahrscheinlich Case-Inhalt, nicht Tisch
+        return out if abs(rot) >= 0.45 else warped
+    return crop
+
+
 def _norm_winkel_45(angle: float) -> float:
     """Winkel in (−45, 45] — kleinste Drehung zur Achsenparallelen."""
     a = (angle + 180.0) % 180.0
@@ -434,6 +536,43 @@ def _slab_inhalt_winkel(img) -> float:
     mid = cum[-1] * 0.5
     ang = float(a[int(np.searchsorted(cum, mid))])
     if abs(ang) < 0.4 or abs(ang) > 18.0:
+        return 0.0
+    return ang
+
+
+def _slab_kontur_winkel(img) -> float:
+    """Neigung aus minAreaRect der stärksten Außenkontur (Canny).
+
+    Ergänzt Hough: Holo-Reflexe erzeugen Fantasie-Linien, die Kontur des
+    Cases ist oft stabiler. Rückgabe in Grad (Normierung wie Hough).
+    """
+    import cv2
+    import numpy as np
+
+    H, W = img.shape[:2]
+    if H < 80 or W < 60:
+        return 0.0
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # Weichzeichner nur zur Kantenerkennung — keine Kosmetik am Ergebnisbild.
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 40, 120)
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    edges = cv2.morphologyEx(cv2.dilate(edges, k, iterations=2),
+                             cv2.MORPH_CLOSE, k, iterations=3)
+    cnts, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return 0.0
+    c = max(cnts, key=cv2.contourArea)
+    if cv2.contourArea(c) < 0.35 * H * W:
+        return 0.0
+    _rw, _rh = cv2.minAreaRect(c)[1]
+    _ra = float(cv2.minAreaRect(c)[2])
+    if _rw <= 0 or _rh <= 0:
+        return 0.0
+    if _rw >= _rh:
+        _ra = _ra + 90.0
+    ang = _norm_winkel_45(_ra)
+    if abs(ang) < 0.6 or abs(ang) > 8.0:
         return 0.0
     return ang
 
@@ -850,9 +989,9 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         H, W = img.shape[:2]
         pts = np.array([[min(max(x, 0), 100) / 100 * W, min(max(y, 0), 100) / 100 * H]
                         for x, y in det["corners"]], dtype=np.float32)
-        # 4 % Einzug: Vision-Ecken sitzen oft am Tisch außerhalb der Case-Kante.
+        # 5 % Einzug: Vision-Ecken sitzen oft am Tisch außerhalb der Case-Kante.
         _c = pts.mean(axis=0)
-        pts = (_c + (pts - _c) * 0.96).astype(np.float32)
+        pts = (_c + (pts - _c) * 0.95).astype(np.float32)
         if min_area_frac > 0:
             frac = float(cv2.contourArea(pts)) / max(W * H, 1)
             if frac < min_area_frac:
@@ -921,6 +1060,9 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
             # (Vision liefert oft ein leicht geneigtes AABB um den Slab).
             if abs(ang_inhalt) >= 0.8 and abs(ang_inhalt) > abs(angle) + 0.5:
                 angle = -ang_inhalt
+            ang_kontur = _slab_kontur_winkel(rough0)
+            if abs(ang_kontur) >= 0.6 and abs(ang_kontur) > abs(angle) + 0.3:
+                angle = -ang_kontur
             # Kappe: Holo-Reflexe erzeugen Fantasie-Winkel >8°.
             if abs(angle) > 8.0:
                 angle = 0.0
@@ -939,6 +1081,7 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         warped = kanten_trim(warped)     # Gradient an der Case-Kante
         warped = tisch_trim(warped)      # warmen Tisch/Kork am Rand weg
         warped = untergrund_trim(warped)  # Filz/Stoff/Studio-Rand weg
+        warped = case_kontur_nachschnitt(warped)  # Kontur → aufrecht + eng
         # Restneigung (≤4,5°): ein Pass. Darüber = oft Holo-Artefakt.
         _fein = _slab_inhalt_winkel(warped)
         if 0.5 <= abs(_fein) <= 4.5:
@@ -946,6 +1089,7 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
             warped = kanten_trim(warped)
             warped = tisch_trim(warped)
             warped = untergrund_trim(warped)
+            warped = case_kontur_nachschnitt(warped)
         warped = belichtung_normalisieren(warped)
         W2, H2 = warped.shape[1], warped.shape[0]
         if W2 < 100 or H2 < 100 or not (1.05 <= H2 / max(W2, 1) <= 2.1):
@@ -1005,10 +1149,10 @@ def _case_nach_boxen(warped, det: dict, pts, M, W: int, H: int):
     wx0, wy0, wx1, wy1 = Win
     Hh, Ww = warped.shape[:2]
     # Plastik-Lippe um Label+Fenster: eng genug gegen Tisch, weit genug für Case.
-    # CGC-Rim ≈ 6–9 % der Labelbreite je Seite; oben ~0,45 Labelhöhe.
-    px = max(4.0, (lx1 - lx0) * 0.07)
-    pt = max(4.0, (ly1 - ly0) * 0.45)
-    pb = max(4.0, (wy1 - wy0) * 0.07)
+    # CGC-Rim ≈ 5–8 % der Labelbreite je Seite; oben ~0,40 Labelhöhe.
+    px = max(4.0, (lx1 - lx0) * 0.055)
+    pt = max(4.0, (ly1 - ly0) * 0.40)
+    pb = max(4.0, (wy1 - wy0) * 0.055)
     cx0 = max(0, int(min(lx0, wx0) - px))
     cx1 = min(Ww, int(max(lx1, wx1) + px))
     cy0 = max(0, int(ly0 - pt))
