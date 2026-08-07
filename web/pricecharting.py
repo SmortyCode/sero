@@ -151,6 +151,13 @@ async def lookup_pc(store, query: str, graded: dict | None, usd_rate: float | No
     Call auf die Preisfelder. domain=None lässt alles durch (Altverhalten,
     v0-Datensätze ohne Typ-Wissen).
     """
+    # Lizenz-Schalter (Audit P0.5): PriceCharting-ToS beschränken die Daten auf
+    # "Internal Business Purposes" und verbieten die Weitergabe an Dritte. Für
+    # ein öffentliches Produkt muss die Quelle AUS sein — Default ist deshalb
+    # aus; nur der Einzelbetrieb des Betreibers schaltet sie per Env ein.
+    if os.environ.get("SERO_QUELLE_PRICECHARTING", "0") != "1":
+        return None
+
     token = os.environ.get("PRICECHARTING_TOKEN")
     if not token or not query or not usd_rate:
         return None

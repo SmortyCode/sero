@@ -1,7 +1,9 @@
 # ADR-002: Preisquellen-Politik — keine LLM-Preise, Lizenz-Schalter je Quelle
 
-Status: beschlossen 07.08.2026 (teilweise umgesetzt: price_state/Kaskade;
-offen: Prompt-Umbau P0.2, Lizenz-Flags)
+Status: beschlossen und UMGESETZT 07.08.2026 — Prompt ohne Preisfeld,
+`comps_verwertbar` (Mindestbeleg-Regel), Alt-Daten-Entgiftung beim Refresh,
+Lizenz-Schalter SERO_QUELLE_130POINT / SERO_QUELLE_PRICECHARTING (Default AUS).
+Quelltext-Wachen: tests/test_pricing.py.
 
 ## Kontext
 

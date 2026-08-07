@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from bot.config import load_config
 from bot.drafts import Store
+from bot.ebay.account import AccountSetupError, create_location, get_or_create_policies
 from bot.ebay.auth import EbayAuthError, EbayClient, _token_key
 
 log = logging.getLogger("web")
@@ -92,12 +93,61 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # ---------------------------------------------------------------- Sicherheit
 
+# CSRF-Schutz (Audit P1): Browser senden bei Cross-Site-POSTs IMMER einen
+# Origin-Header — stimmt der nicht mit unserem Host (oder PUBLIC_BASE_URL,
+# oder der Capacitor-App) überein, ist es ein fremdes Formular: 403.
+# Requests OHNE Origin (curl, Smoke-Test, ältere Clients) passieren — die
+# Angriffsklasse ist browserbasiert und trägt den Header immer.
+_SCHREIBEND = ("POST", "PUT", "PATCH", "DELETE")
+
+
+def _netloc_norm(netloc: str, schema: str = "") -> str:
+    """Host:Port mit wegnormalisierten Default-Ports (:80/:443) — hinter
+    TLS-Terminierung trägt sonst eine Seite den Port und die andere nicht."""
+    netloc = netloc.lower()
+    if schema == "https" and netloc.endswith(":443"):
+        return netloc[:-4]
+    if schema == "http" and netloc.endswith(":80"):
+        return netloc[:-3]
+    return netloc
+
+
+def _origin_erlaubt(request: Request) -> bool:
+    origin = request.headers.get("origin", "")
+    if not origin or origin == "null":
+        return not origin           # "null" ist verdächtig (Sandbox/File) -> 403
+    if origin.startswith("capacitor://") or origin.startswith("ionic://"):
+        return True                 # native App-Hülle
+    o = urllib.parse.urlparse(origin)
+    host = _netloc_norm(o.netloc, o.scheme)
+    # Hinter einem Proxy steht der echte Außen-Host in X-Forwarded-Host —
+    # ohne diesen Fallback wäre JEDER POST 403, sobald der Proxy den
+    # Host-Header nicht durchreicht (Review-Fund).
+    kandidaten = {_netloc_norm(request.headers.get("host", "")),
+                  _netloc_norm(request.headers.get("x-forwarded-host", ""))}
+    if PUBLIC_BASE_URL:
+        p = urllib.parse.urlparse(PUBLIC_BASE_URL)
+        kandidaten.add(_netloc_norm(p.netloc, p.scheme))
+    kandidaten.discard("")
+    return host in kandidaten
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    if request.method in _SCHREIBEND and not _origin_erlaubt(request):
+        log.warning("CSRF abgewehrt: Origin %s auf %s %s",
+                    request.headers.get("origin"), request.method, request.url.path)
+        return JSONResponse({"error": "Ungültige Anfrage-Herkunft."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; "
+        "form-action 'self'")
     return response
 
 
@@ -435,11 +485,15 @@ async def me(request: Request):
         store.kv_get(_token_key(account_token_uid(account["id"])))
         or (account.get("telegram_id") and store.kv_get(_token_key(account["telegram_id"])))
     )
-    user = store.get_user(account["telegram_id"]) if account.get("telegram_id") else None
+    # Effektive Nutzer-ID wie in app_api.uid_for: Telegram-ID falls verknüpft,
+    # sonst die synthetische App-ID. Vorher lief das nur über telegram_id —
+    # reine App-Nutzer bekamen dadurch IMMER setup_ready=false (Audit P0.3).
+    uid = account.get("telegram_id") or account_token_uid(account["id"])
+    user = store.get_user(uid)
     trial_days = max(0, int((account.get("trial_until", 0) - time.time()) / 86400))
     plan_limits = {"starter": 30, "reseller": 200, "shop": None}
     limit = plan_limits.get(account["plan"])
-    used = store.listings_this_month(account["telegram_id"]) if account.get("telegram_id") else 0
+    used = store.listings_this_month(uid)
     return {
         "email": account["email"],
         "username": account.get("username"),
@@ -520,6 +574,70 @@ async def ebay_redirect_paste(request: Request, body: RedirectBody):
     except EbayAuthError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     return {"ok": True}
+
+
+class EbaySetupBody(BaseModel):
+    street: str = ""
+    postal_code: str = ""
+    city: str = ""
+
+
+_setup_locks: dict[int, "asyncio.Lock"] = {}
+
+
+@app.post("/api/ebay-setup")
+async def ebay_setup(request: Request, body: EbaySetupBody):
+    """eBay-Verkaufs-Setup komplett im Web (Audit P0.3): Verkaufsrichtlinien
+    anlegen bzw. übernehmen und den Versandstandort setzen. Vorher existierte
+    dieser Schritt NUR im Telegram-Bot — ein App-Nutzer ohne Telegram kam bis
+    zum Listing-Knopf und scheiterte dort."""
+    account = require_account(request)
+    if isinstance(account, JSONResponse):
+        return account
+    uid = account.get("telegram_id") or account_token_uid(account["id"])
+    if not store.kv_get(_token_key(uid)):
+        return JSONResponse({"error": "Bitte zuerst dein eBay-Konto verbinden."},
+                            status_code=400)
+
+    import asyncio
+    async with _setup_locks.setdefault(uid, asyncio.Lock()):
+        return await _ebay_setup_innen(account, uid, body)
+
+
+async def _ebay_setup_innen(account: dict, uid: int, body: EbaySetupBody):
+    # Pro uid serialisiert (Review-Fund: Doppel-POST von zwei Geräten legte
+    # Richtlinien doppelt an — eBay lehnt den zweiten mit Duplicate-Name ab
+    # und der Nutzer sah einen Fehler auf einem erfolgreichen Onboarding).
+    try:
+        policies = await get_or_create_policies(ebay, uid)
+    except (AccountSetupError, EbayAuthError) as e:
+        log.exception("Web-Onboarding: Richtlinien für uid %s fehlgeschlagen", uid)
+        return JSONResponse({"error": f"Richtlinien-Einrichtung fehlgeschlagen:\n{e}"},
+                            status_code=502)
+    store.upsert_user(uid, status="connecting", **policies)
+
+    if store.get_user(uid).get("merchant_location_key"):
+        store.upsert_user(uid, status="ready")
+        return {"ok": True, "ready": True}
+
+    street = body.street.strip()
+    plz = body.postal_code.strip()
+    city = body.city.strip()
+    if not (street and plz.isdigit() and len(plz) == 5 and city):
+        # Richtlinien sind angelegt; es fehlt nur noch die Adresse. Die UI
+        # zeigt daraufhin das Adressformular (need_address).
+        return JSONResponse({"error": "Deine Versandadresse fehlt noch: Straße mit "
+                                      "Hausnummer, fünfstellige PLZ und Stadt.",
+                             "need_address": True}, status_code=400)
+    try:
+        await create_location(ebay, uid, f"listo-{uid}", street, plz, city)
+    except (AccountSetupError, EbayAuthError) as e:
+        log.exception("Web-Onboarding: Standort für uid %s fehlgeschlagen", uid)
+        return JSONResponse({"error": f"Versandstandort konnte nicht angelegt werden:\n{e}"},
+                            status_code=502)
+    store.upsert_user(uid, merchant_location_key=f"listo-{uid}", status="ready")
+    log.info("Web-Onboarding komplett für uid %s (Account %s)", uid, account["id"])
+    return {"ok": True, "ready": True}
 
 
 # ---------------------------------------------------------------- Telegram verbinden

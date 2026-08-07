@@ -14,6 +14,13 @@ import pytest
 from web.pricecharting import domain_of_item, domain_of_pc, lookup_pc
 
 
+@pytest.fixture(autouse=True)
+def _quelle_an(monkeypatch):
+    """Diese Tests prüfen die GATE-Logik — der Lizenz-Schalter (Audit P0.5,
+    Code-Default AUS) wird dafür bewusst eingeschaltet."""
+    monkeypatch.setenv("SERO_QUELLE_PRICECHARTING", "1")
+
+
 # ────────────────────── Zuordnung PC-Seite ──────────────────────
 
 @pytest.mark.parametrize("console,erwartet", [

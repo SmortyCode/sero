@@ -146,6 +146,11 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
     base = {"value","source","label","detail"} als Fallback-Eintrag."""
     ensure_tables(store)
     row = get_price(store, card_key, grade)
+    # Katalogzeilen aus der abgeschafften KI-Schätzung sind tot (Audit P0.2):
+    # weder als Cache-Treffer zurückgeben noch als Fallback behalten — die
+    # Karte wird komplett neu bewertet.
+    if row and row.get("source") == "estimate":
+        row = None
     # Selbstheilung: Werte OHNE echte Verkaufs-Belege (PC/Basis, z. B. während
     # einer Drossel-Pause entstanden) gelten nur 1 h — dann wird automatisch
     # erneut nach echten Verkäufen gesucht, bis welche da sind.
@@ -217,19 +222,23 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
     # ── Anker (Stufe 4): jeder Wächter braucht eine Referenz — auch beim
     # Slab. Erste Wahl ist die Basis des Aufrufers, zweite die raw-Zeile
     # DERSELBEN Karte (ein Slab ist nie billiger als grob das Rohexemplar).
-    anker = base if (base and base.get("value")) else None
+    anker = base if (base and base.get("value")
+                     and str(base.get("source") or "") != "estimate") else None
     if anker is None and grade != "raw":
         r_raw = get_price(store, card_key, "raw")
-        if r_raw and r_raw.get("value_eur"):
+        if r_raw and r_raw.get("value_eur") and r_raw.get("source") != "estimate":
             anker = {"value": r_raw["value_eur"], "source": r_raw["source"],
                      "label": r_raw["source_label"], "detail": {}}
 
     # Roh-Karten-Datenbanken (Cardmarket & Co.) bepreisen UNGEGRADETE Ware —
-    # als Kaskaden-Basis für einen Slab sind sie tabu. Eine KI-Schätzung oder
-    # ein alter Marktwert des Stücks dagegen MEINT das gegradete Stück.
+    # als Kaskaden-Basis für einen Slab sind sie tabu. Werte aus der
+    # abgeschafften KI-Schätzung (source=estimate) sind ÜBERALL tabu
+    # (Audit P0.2, ADR-002): sie dürfen weder als Basis dienen noch je
+    # wieder in die geteilte Katalogzeile geschrieben werden.
     _ROH_QUELLEN = ("cardmarket", "tcgplayer", "tcgdex", "scryfall",
                     "ygoprodeck", "pokemontcg", "tcgcsv")
     base_erlaubt = bool(base and base.get("value") is not None
+                        and str(base.get("source") or "").lower() != "estimate"
                         and (grade == "raw"
                              or str(base.get("source") or "").lower() not in _ROH_QUELLEN))
 
@@ -261,7 +270,7 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
         # damit die App ihn als unsicher anzeigen kann.
         value, source = pc["value"], "pricecharting_weak"
         label = "PriceCharting (Zuordnung unsicher)"
-    elif row:
+    elif row and row.get("source") != "estimate":
         return row   # nichts Neues — alte Katalog-Zeile ist besser als gar keine
     else:
         return None
@@ -289,9 +298,9 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
                 elif row and row.get("value_eur"):
                     value, source = row["value_eur"], row["source"]
                     label = (row.get("source_label") or "") + " · neuer Verkaufspreis unplausibel"
-                elif anker:
-                    value, source = anker["value"], anker.get("source") or "estimate"
-                    label = (anker.get("label") or "Markt-Einschätzung") + " · Verkaufs-Treffer unplausibel"
+                elif anker and anker.get("source"):
+                    value, source = anker["value"], anker["source"]
+                    label = (anker.get("label") or "Marktwert") + " · Verkaufs-Treffer unplausibel"
                 log.warning("catalog: Ausreißer bei %s %s — sold %.2f vs. Referenz %.2f (Streuung %.1f)",
                             card_key, grade, detail["outlier_sold"], ref, streuung)
 
@@ -309,8 +318,10 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
                                   "treffer": ((pc or {}).get("detail") or {}).get("pc_product")}
             log.warning("catalog: %s-Wert %.2f verletzt Anker %.2f bei %s %s — verworfen",
                         source, value, ref, card_key, grade)
-            value, source = ref, anker.get("source") or "estimate"
-            label = anker.get("label") or "Markt-Einschätzung"
+            if not anker.get("source"):
+                return row or None   # keine belastbare Referenzquelle -> lieber alter Stand
+            value, source = ref, anker["source"]
+            label = anker.get("label") or "Marktwert"
 
     # ── price_state (Stufe 5): der ehrliche Anzeigezustand. est_value bleibt
     # IMMER gesetzt (die 307,90-€-Lehre vom 02.08. — ohne Zahl recherchiert

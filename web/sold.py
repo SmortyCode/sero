@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 import html
 import logging
+import os
 import re
 import time
 
@@ -211,7 +212,15 @@ def fits(query: str, title: str) -> bool:
 
 
 async def fetch_sold(store, query: str, usd_rate: float | None) -> dict | None:
-    """Letzte eBay-Verkäufe zu einer Suchanfrage. 12 h gecacht (auch Misserfolge)."""
+    """Letzte eBay-Verkäufe zu einer Suchanfrage. 12 h gecacht (auch Misserfolge).
+
+    Lizenz-Schalter (Audit P0.5, ADR-002): 130point ist ein gescrapter,
+    undokumentierter Endpunkt — das eBay-Nutzerabkommen verbietet das. Für den
+    Einzelbetrieb des Betreibers per SERO_QUELLE_130POINT=1 bewusst aktivierbar
+    (eigenes Risiko); im Code ist der Default AUS, damit ein Deploy für fremde
+    Nutzer die Quelle NIE stillschweigend mitbringt."""
+    if os.environ.get("SERO_QUELLE_130POINT", "0") != "1":
+        return None
     query = (query or "").strip()
     if not query:
         return None
@@ -274,6 +283,11 @@ async def fetch_sold(store, query: str, usd_rate: float | None) -> dict | None:
                 eur = row["price"] * usd_rate
             else:
                 continue   # exotische Währungen verzerren den Schnitt
+            if eur <= 0:
+                # eBay blendet manche Verkaufspreise aus — die kommen als 0,00
+                # an und halbieren den Schnitt (Review-Fund: CGC-10-Slab stand
+                # auf 4,33 € aus einem 8,65-€- und einem 0,00-€-„Verkauf").
+                continue
             sales.append({**row, "price_eur": round(eur, 2)})
             if len(sales) >= 6:
                 break

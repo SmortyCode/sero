@@ -199,9 +199,11 @@ def suggest_fixed_price(median: float) -> str:
 
 def apply_price_rule(draft: dict) -> None:
     """Rangfolge: Nutzerpreis > Verkaufs-Vorlage > BELEGTER Marktwert >
-    eBay-Vergleichsangebote > KI-Schätzung. Der Marktwert des Stücks (aus dem
-    Preis-Katalog) schlägt die Blind-Recherche der Pipeline — sonst entstehen
-    Vorschläge weit unter Wert (Svens Glurak 307,90 statt 653,02 €)."""
+    eBay-Vergleichsangebote. Der Marktwert des Stücks (aus dem Preis-Katalog)
+    schlägt die Blind-Recherche der Pipeline — sonst entstehen Vorschläge weit
+    unter Wert (Svens Glurak 307,90 statt 653,02 €). Gibt es KEINE dieser
+    Quellen, bleibt der Preis leer und der Nutzer trägt ihn selbst ein
+    (ehrlich statt geraten, ADR-002)."""
     listing = draft.get("listing") or {}
 
     def _num(v):
@@ -229,40 +231,21 @@ def apply_price_rule(draft: dict) -> None:
         draft["price_basis"] = listing.get("market_source") or "Marktwert"
     elif research:
         draft["price"] = suggest_fixed_price(research["median"])
-        draft["price_basis"] = ("KI-Schätzung" if research.get("estimated")
-                                else f"eBay-Median aus {research['count']} Angeboten")
+        draft["price_basis"] = f"eBay-Median aus {research['count']} Angeboten"
     else:
         draft["price"], draft["price_basis"] = None, None
 
 
-def check_price_plausibility(research: dict | None, listing: dict) -> dict | None:
-    """Vergleichsangebote gegen Claudes Marktwert-Rahmen prüfen. Sind die Comps
-    unplausibel (z.B. 17 € 'Sammler-Apfelschorle' statt ~1,50 €) oder zu dünn,
-    wird stattdessen der geschätzte Marktwert als Preisbasis genutzt."""
-    est = listing.get("estimated_price_range_eur") or {}
-    try:
-        low = float(est.get("low"))
-        high = float(est.get("high"))
-    except (TypeError, ValueError):
-        return research  # keine Schätzung -> Comps unverändert nutzen
-    if low <= 0 or high < low:
-        return research
-
-    estimate = {
-        "count": 0, "min": low, "max": high,
-        "median": round((low + high) / 2, 2),
-        "query": research["query"] if research else "",
-        "estimated": True,  # Kennzeichnung für die Vorschau
-    }
-    if not research or research["count"] < 3:
-        log.info("Preis: zu wenige Comps (%s) -> Marktwert-Schätzung %.2f-%.2f €",
-                 research["count"] if research else 0, low, high)
-        return estimate
-    # Median massiv außerhalb des plausiblen Rahmens? -> Comps sind falsche Artikel
-    if not (low * 0.4 <= research["median"] <= high * 2.5):
-        log.info("Preis: Comps-Median %.2f € unplausibel (erwartet %.2f-%.2f €) -> Schätzung",
-                 research["median"], low, high)
-        return estimate
+def comps_verwertbar(research: dict | None) -> dict | None:
+    """Mindestbeleg-Regel: Unter 3 Vergleichsangeboten wird NICHT gerechnet —
+    lieber ehrlich kein Preisvorschlag als einer aus 1-2 Zufallstreffern.
+    (Audit P0.2: Vorher ersetzte hier eine KI-Preisspanne die dünnen Comps.
+    Preise aus dem Sprachmodell sind seit 07.08. produktweit verboten, ADR-002 —
+    ohne Belege trägt der Nutzer den Preis selbst ein.)"""
+    if not research or research.get("count", 0) < 3:
+        if research:
+            log.info("Preis: zu wenige Comps (%s) -> kein Vorschlag", research.get("count"))
+        return None
     return research
 
 
@@ -336,12 +319,7 @@ def build_preview(draft: dict, published: bool = False) -> tuple[str, InlineKeyb
     if listing.get("assumptions"):
         lines.append(f"⚠️ Annahme: {html.escape(str(listing['assumptions']))} — falls falsch: "
                      f"Korrektur als Text schicken + 🔁")
-    if price_info and price_info.get("estimated"):
-        lines.append(
-            f"📊 Marktwert geschätzt: {price_info['min']:.2f}–{price_info['max']:.2f} € "
-            f"(keine brauchbaren Vergleichsangebote — bitte Preis prüfen)"
-        )
-    elif price_info:
+    if price_info:
         lines.append(
             f"📊 Vergleichbare Angebote ({price_info['count']}): "
             f"{price_info['min']:.0f}–{price_info['max']:.0f} €, Median {price_info['median']:.2f} €"
@@ -569,7 +547,7 @@ async def run_pipeline(app: Application, draft_id: str) -> None:
 
         await status_msg.edit_text("⏳ Recherchiere Preise…")
         price_research = await research_price(ebay, listing["search_query_for_pricing"])
-        draft["price_research"] = check_price_plausibility(price_research, listing)
+        draft["price_research"] = comps_verwertbar(price_research)
         draft["format"] = listing.get("format") if listing.get("format") in ("FIXED_PRICE", "AUCTION") else "FIXED_PRICE"
         try:
             draft["quantity"] = max(1, min(int(listing.get("quantity") or 1), 1000))

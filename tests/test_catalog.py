@@ -266,20 +266,21 @@ async def test_mehrere_belege_stehen_ueber_der_referenz(store, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unsicherer_pc_wert_faellt_auf_die_einschaetzung(store, monkeypatch):
+async def test_unsicherer_pc_wert_faellt_auf_die_basis(store, monkeypatch):
     """Svens Manga Band 103: PriceCharting fand die Sammelkarte statt des Buchs
-    und lieferte 603 €. Seit Stufe 4 kommt der unsichere Treffer bei
-    vorhandener Basis gar nicht mehr zum Zug — die Einschätzung, die das
-    GEGRADETE Stück meint, steht in der Kaskade über ihm."""
+    und lieferte 603 €. Eine BELEGTE Basis (hier: alte Verkaufsbelege des
+    Stücks) steht in der Kaskade über dem unsicheren Treffer. (Bis 07.08.
+    durfte hier auch eine KI-Schätzung stehen — seit ADR-002 nicht mehr.)"""
     fremd = {"value": 603.0, "source": "pricecharting", "source_label": "PriceCharting",
              "detail": {"pc_product": "Nami [Manga] OP01-016",
                         "pc_console": "One Piece Romance Dawn"}}
     _quellen(monkeypatch, pc=fremd)
-    basis = {"value": 80.0, "source": "estimate", "label": "Markt-Einschätzung", "detail": {}}
+    basis = {"value": 80.0, "source": "ebay_sold", "label": "Ø letzte 3 eBay-Verkäufe",
+             "detail": {}}
     row = await catalog.refresh_price(store, "k1", "BGS 9.4", "One Piece Band 103",
                                       {"grader": "BGS", "grade": "9.4"}, 1.0, base=basis)
     assert row["value_eur"] == 80.0, "603-€-Fehler kam durch"
-    assert row["source"] == "estimate"
+    assert row["source"] == "ebay_sold"
 
 
 @pytest.mark.asyncio
@@ -300,15 +301,32 @@ async def test_anker_aus_der_raw_zeile_faengt_weak_ohne_basis(store, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_basis_mit_schaetzung_greift_jetzt_auch_beim_slab(store, monkeypatch):
-    """Gegenstück zu test_basis_nur_fuer_ungegradete: Eine KI-Schätzung MEINT
-    das gegradete Stück — sie darf als Rückfall greifen. Nur Roh-Karten-
-    Datenbanken (Cardmarket & Co.) bleiben für Slabs tabu."""
+async def test_estimate_basis_ist_ueberall_tabu(store, monkeypatch):
+    """ADR-002 (07.08.): Werte aus der abgeschafften KI-Schätzung dürfen NIE
+    wieder in die geteilte Katalogzeile — auch nicht als letzter Rückfall.
+    Ohne echte Quelle gibt es ehrlich KEINEN Katalogpreis."""
     _quellen(monkeypatch)
     basis = {"value": 150.0, "source": "estimate", "label": "KI-Schätzung", "detail": {}}
     row = await catalog.refresh_price(store, "k9", "PSA 10", "Glurak PSA 10",
                                       {"grader": "PSA", "grade": "10"}, 1.0, base=basis)
-    assert row is not None and row["value_eur"] == 150.0 and row["source"] == "estimate"
+    assert row is None, "KI-Schätzung landete wieder im Katalog"
+
+
+@pytest.mark.asyncio
+async def test_alte_estimate_zeile_wird_nicht_mehr_serviert(store, monkeypatch):
+    """Alt-Zeilen mit source=estimate (vor dem 07.08. entstanden) dürfen weder
+    als Cache-Treffer zurückkommen noch als Fallback überleben."""
+    catalog.ensure_tables(store)
+    import time as _t
+    store._conn.execute(
+        "INSERT INTO card_prices (card_key, grade, value_eur, source, source_label, "
+        "detail, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("k7", "PSA 10", 65.0, "estimate", "KI-Schätzung", "{}", _t.time()))
+    store._conn.commit()
+    _quellen(monkeypatch)
+    row = await catalog.refresh_price(store, "k7", "PSA 10", "Irgendwas PSA 10",
+                                      {"grader": "PSA", "grade": "10"}, 1.0)
+    assert row is None or row.get("source") != "estimate"
 
 
 @pytest.mark.asyncio

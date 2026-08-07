@@ -1,8 +1,41 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026.** Diese Datei ist die einzige Wahrheit über den
-Zustand des Projekts. Wer hier weiterbaut (Cursor, ein anderes Werkzeug, ein
-Mensch): erst lesen, dann ändern, danach diese Datei aktualisieren.
+**Stand: 7. August 2026 (zweiter Durchgang — Roadmap umgesetzt).** Diese Datei
+ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
+(Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
+diese Datei aktualisieren.
+
+## Zweiter Durchgang (07.08. nachmittags): Roadmap-Punkte umgesetzt
+
+- **Git:** `~/ebay-bot` und `~/sero-app` sind jetzt Git-Repositories mit
+  `.gitignore` (Secrets/Daten ausgeschlossen) und Basis-Commit vor den Umbauten.
+- **P0.2 — Preise NIE aus dem Sprachmodell (ADR-002, jetzt umgesetzt):**
+  `estimated_price_range_eur` ist aus dem Analyse-Prompt entfernt; der Prompt
+  verbietet Preisschätzungen jetzt ausdrücklich. `check_price_plausibility`
+  wurde zu `comps_verwertbar` (Mindestbeleg-Regel: unter 3 Vergleichsangeboten
+  gibt es KEINEN Preisvorschlag — der Nutzer trägt selbst ein). Die
+  est_low/est_high-Felder entstehen nicht mehr; Altbestände mit
+  `price_source=estimate` werden beim nächsten Refresh verworfen und neu
+  bewertet. Der Rohpreis am Slab bleibt als ehrlich gekennzeichnete Spanne
+  (`ROHPREIS_SLAB`) sichtbar, ist aber als Listing-Preisbasis GESPERRT.
+  Quelltext-Wachen in `tests/test_pricing.py` schreiben all das fest.
+  Verlorene Nebenwirkung (bewusst): der alte „Apfelschorle-Wächter"
+  (LLM-Spanne validierte Comps-Median) — Ausreißer fängt jetzt nur noch der
+  IQR-Trim in browse.research_price plus die Mindestbeleg-Regel.
+- **P0.3 — eBay-Einrichtung ohne Telegram:** Neuer Endpoint
+  `POST /api/ebay-setup` (Richtlinien anlegen/übernehmen + Versandstandort,
+  `web/server.py`); `/api/me` liefert `setup_ready`/`used_this_month` jetzt
+  auch für reine App-Nutzer (synthetische uid). Onboarding-Website: Schritt 3
+  ist die Versandadresse (Pflicht), Telegram ist ein optionaler Kasten in
+  Schritt 4. In der App öffnet die Setup-Zeile im Profil ein Adress-Sheet.
+- **P0.5 — Lizenz-Schalter:** `SERO_QUELLE_130POINT` und
+  `SERO_QUELLE_PRICECHARTING`, Code-Default AUS (Tests fixieren das); nur die
+  `.env` des Betreiber-Einzelbetriebs schaltet sie ein.
+- **P1 — CSRF + CSP:** Origin-Prüfung für alle schreibenden Methoden
+  (fremder Origin → 403, live verifiziert; Requests ohne Origin passieren,
+  weil die Angriffsklasse browserbasiert ist und Origin immer trägt).
+  Content-Security-Policy-Header auf allen Antworten.
+- Suite: **329 passed, 1 xfailed**; Smoke grün; `sero.js?v=105`.
 
 Hintergrund: Am 04.08. ging ein Dossier an externe Prüfer; der ChatGPT-Audit
 kam am 07.08. zurück und wurde teilweise umgesetzt (Details unten). Die
@@ -15,10 +48,10 @@ reduziert auf das, was für SERO wirklich zutrifft.
 
 | | |
 |---|---|
-| Tests | **323 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
+| Tests | **329 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=104`, `sero.css?v=60` |
+| Frontend | `sero.js?v=105`, `sero.css?v=60` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)
@@ -70,36 +103,7 @@ reduziert auf das, was für SERO wirklich zutrifft.
 In empfohlener Reihenfolge. Nichts davon anfangen, ohne es zu Ende zu bringen —
 ein halber Umbau ist schlimmer als keiner.
 
-### 1. P0.2 — Analyse-Prompt: Fakten statt Raten (WICHTIGSTER offener Punkt)
-`bot/claude_client.py` verlangt vom Modell eine Pflicht-Preisspanne
-(`est_low`/`est_high`) und enthält „wähle die wahrscheinlichste Variante".
-Das widerspricht der Produktregel „nie erfundene Preise". Abgefedert ist es
-heute durch `price_state`/`price_reason` (die App weist KI-Spannen als
-unbelegt aus) und durch die Preis-Kaskade (echte Quellen überschreiben die
-Spanne). Aber: `est_low`/`est_high` fließt noch in `slab_rohwert_retten` und
-als Anker in `catalog.refresh_price` ein.
-**Ziel:** Beobachtungs-Schema (`value`/`confidence`/`evidence`/`needs_review`)
-ohne jede Preisangabe aus dem LLM; Anker/Rettung auf echte Quellen umstellen.
-Das ist ein Umbau an Prompt + Schema + zwei Preispfaden + UI — als Einheit
-machen, mit Characterization-Tests vorher.
-
-### 2. P0.3 — eBay-Onboarding ohne Telegram
-Ein App-Nutzer ohne Telegram kommt bis zum Listing-Knopf und scheitert dort:
-Verkaufsrichtlinien + Standort (`setup_ready`) entstehen nur im
-Telegram-Flow (`bot/main.py`). **Ziel:** Web-Onboarding-Schritt nach dem
-eBay-OAuth (`/connect/ebay`-Callback), der Policies und Merchant-Location
-anlegt bzw. übernimmt. Teuerster Einzelbefund für echte Nutzer.
-
-### 3. P0.5 — Preisquellen-Rechtslage
-130point (gescrapt, verstößt gegen eBay-AGB) und PriceCharting (ToS verbieten
-Weitergabe an Dritte) dürfen in einem öffentlichen Produkt NICHT aktiv sein.
-Heute Betreiber-Risiko im Einzelbetrieb; vor Fremdnutzern: Adapter hinter
-Lizenz-Feature-Flags (pro Quelle abschaltbar), Default AUS für alles ohne
-Vertrag. Sauber sind: TCGdex/Scryfall/YGOPRODeck (rohe Karten), eBay Browse
-(aktive Angebote, als „Angebotslage" gekennzeichnet), eigene Verkäufe über
-die Sell-API (Scope fehlt noch — siehe `/verbinden`).
-
-### 4. P0.6 — Skalierbarer Betrieb (der große Umbau)
+### 1. P0.6 — Skalierbarer Betrieb (der große Umbau)
 Ein Prozess, eine SQLite-Verbindung, In-Memory-Jobs, Fotos auf Platte.
 Harte Grenzen: ~1 Freisteller gleichzeitig (≈100 Stücke/h plattformweit),
 8-s-Takt bei Belegabfragen (≈450/h), 14–40 MB Bilder pro Stück.
@@ -108,10 +112,8 @@ Objektspeicher, dauerhafte Queue. Erst nötig ab >≈20 gleichzeitigen Nutzern �
 nicht vorziehen, aber jede neue Funktion so bauen, dass sie den Umbau nicht
 schwerer macht.
 
-### 5. Restliche P1
+### 2. Restliche P1
 - In-Memory-Rate-Limiter und -Jobzustände überleben keinen Neustart.
-- CSRF-Schutz fehlt (Cookie-Auth mit `samesite=lax` deckt nicht alles).
-- Keine CSP-Header.
 - Kein Alembic/Migrationswerkzeug — Schema-Änderungen laufen über
   `_ensure_column` beim Start.
 - `app_api.py` (~3.680 Zeilen, eine Closure) und `sero.js` (~3.780 Zeilen)
@@ -120,11 +122,10 @@ schwerer macht.
   + `pytest` als Pflicht-Gate. (Lokal existiert kein Git-Remote — zuerst
   Repo-Frage klären, siehe unten.)
 
-### 6. Kein Versionskontroll-Stand
-`~/ebay-bot` und `~/sero-app` sind KEINE Git-Repositories. Erster Schritt im
-neuen Werkzeug: `git init` + sinnvolles `.gitignore` (`.env`, `data.db`,
-`backups/`, `collection_photos/`, `web/uploads/`, `logs/`) und ein
-Anfangs-Commit, DANN erst ändern.
+### 3. Kein Git-REMOTE
+Lokale Repos existieren seit 07.08. — es fehlt ein Remote (GitHub o.ä.)
+als Backup und als CI-Grundlage. Vor dem Push: `git log` prüfen, dass keine
+Secrets enthalten sind (Basis-Commits sind geprüft sauber).
 
 ## Was der Nachfolger über die ChatGPT-Befunde wissen muss
 

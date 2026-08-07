@@ -246,8 +246,12 @@ store._conn.commit()
 r = client.post(f"/api/app/collection/item/{iid}/refresh-price")
 d = r.json()
 assert r.status_code == 200, r.text[:300]
-assert d["est_value"] is not None, "est_value wurde geleert — 307,90-Regel verletzt"
-assert d["price_state"] == "spanne", f"Rohpreis am Slab muss Spanne sein: {d['price_state']}"
+# Neue Spec 07.08. (Review-Fund): Der Rohpreis der UNGEGRADETEN Karte ist am
+# Slab um Größenordnungen falsch — ehrlich ist est_value=None/unbekannt, die
+# Zahl steht nur noch als Untergrenze im Detail. Vorher stand hier ein
+# 0,06-€-„Richtwert" im Portfolio und im Preisalarm.
+assert d["est_value"] is None, f"Rohpreis blieb als Wert am Slab: {d['est_value']}"
+assert d["price_state"] == "unbekannt", d["price_state"]
 assert d["price_reason"] == "ROHPREIS_SLAB", d["price_reason"]
 
 # Dieselbe Quelle an einer ROHEN Karte bleibt belegt

@@ -397,3 +397,33 @@ def test_kontoloeschung_raeumt_beide_token_schluessel():
     block = q[start:start + 3000]
     assert "ACCOUNT_UID_OFFSET + aid" in block
     assert "for u in uids" in block
+
+
+# ---------------------------------------------------------------- Audit 07.08. (P1: CSRF + CSP, P0.3: Web-Onboarding)
+
+def test_csrf_und_csp_vorhanden():
+    q = _server_quelle()
+    assert "_origin_erlaubt" in q
+    assert "Content-Security-Policy" in q
+    assert 'request.method in _SCHREIBEND' in q
+
+
+def test_web_onboarding_ohne_telegram():
+    """P0.3: /api/ebay-setup muss Richtlinien UND Standort ohne Telegram anlegen."""
+    q = _server_quelle()
+    start = q.index('@app.post("/api/ebay-setup")')
+    block = q[start:start + 3000]
+    assert "get_or_create_policies" in block
+    assert "create_location" in block
+    assert 'status="ready"' in block
+    # Muss auch für Konten OHNE Telegram funktionieren: synthetische uid
+    assert "account_token_uid" in block
+
+
+def test_me_setup_ready_auch_ohne_telegram():
+    """Reine App-Nutzer (synthetische uid) bekamen IMMER setup_ready=false."""
+    q = _server_quelle()
+    start = q.index("async def me(")
+    block = q[start:q.index("def ", start + 10)]
+    assert "account_token_uid" in block
+    assert 'store.get_user(uid)' in block

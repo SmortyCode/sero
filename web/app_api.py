@@ -74,7 +74,7 @@ from bot.main import (
     USK_ASPECT,
     USK_VALUES,
     apply_price_rule,
-    check_price_plausibility,
+    comps_verwertbar,
     cleanup_photos,
     current_usk,
     is_media_category,
@@ -527,8 +527,6 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             "quantity": int(item.get("quantity") or 1),
             "purchase_price": item.get("purchase_price"),
             "est_value": item_value(item),
-            "est_low": item.get("est_low"),
-            "est_high": item.get("est_high"),
             "market": item.get("market"),
             # „sold" hieß hier zweimal etwas anderes — einmal die Verkaufsbelege,
             # einmal „ist verkauft". Der zweite Eintrag hat den ersten stumm
@@ -652,7 +650,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
     # bewusst in KEINER Liste — die gehören dem Nutzer, immer.
     ANALYSE_FELDER = PREIS_FELDER + ("status", "status_text", "error", "analysis",
                                      "photos", "photos_raw", "graded",
-                                     "est_low", "est_high", "grading")
+                                      "grading")
     NUR_WENN_LEER = ("name", "category", "condition")
 
     def col_save_analyse(item_id: str, account: dict, item: dict) -> dict | None:
@@ -674,33 +672,6 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         item.update(frisch)                # Analyse rechnet mit dem echten Stand weiter
         return item
 
-    def slab_rohwert_retten(item: dict) -> None:
-        """Svens Scans vom 03.08., 20:48: Ein CGC-10-Slab bekam 0,05 €
-        (TCGplayer-Rohpreis der Common) und ein zweiter 4,33 € (alte Belege
-        der ROHEN Karte). Liegt der Wert eines Slabs aus einer Rohquelle oder
-        aus alten Belegen DEUTLICH unter der unteren KI-Schätzung, ist die
-        Quelle offensichtlich die falsche Ware — dann ist die ehrliche
-        KI-Mitte der bessere Richtwert, der Fehlwert wandert als Untergrenze
-        ins Detail."""
-        if not (item.get("graded") or {}).get("grade"):
-            return
-        wert = item.get("est_value")
-        low, high = item.get("est_low"), item.get("est_high")
-        if not wert or not low or not high or wert >= low * 0.3:
-            return
-        src = item.get("price_source")
-        verdaechtig = (src in ("cardmarket", "tcgplayer")
-                       or (src == "ebay_sold" and (item.get("sold") or {}).get("stale")))
-        if not verdaechtig:
-            return
-        log.warning("Slab-Wert %.2f (%s) weit unter KI-Untergrenze %.2f — "
-                    "auf Schätzung gerettet (%s)", wert, src, low, item.get("id"))
-        item["price_detail"] = {**(item.get("price_detail") or {}),
-                                "untergrenze_verworfen": {"wert": wert, "quelle": src}}
-        item["est_value"] = round((low + high) / 2, 2)
-        item["price_source"] = "estimate"
-        item["price_label"] = "KI-Schätzung"
-
     def setze_preiszustand(item: dict) -> None:
         """price_state (Stufe 5): der ehrliche Anzeigezustand neben est_value.
 
@@ -711,17 +682,26 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         bester Rückfall, Grund im geschlossenen Enum."""
         src = item.get("price_source")
         ist_slab = bool((item.get("graded") or {}).get("grade"))
+        _roh = ("cardmarket", "tcgplayer", "scryfall", "ygoprodeck", "tcgdex", "tcgcsv")
         if item.get("est_value") is None:
             zustand = ("unbekannt", "UNBEKANNT_KEINE_BELEGE")
         elif src == "ebay_sold":
             zustand = (("spanne", "BELEGE_ALT")
                        if (item.get("sold") or {}).get("stale") else ("belegt", None))
-        elif src in ("cardmarket", "tcgplayer") and ist_slab:
-            # Selbsttest 03.08.: Ein PSA-10-Slab bekam den TCGplayer-Preis
-            # der UNGEGRADETEN Karte als „belegt". Der Rohpreis ist für einen
-            # Slab nur die Untergrenze — ehrlich als Spanne ausweisen.
-            zustand = ("spanne", "ROHPREIS_SLAB")
-        elif src in ("cardmarket", "tcgplayer", "pricecharting"):
+        elif src in _roh and ist_slab:
+            # Selbsttest 03.08. + Review 07.08.: Der Rohpreis der UNGEGRADETEN
+            # Karte ist am Slab um Größenordnungen falsch (CGC 10 für 0,06 €).
+            # Ehrlich ist „unbekannt" — die Zahl wandert als Untergrenze ins
+            # Detail statt in Portfolio, Preisalarm und Verlauf.
+            item["price_detail"] = {**(item.get("price_detail") or {}),
+                                    "rohwert_untergrenze": {"wert": item.get("est_value"),
+                                                            "quelle": src}}
+            item["est_value"] = None
+            zustand = ("unbekannt", "ROHPREIS_SLAB")
+        elif src in _roh + ("pricecharting",):
+            # Kartendatenbank-Preise (Cardmarket direkt oder über Scryfall/
+            # YGOPRODeck/TCGdex) sind BELEGTE Rohkarten-Preise — vorher fielen
+            # scryfall/ygoprodeck in „unbekannt" und verloren den Listing-Preis.
             zustand = ("belegt", None)
         elif src in ("ebay", "ebay_eu"):
             zustand = ("spanne", "NUR_ANGEBOTE")
@@ -752,9 +732,8 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         item["price_detail"] = {**(item.get("price_detail") or {}),
                                 "verworfen_pc": pc_wert}
         item["est_value"] = markt
-        item["price_source"] = "ebay" if not research.get("estimated") else "estimate"
-        item["price_label"] = ("eBay-Median (aktive Angebote)"
-                               if not research.get("estimated") else "KI-Schätzung")
+        item["price_source"] = "ebay"
+        item["price_label"] = "eBay-Median (aktive Angebote)"
         ckey = item.get("card_key")
         if ckey and not str(ckey).startswith("solo:"):
             try:
@@ -769,6 +748,16 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
 
     async def refresh_item_price(account: dict, item: dict, force: bool = False) -> bool:
         """Preis eines Items neu ziehen (Karten-DB, sonst eBay). True = Wert aktualisiert."""
+
+        # Alt-Daten-Entgiftung (Audit P0.2): Werte, die noch aus der abgeschafften
+        # KI-Preisspanne stammen (source=estimate), werden verworfen und das
+        # Stück wird komplett neu bewertet — echte Quellen oder ehrlich unbekannt.
+        if item.get("price_source") == "estimate":
+            item["price_detail"] = {**(item.get("price_detail") or {}),
+                                    "ki_schaetzung_verworfen": item.get("est_value")}
+            item["est_value"] = None
+            item["price_source"] = None
+            item["price_label"] = None
         updated = False
         # Einmalige Identifikation nachholen (z. B. bei importierten Items)
         if not item.get("card_info") and item.get("analysis"):
@@ -842,24 +831,20 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         listing = item.get("analysis") or {}
         query = listing.get("search_query_for_pricing") or item.get("name")
         if query:
-            research = await research_price(ebay, query)
-            research = check_price_plausibility(research, listing)
-            if research:
-                item["market"] = {k: research.get(k)
-                                  for k in ("count", "min", "max", "median", "estimated", "samples")}
+            research = comps_verwertbar(await research_price(ebay, query))
+            # Kein verwertbarer Markt -> auch die ALTE market-Anzeige leeren;
+            # sonst stehen KI-Spannen-Reste oder veraltete Mediane neben
+            # einem ehrlichen „Wert unbekannt" (Review-Fund).
+            item["market"] = ({k: research.get(k)
+                               for k in ("count", "min", "max", "median", "samples")}
+                              if research else None)
             if waechter_c(item, research):
                 updated = True
             if not updated and research:
-                if not research.get("estimated"):
-                    item["est_value"] = research.get("median")
-                    item["price_source"] = "ebay"
-                    item["price_label"] = "eBay-Median (aktive Angebote)"
-                    updated = True
-                elif item.get("est_value") is None:
-                    item["est_value"] = research.get("median")
-                    item["price_source"] = "estimate"
-                    item["price_label"] = "KI-Schätzung"
-        slab_rohwert_retten(item)
+                item["est_value"] = research.get("median")
+                item["price_source"] = "ebay"
+                item["price_label"] = "eBay-Median (aktive Angebote)"
+                updated = True
         setze_preiszustand(item)
         item["price_updated"] = time.time()
         # Zwischen Einlesen und Schreiben liegen hier Netz-Abfragen, oft Minuten.
@@ -1000,30 +985,18 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             item["status_text"] = "Recherchiere eBay-Angebote …"
             if col_save_analyse(item_id, account, item) is None:
                 return
-            research = await research_price(ebay, listing.get("search_query_for_pricing") or title)
-            research = check_price_plausibility(research, listing)
-            if research:
-                item["market"] = {k: research.get(k)
-                                  for k in ("count", "min", "max", "median", "estimated", "samples")}
-            est = listing.get("estimated_price_range_eur") or {}
-            try:
-                item["est_low"] = float(est.get("low")) if est.get("low") is not None else None
-                item["est_high"] = float(est.get("high")) if est.get("high") is not None else None
-            except (TypeError, ValueError):
-                pass
-            if not src:
-                if research and not research.get("estimated"):
-                    item["est_value"] = research.get("median")
-                    item["price_source"] = "ebay"
-                    item["price_label"] = "eBay-Median (aktive Angebote)"
-                elif research:
-                    item["est_value"] = research.get("median")
-                    item["price_source"] = "estimate"
-                    item["price_label"] = "KI-Schätzung"
-                elif item.get("est_low") and item.get("est_high"):
-                    item["est_value"] = round((item["est_low"] + item["est_high"]) / 2, 2)
-                    item["price_source"] = "estimate"
-                    item["price_label"] = "KI-Schätzung"
+            research = comps_verwertbar(
+                await research_price(ebay, listing.get("search_query_for_pricing") or title))
+            item["market"] = ({k: research.get(k)
+                               for k in ("count", "min", "max", "median", "samples")}
+                              if research else None)
+            # KEIN Rückfall auf eine KI-Preisspanne mehr (Audit P0.2, ADR-002):
+            # ohne Karten-DB-Treffer, Katalogzeile oder >=3 Vergleichsangebote
+            # bleibt est_value leer und das Stück zeigt ehrlich „Wert unbekannt".
+            if not src and research:
+                item["est_value"] = research.get("median")
+                item["price_source"] = "ebay"
+                item["price_label"] = "eBay-Median (aktive Angebote)"
 
             # Globaler Preis-Katalog: hat IRGENDWER diese Karte schon, ist der Preis
             # sofort da (Datenbank-Read) — sonst holt der Katalog ihn EINMAL für alle.
@@ -1040,6 +1013,10 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                     card_ref["name"] = item.get("name") or title
                 ckey = catalog.upsert_card(store, card_ref, solo_id=item_id)
                 item["card_key"] = ckey
+                if item.get("price_source") == "estimate":
+                    item["est_value"] = None
+                    item["price_source"] = None
+                    item["price_label"] = None
                 base = ({"value": item.get("est_value"), "source": item.get("price_source"),
                          "label": item.get("price_label"), "detail": item.get("price_detail")}
                         if item.get("est_value") is not None else None)
@@ -1066,7 +1043,6 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             # Wächter C auch beim ERSTEN Scan — dem einzigen Lauf, den der
             # Nutzer live sieht. Bis Stufe 4 lief er nur beim Refresh.
             waechter_c(item, research)
-            slab_rohwert_retten(item)
             setze_preiszustand(item)
 
             item["status"] = "ready"
@@ -1166,7 +1142,7 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
 
             chat_set(status_id, {"text": "Recherchiere Preise …", "done": False})
             price_research = await research_price(ebay, listing["search_query_for_pricing"])
-            draft["price_research"] = check_price_plausibility(price_research, listing)
+            draft["price_research"] = comps_verwertbar(price_research)
             draft["format"] = (listing.get("format")
                                if listing.get("format") in ("FIXED_PRICE", "AUCTION") else "FIXED_PRICE")
             try:
@@ -1217,8 +1193,8 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
         policies = store.user_policies(user_id)
         if not policies:
             chat_add(aid, "bot", "error",
-                     {"text": "Dein eBay-Setup ist unvollständig — bitte einmal auf der Website "
-                              "bzw. im Telegram-Bot das eBay-Konto fertig einrichten."})
+                     {"text": "Dein eBay-Setup ist unvollständig — tippe im Profil auf "
+                              "„Setup“ und trag deine Versandadresse ein."})
             return
 
         listing = draft["listing"]
@@ -2397,20 +2373,33 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             store.update_draft(draft_id, d0)
 
         preset = dict(item.get("analysis") or {})
+        # Die Analyse enthielt früher eine KI-Preisspanne — falls Alt-Daten sie
+        # noch tragen, darf sie NIE in die Listing-Pipeline reisen (ADR-002).
+        preset.pop("estimated_price_range_eur", None)
         # Der BELEGTE Marktwert des Stücks gehört IMMER ins Listing — sonst
-        # recherchiert die Pipeline blind neu und landet bei der groben
-        # KI-Schätzung (Svens Glurak: 307,90 € statt 653,02 €, 02.08.).
-        est = item_value(item)
+        # recherchiert die Pipeline blind neu und landet weit daneben
+        # (Svens Glurak: 307,90 € statt 653,02 €, 02.08.). Ein Alt-Wert aus
+        # der abgeschafften KI-Schätzung zählt NICHT als Marktwert.
+        # Gesperrt als Listing-Basis: Alt-KI-Werte (estimate), unbelegte Werte
+        # und der Rohpreis am Slab (nur eine Untergrenze — sonst wird ein
+        # PSA-10-Slab zum Preis der ungegradeten Karte gelistet).
+        ist_slab = bool((item.get("graded") or {}).get("grade"))
+        preisbasis_ok = (item.get("price_source") != "estimate"
+                         and item.get("price_state") != "unbekannt"
+                         and item.get("price_reason") != "ROHPREIS_SLAB"
+                         # Alte Belege am SLAB stammen oft von der rohen Karte
+                         # oder Schein-Verkäufen — Review-Fund: CGC-10-Slab
+                         # wäre für 4,11 € gelistet worden.
+                         and not (ist_slab and item.get("price_reason") == "BELEGE_ALT"))
+        est = item_value(item) if preisbasis_ok else None
         if est:
             preset["market_value"] = f"{est:.2f}"
-            # Der Zustand reist mit (Stufe 5): Das Listing bekommt IMMER einen
-            # Preis — aber die Herkunft sagt ehrlich, wie belastbar er ist.
+            # Der Zustand reist mit (Stufe 5): die Herkunft sagt ehrlich,
+            # wie belastbar der Preis ist.
             zustand = item.get("price_state")
             if zustand == "spanne":
                 preset["market_source"] = ((item.get("price_label") or "Marktwert")
                                            + " · Spanne, Zuordnung grob")
-            elif zustand == "unbekannt":
-                preset["market_source"] = "KI-Schätzung, nicht belegt"
             else:
                 preset["market_source"] = item.get("price_label") or "Marktwert"
         if body and body.price_mode:
