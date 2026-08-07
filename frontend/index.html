@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>SERO</title>
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Home-Screen: apple-touch-icon in der von iOS erwarteten Größe (180 px);
+       app-icon.png (1024) bleibt die Quelle für Store und Manifest. -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="icon" href="assets/sero-slab.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="assets/app-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SERO">
+  <!-- black-translucent: die App zeichnet bis unter die Statusleiste (viewport-fit=cover).
+       Vorher standen hier ZWEI widersprüchliche Angaben — welche galt, entschied
+       die Reihenfolge im Dokument, nicht wir. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+<link rel="stylesheet" href="sero.css?v=60">
+  <link rel="stylesheet" href="sero-dark.css?v=3">
+</head>
+<body>
+
+<!-- Marken-Splash beim Start -->
+<div id="splash"><img src="assets/monogram-navy.png" alt="SERO"></div>
+
+<!-- ═══════════ Login ═══════════ -->
+<section id="viewLogin" class="view" hidden>
+  <div class="login-wrap">
+    <img class="login-logo" src="assets/stacked-navy.png" alt="SERO">
+    <p class="login-sub">Deine Karten. Dein Marktplatz.</p>
+    <ul class="login-feats">
+      <li><span class="lf-ic" data-ic="camera"></span>Karte fotografieren</li>
+      <li><span class="lf-ic" data-ic="chart"></span>Marktwert aus echten eBay-Verkäufen</li>
+      <li><span class="lf-ic" data-ic="arrowup"></span>Mit einem Tipp auf eBay listen</li>
+    </ul>
+    <div class="login-card" id="loginStep1">
+      <label>E-Mail-Adresse oder Benutzername</label>
+      <input id="loginId" type="email" autocomplete="email" placeholder="du@mail.de" enterkeyhint="next">
+      <button class="btn-primary" id="loginNext">Weiter</button>
+      <p class="login-err" id="loginErr1"></p>
+    </div>
+    <div class="login-card" id="loginStep2" hidden>
+      <label>Dein Anmeldecode</label>
+      <p class="login-hint" id="codeHint">SERO hat dir einen Code geschickt.</p>
+      <input id="loginCode" inputmode="text" autocomplete="one-time-code" placeholder="L-123456" enterkeyhint="go">
+      <button class="btn-primary" id="loginVerify">Anmelden</button>
+      <p class="login-err" id="loginErr2"></p>
+    </div>
+    <p class="login-foot">Noch kein Konto? <button class="login-link" id="loginSignup">Konto erstellen</button></p>
+  </div>
+</section>
+
+<!-- ═══════════ App ═══════════ -->
+<section id="viewApp" class="view" hidden>
+  <header class="topbar">
+    <img class="topbar-logo logo-light" src="assets/wordmark-navy.png" alt="SERO">
+    <img class="topbar-logo logo-dark" src="assets/wordmark-white.png" alt="SERO">
+    <span class="topbar-spacer"></span>
+    <span class="topbar-badge" id="dryBadge" hidden>Testmodus</span>
+  </header>
+
+  <!-- Tab: Home (Dashboard) -->
+  <main id="tabHome" class="tab-page">
+    <div class="page-scroll" id="homeScroll"></div>
+  </main>
+
+  <!-- Tab: Sammlung -->
+  <main id="tabCollection" class="tab-page" hidden>
+    <div class="page-scroll" id="colScroll">
+      <div class="title-row">
+        <h1 class="large-title">Sammlung</h1>
+        <button class="icon-btn" id="btnSort" aria-label="Sortieren"></button>
+        <button class="icon-btn" id="btnFilter" aria-label="Filtern"></button>
+      </div>
+      <div id="colHero"></div>
+      <div class="sysbanner" id="sysBanner" hidden></div>
+      <div class="search" id="colSearchBox" hidden>
+        <span id="colSearchIcon"></span>
+        <input id="colSearch" type="text" placeholder="Sammlung durchsuchen" autocomplete="off">
+      </div>
+      <div class="chips" id="colChips" hidden></div>
+      <div class="grid" id="colGrid"></div>
+      <div class="empty" id="colEmpty" hidden>
+        <img src="assets/monogram-navy.png" alt="">
+        <h2>Deine Sammlung startet hier</h2>
+        <p>Scanne deine erste Karte — SERO erkennt sie, ermittelt den Marktwert und macht sie mit einem Tipp eBay-fertig.</p>
+        <button class="btn-primary" id="emptyAdd"></button>
+        <button class="btn-secondary" id="emptyImport">Aus eBay-Listings importieren</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Tab: Scanner -->
+  <main id="tabScan" class="tab-page" hidden>
+    <div class="page-scroll">
+      <h1 class="large-title">Scanner</h1>
+      <div class="seg" id="scanModeSeg" style="margin:0 0 14px">
+        <button data-m="collect">Sammlung</button>
+        <button data-m="sell">Verkauf</button>
+      </div>
+      <div class="scan-hero">
+        <span class="scan-ic" id="scanHeroIcon"></span>
+        <h2>Karte scannen</h2>
+        <p id="scanHeroText">SERO erkennt jedes Stück und ermittelt den Marktwert.</p>
+        <div class="scan-actions">
+          <button class="btn-primary" id="btnScanNow"></button>
+          <button class="btn-secondary sq" id="btnScanGallery" aria-label="Aus Fotos auswählen"></button>
+        </div>
+      </div>
+      <div id="sellTplRow"></div>
+      <div class="sec-row" id="scanHistLabel" hidden>
+        <span class="section-label" style="margin:0">Zuletzt gescannt</span>
+        <button class="sec-link" id="scanAll">Alle anzeigen</button>
+      </div>
+      <div id="scanHistory" class="ilist"></div>
+    </div>
+  </main>
+
+  <!-- Tab: Verkauf -->
+  <main id="tabSales" class="tab-page" hidden>
+    <div class="page-scroll">
+      <h1 class="large-title">Verkauf</h1>
+      <div id="salesStats"></div>
+      <div class="seg" id="salesSeg">
+        <button data-b="active" class="on">Aktiv</button>
+        <button data-b="draft">Entwürfe</button>
+        <button data-b="ended">Beendet</button>
+      </div>
+      <div id="salesBulk"></div>
+      <div id="salesList"></div>
+      <div id="salesEmpty" hidden></div>
+    </div>
+  </main>
+
+  <!-- Tab: Profil -->
+  <main id="tabProfile" class="tab-page" hidden>
+    <div class="page-scroll" id="profileScroll"></div>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="tabHome"><span class="tic"></span><span>Übersicht</span></button>
+    <button class="tab" data-tab="tabCollection"><span class="tic"></span><span>Sammlung</span></button>
+    <button class="tab-cam" id="btnCamera" aria-label="Scannen"></button>
+    <button class="tab" data-tab="tabSales"><span class="tic"></span><span>Verkauf</span></button>
+    <button class="tab" data-tab="tabProfile"><span class="tic"></span><span>Profil</span></button>
+  </nav>
+</section>
+
+<!-- ═══════════ Detail-Overlay ═══════════ -->
+<div id="detail" class="detail" hidden>
+  <div class="detail-bar">
+    <button class="icon-btn" id="detailClose" aria-label="Schließen"></button>
+    <span class="dtitle" id="detailTitle"></span>
+    <button class="icon-btn" id="detailFav" aria-label="Favorit"></button>
+    <button class="icon-btn" id="detailTrash" aria-label="Entfernen"></button>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<!-- ═══════════ Bottom-Sheet ═══════════ -->
+<div id="sheetBackdrop" class="sheet-backdrop" hidden></div>
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet-grip"></div>
+  <h3 id="sheetTitle"></h3>
+  <p id="sheetHint" class="sheet-hint"></p>
+  <div id="sheetBody"></div>
+  <p id="sheetErr" class="sheet-err"></p>
+  <div class="sheet-actions">
+    <button class="btn-plain" id="sheetCancel">Abbrechen</button>
+    <button class="btn-primary" id="sheetSave">Übernehmen</button>
+  </div>
+</div>
+
+<input id="fileInput" type="file" accept="image/*" multiple hidden>
+<input id="cameraInput" type="file" accept="image/*" capture="environment" multiple hidden>
+
+<script src="sero.js?v=106"></script>
+</body>
+</html>

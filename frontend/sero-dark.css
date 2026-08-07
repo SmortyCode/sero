@@ -1,0 +1,96 @@
+/* ═══════════════════════════════════════════════════════════
+   SERO — „Studio Black" (freigegeben 01.08.)
+   Der Dunkelmodus im selben Look wie Studio White: reines
+   Schwarz als Bühne, Karten schweben auf #141519, gleiche Typo,
+   gleiche Kerzen, gleiche Grade-Siegel.
+   Jede Regel doppelt: Automatik (Media) + manueller Schalter.
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-color-scheme: dark) { html:not(.force-light) {
+  --bg: #000000;
+  --bg-elevated: #141519;
+  --fill: rgba(255, 255, 255, .07);
+  --fill-2: rgba(255, 255, 255, .13);
+  --label: #ffffff;
+  --label-2: #8b93a1;
+  --label-3: rgba(255, 255, 255, .32);
+  --separator: rgba(255, 255, 255, .08);
+  --bar: rgba(22, 23, 28, .86);
+  --sheet: #16171c;
+  --tint: #7aa8ee;
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 14px 34px rgba(0, 0, 0, .55);
+  --chart-up: #30d158;
+  --chart-dn: #ff453a;
+  --thumb-bg: #1d1f26;
+  /* Aus sero.css hierher gezogen (03.08.): diese fünf standen NUR im dortigen
+     Dark-Block. Ohne sie würden im Dunkelmodus die HELLEN Werte gelten —
+     Grün #248a3d statt #30d158, Rot #d70015 statt #ff453a: auf Schwarz zu dunkel. */
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ffb340;
+  --hairline: rgba(255, 255, 255, .08);
+  --tint-soft: rgba(122, 168, 238, .14);
+} }
+html.force-dark {
+  --bg: #000000;
+  --bg-elevated: #141519;
+  --fill: rgba(255, 255, 255, .07);
+  --fill-2: rgba(255, 255, 255, .13);
+  --label: #ffffff;
+  --label-2: #8b93a1;
+  --label-3: rgba(255, 255, 255, .32);
+  --separator: rgba(255, 255, 255, .08);
+  --bar: rgba(22, 23, 28, .86);
+  --sheet: #16171c;
+  --tint: #7aa8ee;
+  --shadow-card: 0 2px 6px rgba(0, 0, 0, .5), 0 14px 34px rgba(0, 0, 0, .55);
+  --chart-up: #30d158;
+  --chart-dn: #ff453a;
+  --thumb-bg: #1d1f26;
+  /* Aus sero.css hierher gezogen (03.08.): diese fünf standen NUR im dortigen
+     Dark-Block. Ohne sie würden im Dunkelmodus die HELLEN Werte gelten —
+     Grün #248a3d statt #30d158, Rot #d70015 statt #ff453a: auf Schwarz zu dunkel. */
+  --green: #30d158;
+  --red: #ff453a;
+  --orange: #ffb340;
+  --hairline: rgba(255, 255, 255, .08);
+  --tint-soft: rgba(122, 168, 238, .14);
+}
+
+@media (prefers-color-scheme: dark) { html:not(.force-light) {
+  body { background: #000; }
+  .gitem, .ov-card, .stat, .ilist, .scan-hero, .sale-tile, .card,
+  #detailBody .ilist, #detailBody .v-card { background: var(--bg-elevated); }
+  .gitem .gph { box-shadow: 0 8px 20px rgba(0, 0, 0, .6); }
+  .range-pill.on, .fchip.on { background: #2b5ea8; color: #fff; }
+  .ov-delta.up { background: rgba(18, 190, 120, .16); color: #3ddc97; }
+  .ov-delta.down { background: rgba(224, 86, 76, .16); color: #ff8a80; }
+  .cgrid { stroke: rgba(255, 255, 255, .07); }
+  .seg, #detailBody .seg { background: rgba(255, 255, 255, .07); }
+  .seg button.on { background: #23252b; color: #fff; }
+  #colSearch { background: var(--bg-elevated); }
+  .tabbar { background: var(--bar); border-color: rgba(255, 255, 255, .12);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .14); }
+  .tabbar::before { background: linear-gradient(rgba(255, 255, 255, .10), transparent 45%); }
+  .tab-cam, #btnCamera { box-shadow: 0 8px 22px rgba(40, 90, 170, .5) !important; }
+  .gseal-in.bw { border-color: rgba(255, 255, 255, .55); }
+} }
+
+html.force-dark body { background: #000; }
+html.force-dark .gitem, html.force-dark .ov-card, html.force-dark .stat,
+html.force-dark .ilist, html.force-dark .scan-hero, html.force-dark .sale-tile,
+html.force-dark .card, html.force-dark #detailBody .ilist,
+html.force-dark #detailBody .v-card { background: var(--bg-elevated); }
+html.force-dark .gitem .gph { box-shadow: 0 8px 20px rgba(0, 0, 0, .6); }
+html.force-dark .range-pill.on, html.force-dark .fchip.on { background: #2b5ea8; color: #fff; }
+html.force-dark .ov-delta.up { background: rgba(18, 190, 120, .16); color: #3ddc97; }
+html.force-dark .ov-delta.down { background: rgba(224, 86, 76, .16); color: #ff8a80; }
+html.force-dark .cgrid { stroke: rgba(255, 255, 255, .07); }
+html.force-dark .seg, html.force-dark #detailBody .seg { background: rgba(255, 255, 255, .07); }
+html.force-dark .seg button.on { background: #23252b; color: #fff; }
+html.force-dark #colSearch { background: var(--bg-elevated); }
+html.force-dark .tabbar { background: var(--bar); border-color: rgba(255, 255, 255, .12);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .14); }
+html.force-dark .tabbar::before { background: linear-gradient(rgba(255, 255, 255, .10), transparent 45%); }
+html.force-dark .tab-cam, html.force-dark #btnCamera { box-shadow: 0 8px 22px rgba(40, 90, 170, .5) !important; }
+html.force-dark .gseal-in.bw { border-color: rgba(255, 255, 255, .55); }

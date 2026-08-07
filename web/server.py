@@ -1024,7 +1024,9 @@ from web.app_api import build_router  # noqa: E402 — braucht store/ebay/cfg vo
 
 app.include_router(build_router(store, ebay, cfg))
 
-APP_DIR = Path(os.environ.get("SERO_APP_DIR", str(Path.home() / "sero-app" / "web")))
+# Frontend liegt im selben Repo unter frontend/ (früher ~/sero-app/web).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+APP_DIR = Path(os.environ.get("SERO_APP_DIR", str(_REPO_ROOT / "frontend")))
 
 # ---------------------------------------------------------------- Statische Dateien (zuletzt!)
 

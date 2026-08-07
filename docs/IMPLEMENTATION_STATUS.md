@@ -7,6 +7,10 @@ diese Datei aktualisieren.
 
 ## Zweiter Durchgang (07.08. nachmittags): Roadmap-Punkte umgesetzt
 
+- **Ein Ordner für die App (07.08. abends):** Frontend von `~/sero-app/web`
+  nach `~/ebay-bot/frontend/` gezogen. `web/server.py` liefert `/app` jetzt
+  aus demselben Repo (Default `SERO_APP_DIR` = `<repo>/frontend`). Website
+  bleibt vorerst in `~/listo-website`. GitHub-Backup: `SmortyCode/sero`.
 - **Git:** `~/ebay-bot` und `~/sero-app` sind jetzt Git-Repositories mit
   `.gitignore` (Secrets/Daten ausgeschlossen) und Basis-Commit vor den Umbauten.
 - **P0.2 — Preise NIE aus dem Sprachmodell (ADR-002, jetzt umgesetzt):**

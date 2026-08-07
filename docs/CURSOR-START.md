@@ -1,9 +1,10 @@
 # Start-Prompt für Cursor AI
 
-**So gehst du vor:** In Cursor alle drei Ordner öffnen (`~/ebay-bot`,
-`~/sero-app`, `~/listo-website`), dann den Text unten als allererste Nachricht
-einfügen. Die `AGENTS.md` in jedem Ordner liest Cursor danach bei jedem
-Auftrag automatisch mit — du musst das nie wiederholen.
+**So gehst du vor:** In Cursor den Ordner `~/ebay-bot` öffnen (die App),
+optional zusätzlich `~/listo-website` wenn du an der Website arbeitest.
+Dann den Text unten als allererste Nachricht einfügen. Die `AGENTS.md`
+liest Cursor danach bei jedem Auftrag automatisch mit — du musst das nie
+wiederholen.
 
 ---
 
@@ -16,11 +17,10 @@ Retro-Videospielen, Manga und Comics. Der Kern: Foto machen, SERO erkennt das
 Stück, ermittelt den Marktwert und macht daraus mit einem Tipp ein fertiges
 eBay-Listing. Deutschland zuerst, eBay.de, Euro.
 
-**Der Code liegt in drei Ordnern, alle drei sind Git-Repos mit sauberem Stand
-vom 7. August 2026:**
-- `~/ebay-bot` — Backend (Python/FastAPI), Telegram-Bot, eBay-Anbindung, Tests
-- `~/sero-app/web` — die App selbst (JavaScript ohne Framework)
-- `~/listo-website` — Website und Onboarding
+**Der Code liegt hier:**
+- `~/ebay-bot` — die komplette App: Backend (Python/FastAPI), Telegram-Bot,
+  Frontend unter `frontend/`, Tests. GitHub: `SmortyCode/sero`
+- `~/listo-website` — Website und Onboarding (noch getrennt; später)
 
 **Bevor du irgendetwas änderst, lies bitte in dieser Reihenfolge:**
 1. `~/ebay-bot/AGENTS.md` — meine unverhandelbaren Regeln und die Fallen,
@@ -36,7 +36,8 @@ offenen Fragen. Fang noch nicht an zu programmieren.
 
 1. **Preise dürfen nie erfunden werden.** Lieber „Wert unbekannt" als eine
    Zahl, die nicht belegt ist. Das ist die wichtigste Regel im Projekt und
-   steht in Tests festgeschrieben.
+   steht in Tests festgeschrieben. Beim Listen kann ich den Preis manuell
+   eintippen.
 2. **Nichts geht ohne meine Freigabe live** — und Achtung: Der Testmodus ist
    aktuell aus. Jedes Veröffentlichen geht wirklich zu eBay und kostet mich
    Gebühren. Beim Testen also nie ein echtes Listing erzeugen.
@@ -61,9 +62,10 @@ Entscheidung zurückbaut. Wenn so ein Test rot wird, ist nicht der Test kaputt,
 sondern die Änderung falsch.
 
 **Als Erstes möchte ich von dir wissen:** Was ist aus deiner Sicht der
-sinnvollste nächste Schritt, damit die App für erste echte Nutzer bereit ist?
-Die offenen Punkte stehen in `IMPLEMENTATION_STATUS.md` — sag mir, ob du die
-Reihenfolge dort teilst oder etwas anders priorisieren würdest.
+sinnvollste nächste Schritt, damit die App für mich als echten Nutzer
+zuverlässig läuft? Die offenen Punkte stehen in `IMPLEMENTATION_STATUS.md` —
+sag mir, ob du die Reihenfolge dort teilst oder etwas anders priorisieren
+würdest.
 
 Und noch etwas: Ich neige dazu, zu viel gleichzeitig zu wollen. Bremse mich,
 wenn ein Vorschlag den Kern nicht voranbringt.

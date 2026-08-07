@@ -13,11 +13,11 @@ ck "Security-Header nosniff"     "$(curl -sI localhost:3000/app/ | grep -ci 'x-c
 
 ./.venv/bin/python -c "import web.server, web.catalog, web.sold, web.cardscan, web.pricecharting, web.ebay_insights" 2>/dev/null \
   && echo "  ✓ Python-Module importieren" || { echo "  ✗ Python-Import kaputt"; FAIL=1; }
-node --check /Users/smorty/sero-app/web/sero.js 2>/dev/null \
+node --check /Users/smorty/ebay-bot/frontend/sero.js 2>/dev/null \
   && echo "  ✓ sero.js Syntax" || { echo "  ✗ sero.js Syntax"; FAIL=1; }
 
-CSSV=$(grep -o 'sero\.css?v=[0-9]*' /Users/smorty/sero-app/web/index.html | grep -o '[0-9]*')
-JSV=$(grep -o 'sero\.js?v=[0-9]*' /Users/smorty/sero-app/web/index.html | grep -o '[0-9]*')
+CSSV=$(grep -o 'sero\.css?v=[0-9]*' /Users/smorty/ebay-bot/frontend/index.html | grep -o '[0-9]*')
+JSV=$(grep -o 'sero\.js?v=[0-9]*' /Users/smorty/ebay-bot/frontend/index.html | grep -o '[0-9]*')
 [ -n "$CSSV" ] && [ -n "$JSV" ] && echo "  ✓ Versions-Pins (css v$CSSV / js v$JSV)" || { echo "  ✗ Versions-Pins fehlen"; FAIL=1; }
 
 STUCK=$(/usr/bin/sqlite3 data.db "SELECT COUNT(*) FROM collection_items WHERE json_extract(data,'\$.status')='analyzing' AND json_extract(data,'\$.created_at') < strftime('%s','now') - 1800" 2>/dev/null)

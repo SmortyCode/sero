@@ -13,13 +13,16 @@ Manga und Comics. Kern in einem Satz:
 daraus mit einem Tipp ein fertiges eBay-Listing.**
 Deutschland zuerst: eBay.de, Euro, deutsche Texte.
 
-## Wo was liegt (drei getrennte Git-Repos)
+## Wo was liegt
 
 | Pfad | Inhalt |
 |---|---|
-| `~/ebay-bot` | Backend (FastAPI), Telegram-Bot, eBay-Anbindung, Tests |
-| `~/sero-app/web` | Die PWA: `sero.js`, `sero.css`, `index.html` (kein Framework) |
-| `~/listo-website` | Website + Onboarding-Assistent (`onboarding.html`) |
+| `~/ebay-bot` | **Die App** — Backend, Telegram-Bot, Frontend (`frontend/`), Tests |
+| `~/ebay-bot/frontend/` | Die PWA: `sero.js`, `sero.css`, `index.html` (kein Framework) |
+| `~/listo-website` | Website + Onboarding (noch getrennt; kommt später dazu) |
+
+GitHub-Backup: `SmortyCode/sero` (dieses Repo), `SmortyCode/sero-website`.
+Der frühere Ordner `~/sero-app` ist obsolet — Inhalt liegt in `frontend/`.
 
 **`docs/IMPLEMENTATION_STATUS.md` ist die einzige Wahrheit** über Zustand,
 Erledigtes und offene Punkte. Vor jeder Änderung lesen, danach aktualisieren.
@@ -135,7 +138,7 @@ alten Code, während der Bot echte Listings mit der alten Logik veröffentlicht.
 - **Niemals einen eigenen Server auf Port 3000 starten** und die Dienste nicht
   stoppen — dabei ist schon eine Vorführung geplatzt.
 - Nach Frontend-Änderungen den passenden Versions-Pin in
-  `~/sero-app/web/index.html` hochzählen. Es sind **drei unabhängige**:
+  `frontend/index.html` hochzählen. Es sind **drei unabhängige**:
   `sero.css?v=`, `sero-dark.css?v=`, `sero.js?v=`. CSS-Änderung → CSS-Pin.
 
 ## Prüfen vor jeder Übergabe
