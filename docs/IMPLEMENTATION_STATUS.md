@@ -20,7 +20,7 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-HTTP ok). **Nicht** auf production gestellt — Secure-Cookie würde Handy-WLAN brechen. Schritte in `.env.example`. |
 | E2E Handy Foto→Listen | Checkliste `docs/E2E_HANDY.md`. API-Smoke: `/app/` 200, Collection/Me 401. Rest: Sven am Handy unter dry_run. |
 | GitHub Push | Remote `origin/master` — Push nach diesem Stand. |
-| CI | `.github/workflows/ci.yml` — pytest auf Push/PR (trivial). |
+| CI | Vorbereitet (pytest-Workflow), Push braucht GitHub-Token mit `workflow`-Scope — lokal noch nicht im Remote. |
 
 Backup vor DB-Aktionen: `backups/data-18.db`.
 
@@ -184,7 +184,8 @@ schwerer macht.
   `_ensure_column` beim Start.
 - `app_api.py` (~3.680 Zeilen, eine Closure) und `sero.js` (~3.780 Zeilen)
   modularisieren — erst NACH den fachlichen P0-Punkten.
-- CI: triviales GitHub-Actions-Workflow vorhanden (pytest). Ausbau später.
+- CI: Workflow-Vorlage vorbereitet, aber Push braucht Token-Scope `workflow`
+  (aktueller `gh`-Login hat ihn nicht). Lokal nachreichen sobald Scope da.
 
 ### 3. Git-Remote
 Remote `origin` → `SmortyCode/sero`. Push nach Go-Live-Baustellen.
