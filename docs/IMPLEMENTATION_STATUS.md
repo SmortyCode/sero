@@ -1,6 +1,6 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (Abend — Baustellen 1–5 abgearbeitet).** Diese Datei
+**Stand: 7. August 2026 (spät — CI-Datei + Sales-Reconnect-UX).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
@@ -12,17 +12,24 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 | Punkt | Stand |
 |---|---|
 | `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot+Web am 07.08. Abend per `launchctl kickstart` neu gestartet (dry_run-Cache frisch). |
-| Scanner / Freisteller | Rotation-first + `untergrund_trim` + `case_kontur_nachschnitt` (Label-Schutz). KEIN rembg. CGC neu aus Rohfotos, beste Variante. Pin `sero.js?v=108`. Rest-Schräge/Tisch bei schwierigen Fotos möglich — Code-Pfad für neue Scans verbessert. |
+| Scanner / Freisteller | Rotation-first + `untergrund_trim` + `case_kontur_nachschnitt` (Label-Schutz). KEIN rembg. CGC neu aus Rohfotos, beste Variante. Pin `sero.js?v=109`. Rest-Schräge/Tisch bei schwierigen Fotos möglich — Code-Pfad für neue Scans verbessert. |
 | Alte CGC `_cut` → `slab_recut` | Neugeschnitten aus `00.jpg`/`01.jpg`; Auswahl prev/cur/new nach Score. Case komplett. |
 | `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint |
 | 4 Error-Entwürfe | Orphans gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
-| Sales-Sync 403 | **Code fertig, Sven muss einmal neu verbinden:** `USER_SCOPES` enthält `sell.fulfillment`. Consent-URL (`/verbinden` + Website `/connect/ebay`) fordert ihn an. Bei Orders-403 setzt Sync `ebay_fulfillment_fehlt_<uid>`; `/api/me` → `ebay_needs_reconnect`; Profil zeigt „Neu verbinden“. Flag fällt nach erfolgreichem OAuth. Token `5694742134` noch ohne Scope bis Sven verbindet. |
+| Sales-Sync 403 | **Code fertig, Sven muss einmal neu verbinden:** Flag gesetzt. Profil „Neu verbinden“ (orange) + Hinweis unter Verkauf. Consent holt `sell.fulfillment`. Flag fällt nach OAuth. Token `5694742134` noch ohne Scope. |
 | Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-HTTP ok). **Nicht** auf production gestellt — Secure-Cookie würde Handy-WLAN brechen. Schritte in `.env.example`. |
 | E2E Handy Foto→Listen | Checkliste `docs/E2E_HANDY.md`. API-Smoke: `/app/` 200, Collection/Me 401. Rest: Sven am Handy unter dry_run. |
 | GitHub Push | Remote `origin/master` — Push nach diesem Stand. |
-| CI | Vorbereitet (pytest-Workflow), Push braucht GitHub-Token mit `workflow`-Scope — lokal noch nicht im Remote. |
+| CI | Datei `.github/workflows/ci.yml` lokal (pytest 3.13 + `node --check`). Push braucht Token-Scope `workflow` — aktueller `gh`-Login hat nur `repo`/`gist`/`read:org`. |
 
 Backup vor DB-Aktionen: `backups/data-18.db`.
+
+## CI + Reconnect-UX (07.08. Nacht)
+
+- `.github/workflows/ci.yml`: pytest auf Python 3.13 + `node --check frontend/sero.js`.
+  Push der Workflow-Datei braucht GitHub-Token mit Scope `workflow`.
+- Verkauf-Tab zeigt Reconnect-Hinweis (`ebay_needs_reconnect`); Profil-Wert orange.
+  Pin `sero.js?v=109`. E2E-Doku um Sales-401 / dry_run / Flag-Checks ergänzt.
 
 ## Freisteller / Sales-Sync (07.08. spät abends)
 
@@ -53,7 +60,7 @@ Backup vor DB-Aktionen: `backups/data-18.db`.
 - **CGC Pristine + PicsArt-Freisteller (07.08.):** `graded.label_type`
   (pristine/perfect/gem_mint) — Gold-Siegel „CGC Pristine 10“, Titel + Verkaufssuche.
   Slab-Pfad siehe Punkt oben (PicsArt-Nachschritt zurückgenommen).
-  Pins `sero.css?v=61` / `sero.js?v=108`.
+  Pins `sero.css?v=61` / `sero.js?v=109`.
 - **Ein Ordner für die App (07.08. abends):** Frontend von `~/sero-app/web`
   nach `~/ebay-bot/frontend/` gezogen. `web/server.py` liefert `/app` jetzt
   aus demselben Repo (Default `SERO_APP_DIR` = `<repo>/frontend`). Website
@@ -100,7 +107,7 @@ Backup vor DB-Aktionen: `backups/data-18.db`.
   `market`-Dicts aus der KI-Ära werden geleert und im Frontend gefiltert,
   CSRF versteht X-Forwarded-Host/Default-Ports (Proxy-Betrieb), und
   `/api/ebay-setup` ist pro Nutzer serialisiert.
-- Suite: **340+ passed, 1 xfailed**; Smoke grün; `sero.js?v=108`.
+- Suite: **340+ passed, 1 xfailed**; Smoke grün; `sero.js?v=109`.
 - Git: Basis-Commit + Umsetzungs-Commit in `~/ebay-bot` und `~/sero-app`;
   `~/listo-website` ebenfalls versioniert. Remote `origin` aktiv.
 
@@ -118,7 +125,7 @@ reduziert auf das, was für SERO wirklich zutrifft.
 | Tests | **340 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=108`, `sero.css?v=61` |
+| Frontend | `sero.js?v=109`, `sero.css?v=61` |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)
@@ -185,8 +192,8 @@ schwerer macht.
   `_ensure_column` beim Start.
 - `app_api.py` (~3.680 Zeilen, eine Closure) und `sero.js` (~3.780 Zeilen)
   modularisieren — erst NACH den fachlichen P0-Punkten.
-- CI: Workflow-Vorlage vorbereitet, aber Push braucht Token-Scope `workflow`
-  (aktueller `gh`-Login hat ihn nicht). Lokal nachreichen sobald Scope da.
+- CI: `.github/workflows/ci.yml` liegt im Repo. Push der Workflow-Datei
+  braucht Token-Scope `workflow` (aktueller `gh`-Login hat ihn nicht).
 
 ### 3. Git-Remote
 Remote `origin` → `SmortyCode/sero`. Push nach Go-Live-Baustellen.

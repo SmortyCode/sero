@@ -2575,6 +2575,23 @@ function renderSales() {
       + (offen ? `<p class="bulk-note">${LF("{0} brauchen noch deine Prüfung.", offen)}</p>` : "") : "";
   const bulkBox = $("salesBulk");
   if (bulkBox) bulkBox.innerHTML = bulkBtn;
+  // Sales-Sync braucht sell.fulfillment — Hinweis dort, wo Verkäufe zählen.
+  let reconnectEl = $("salesReconnect");
+  if (!reconnectEl) {
+    reconnectEl = document.createElement("p");
+    reconnectEl.id = "salesReconnect";
+    reconnectEl.className = "assume";
+    reconnectEl.hidden = true;
+    const host = $("salesBulk") || $("salesList");
+    if (host && host.parentNode) host.parentNode.insertBefore(reconnectEl, host);
+  }
+  if (state.me && state.me.ebay_needs_reconnect) {
+    reconnectEl.hidden = false;
+    reconnectEl.textContent = L("Damit Verkäufe korrekt erkannt werden, verbinde eBay einmal neu auf der Website (Mit eBay verbinden).");
+  } else {
+    reconnectEl.hidden = true;
+    reconnectEl.textContent = "";
+  }
   $("salesList").innerHTML = rows.map((r) => gridMode ? `
     <button class="sale-tile" data-draft="${r.draft_id}" data-item="${r.item_id || ""}">
       ${r.photo ? `<img src="${esc(thumb(r.photo, 480))}" loading="lazy" alt="">` : `<span class="gph-none">${MONO_PH}</span>`}
@@ -2726,7 +2743,8 @@ async function renderProfile() {
       <span class="ric" style="background:${color}">${icon(ic, 15)}</span>
       <span class="rlabel">${label}</span>${right}
       ${tap ? `<span class="chev">${icon("chevron", 15)}</span>` : ""}</${tap ? "button" : "div"}>`;
-  const rv = (v) => `<span class="rvalue">${esc(v)}</span>`;
+  const rv = (v, warn = false) =>
+    `<span class="rvalue"${warn ? ` style="color:var(--orange)"` : ""}>${esc(v)}</span>`;
 
   $("profileScroll").innerHTML = `
     <h1 class="large-title">Profil</h1>
@@ -2754,7 +2772,8 @@ async function renderProfile() {
     <div class="ilist">
       ${row("link", "#3478f6", "eBay-Konto", rv(
         me.ebay_needs_reconnect ? L("Neu verbinden")
-          : (me.ebay_connected ? L("Verbunden") : L("Nicht verbunden"))),
+          : (me.ebay_connected ? L("Verbunden") : L("Nicht verbunden")),
+        !!me.ebay_needs_reconnect),
         "profEbay", !!me.ebay_needs_reconnect || !me.ebay_connected)}
       ${row("bubble", "var(--green)", "Telegram", rv(me.telegram_linked ? "Verknüpft" : "—"))}
       ${row("gear", "var(--icon-neutral)", "Setup", rv(me.setup_ready ? "Bereit" : "Unvollständig"), "profSetup", !me.setup_ready)}
