@@ -1,0 +1,34 @@
+# SERO — vollständige Abhängigkeiten (Audit-Befund P0.1: vorher fehlten 12 Pakete).
+# Stand 07.08.2026, Versionen = der real laufende Betrieb (Python 3.13).
+# Installation:  python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+
+# Web-Anwendung
+fastapi==0.136.3
+starlette==1.3.0
+uvicorn==0.49.0
+pydantic==2.13.4
+itsdangerous==2.2.0
+python-multipart==0.0.32
+stripe==15.2.0
+
+# Telegram-Bot (geteiltes Backend, siehe docs/IMPLEMENTATION_STATUS.md)
+python-telegram-bot==22.7
+
+# KI und HTTP
+anthropic==0.109.1
+httpx==0.28.1
+python-dotenv==1.2.2
+
+# Bildpipeline (Warp, Freisteller, Qualitätswache)
+Pillow==12.2.0
+pillow-heif==1.5.0
+opencv-python-headless==5.0.0.93
+numpy==2.4.6
+scipy==1.17.1
+scikit-image==0.26.0
+rembg==2.0.76
+onnxruntime==1.26.0
+
+# Tests
+pytest==9.0.3
+pytest-asyncio==1.4.0

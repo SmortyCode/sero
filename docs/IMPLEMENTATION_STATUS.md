@@ -1,0 +1,151 @@
+# SERO — Stand der Umsetzung
+
+**Stand: 7. August 2026.** Diese Datei ist die einzige Wahrheit über den
+Zustand des Projekts. Wer hier weiterbaut (Cursor, ein anderes Werkzeug, ein
+Mensch): erst lesen, dann ändern, danach diese Datei aktualisieren.
+
+Hintergrund: Am 04.08. ging ein Dossier an externe Prüfer; der ChatGPT-Audit
+kam am 07.08. zurück und wurde teilweise umgesetzt (Details unten). Die
+Roadmap in dieser Datei ist der abgestimmte 8-Phasen-Plan aus dem Audit,
+reduziert auf das, was für SERO wirklich zutrifft.
+
+---
+
+## Verifizierter Systemzustand (07.08.2026)
+
+| | |
+|---|---|
+| Tests | **323 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
+| Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
+| Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
+| Frontend | `sero.js?v=104`, `sero.css?v=60` |
+| Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
+
+## Heute umgesetzt (Audit-Punkte)
+
+1. **P0.1 Installierbarkeit:** `requirements.txt` vollständig (27 Pakete mit
+   Versionen statt 8), `.env.example`, README neu (beschrieb vorher das
+   Vorgänger-Projekt „ListingPunk"). Clean-Install in frischem venv bewiesen.
+2. **P0.4 Publish-Doppelstart:** Atomarer Status-Claim in SQLite
+   (`Store.claim_draft`/`release_draft_claim` in `bot/drafts.py`), eingebaut in
+   `app_run_upload`. 20 parallele Claims → genau ein Gewinner
+   (`tests/test_publish_claim.py`, 6 Tests inkl. Quelltext-Wache).
+   eBay-seitig waren Timeout-Fälle schon selbstheilend (`publish_offer` fragt
+   bei Timeout nach, `create_offer` sucht per SKU).
+3. **P1 Stripe fail-open:** `APP_ENV=production` lehnt Checkout ohne
+   `STRIPE_SECRET_KEY` mit 503 ab statt den Plan gratis zu aktivieren.
+4. **P1 Host-Header:** Alle ausgehenden Links (Login-Mail, Stripe-Redirects,
+   OAuth-Callbacks) laufen über `public_base_url()`; in Produktion ist
+   `PUBLIC_BASE_URL` Pflicht (Start bricht sonst ab).
+5. **P1 Cookie:** Session-Cookie bekommt `secure=True` bei
+   `APP_ENV=production` (lokal bleibt HTTP im LAN funktionsfähig).
+6. **P1 Token-Leiche:** Kontolöschung räumt jetzt BEIDE Identitäten
+   (Telegram-ID und synthetische App-ID) — vorher blieb ein gültiges
+   eBay-Refresh-Token zurück.
+7. **Streichliste (Teil 1):** Ersatzlos entfernt aus Backend + Frontend + CSS:
+   Solana-NFT-Wallet, Markt-Sektion (Release-Kalender + Reddit-News),
+   OHLC-Kerzencharts, Gamification (Punkte/Stufen/Set-Fortschritt),
+   Zeitspar-Rechner (`time_saved` inkl. Meilenstein-Overlay),
+   KI-Grading-Schätzung (`/grade`, `get_grader` — damit ist auch der
+   Fremdverzeichnis-Import aus `~/card-grader` weg).
+   ~360 Zeilen Backend, ~380 Zeilen JS, ~420 Zeilen CSS.
+
+## Bewusste Abweichungen vom Audit
+
+- **`/graded-market` bleibt.** Der Audit strich „Grading" pauschal; die
+  PSA-10/9-Angebotspreise sind aber echte eBay-Daten (kein LLM-Raten) und ein
+  ausdrücklicher Produktwunsch des Betreibers. Gestrichen wurde nur die
+  KI-Note-Schätzung.
+- **Markt-Umschalter EU/USA/Japan bleibt** (Streichkandidat laut Audit).
+  Frisch gebaut auf ausdrücklichen Wunsch, klein, nutzt die ohnehin
+  vorhandene Browse-Anbindung. Kandidat für später, falls er Pflege kostet.
+- **Zweitsprache (i18n) bleibt vorerst.** Das Wörterbuch ist tief in
+  `sero.js` verwoben; Entfernen ist ein eigener, riskanter Umbau ohne
+  Sicherheitsgewinn. Kandidat für die Frontend-Modularisierung (Phase 7).
+- **Preisalarme und Hintergrund-Designer bleiben vorerst** (klein, geringe
+  Pflegekosten). Entscheid beim nächsten Schnitt.
+
+## Nicht umgesetzt — die Roadmap für den Nachfolger
+
+In empfohlener Reihenfolge. Nichts davon anfangen, ohne es zu Ende zu bringen —
+ein halber Umbau ist schlimmer als keiner.
+
+### 1. P0.2 — Analyse-Prompt: Fakten statt Raten (WICHTIGSTER offener Punkt)
+`bot/claude_client.py` verlangt vom Modell eine Pflicht-Preisspanne
+(`est_low`/`est_high`) und enthält „wähle die wahrscheinlichste Variante".
+Das widerspricht der Produktregel „nie erfundene Preise". Abgefedert ist es
+heute durch `price_state`/`price_reason` (die App weist KI-Spannen als
+unbelegt aus) und durch die Preis-Kaskade (echte Quellen überschreiben die
+Spanne). Aber: `est_low`/`est_high` fließt noch in `slab_rohwert_retten` und
+als Anker in `catalog.refresh_price` ein.
+**Ziel:** Beobachtungs-Schema (`value`/`confidence`/`evidence`/`needs_review`)
+ohne jede Preisangabe aus dem LLM; Anker/Rettung auf echte Quellen umstellen.
+Das ist ein Umbau an Prompt + Schema + zwei Preispfaden + UI — als Einheit
+machen, mit Characterization-Tests vorher.
+
+### 2. P0.3 — eBay-Onboarding ohne Telegram
+Ein App-Nutzer ohne Telegram kommt bis zum Listing-Knopf und scheitert dort:
+Verkaufsrichtlinien + Standort (`setup_ready`) entstehen nur im
+Telegram-Flow (`bot/main.py`). **Ziel:** Web-Onboarding-Schritt nach dem
+eBay-OAuth (`/connect/ebay`-Callback), der Policies und Merchant-Location
+anlegt bzw. übernimmt. Teuerster Einzelbefund für echte Nutzer.
+
+### 3. P0.5 — Preisquellen-Rechtslage
+130point (gescrapt, verstößt gegen eBay-AGB) und PriceCharting (ToS verbieten
+Weitergabe an Dritte) dürfen in einem öffentlichen Produkt NICHT aktiv sein.
+Heute Betreiber-Risiko im Einzelbetrieb; vor Fremdnutzern: Adapter hinter
+Lizenz-Feature-Flags (pro Quelle abschaltbar), Default AUS für alles ohne
+Vertrag. Sauber sind: TCGdex/Scryfall/YGOPRODeck (rohe Karten), eBay Browse
+(aktive Angebote, als „Angebotslage" gekennzeichnet), eigene Verkäufe über
+die Sell-API (Scope fehlt noch — siehe `/verbinden`).
+
+### 4. P0.6 — Skalierbarer Betrieb (der große Umbau)
+Ein Prozess, eine SQLite-Verbindung, In-Memory-Jobs, Fotos auf Platte.
+Harte Grenzen: ~1 Freisteller gleichzeitig (≈100 Stücke/h plattformweit),
+8-s-Takt bei Belegabfragen (≈450/h), 14–40 MB Bilder pro Stück.
+**Zielbild in ADR-001:** modularer Monolith + getrennte Worker, PostgreSQL,
+Objektspeicher, dauerhafte Queue. Erst nötig ab >≈20 gleichzeitigen Nutzern —
+nicht vorziehen, aber jede neue Funktion so bauen, dass sie den Umbau nicht
+schwerer macht.
+
+### 5. Restliche P1
+- In-Memory-Rate-Limiter und -Jobzustände überleben keinen Neustart.
+- CSRF-Schutz fehlt (Cookie-Auth mit `samesite=lax` deckt nicht alles).
+- Keine CSP-Header.
+- Kein Alembic/Migrationswerkzeug — Schema-Änderungen laufen über
+  `_ensure_column` beim Start.
+- `app_api.py` (~3.680 Zeilen, eine Closure) und `sero.js` (~3.780 Zeilen)
+  modularisieren — erst NACH den fachlichen P0-Punkten.
+- Kein CI. Vorschlag: GitHub Actions mit `pip install -r requirements.txt`
+  + `pytest` als Pflicht-Gate. (Lokal existiert kein Git-Remote — zuerst
+  Repo-Frage klären, siehe unten.)
+
+### 6. Kein Versionskontroll-Stand
+`~/ebay-bot` und `~/sero-app` sind KEINE Git-Repositories. Erster Schritt im
+neuen Werkzeug: `git init` + sinnvolles `.gitignore` (`.env`, `data.db`,
+`backups/`, `collection_photos/`, `web/uploads/`, `logs/`) und ein
+Anfangs-Commit, DANN erst ändern.
+
+## Was der Nachfolger über die ChatGPT-Befunde wissen muss
+
+Geprüft und **bestätigt**: P0.1, P0.4 (Doppelstart real — Task-Spawn ohne
+Claim), Stripe fail-open, Host-Header in 6 Links, Token-Leiche (bei
+Telegram-verknüpften Konten), README-Veraltung, fehlende Pakete.
+Geprüft und **relativiert**: „Publish nicht idempotent" — die eBay-Seite
+(create/publish) war durch SKU-Suche und Timeout-Nachfrage bereits
+abgesichert; das Loch war der lokale Doppelstart. „Grading streichen" — nur
+zur Hälfte übernommen (siehe Abweichungen).
+**Nicht geprüft** (bei Umsetzung selbst verifizieren): die genauen
+Zeilenangaben des Audits — sie stammen vom Dossier-Stand 04.08. und stimmen
+nach den Streichungen nicht mehr.
+
+## Nicht verhandelbar (Produktregeln des Betreibers)
+
+Duzen; keine Ausrufezeichen/Emojis in UI-Texten; „Stück/listen/Marktwert/
+tippen"; die App sagt nie „Wir". Eigenes freigestelltes Foto ist immer das
+Hauptbild. Marktwert nur aus echten Belegen, sonst ehrlich „unbekannt".
+Nichts geht ohne Freigabe live. Keine Drag-Sortierung. Bild-Standard: Warp
+pur ohne Kosmetik (per Quelltext-Test festgeschrieben). Entwürfe mit Status
+`published`/`ended`/`dry_run_done` nie anfassen. Vor jedem Löschen: Sicherung
+anlegen und unmittelbar davor erneut prüfen. Prüf-/Audit-Agenten bekommen nur
+lesende Aufträge — nie Schreibrechte, nie eine Live-Session.

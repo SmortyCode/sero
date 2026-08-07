@@ -1,0 +1,17 @@
+# Geheimnisse und Echtdaten — NIE einchecken
+.env
+.env.bak*
+data.db
+data.db-*
+backups/
+collection_photos/
+web/uploads/
+logs/
+tmp/
+staging/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

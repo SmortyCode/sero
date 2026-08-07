@@ -1,0 +1,336 @@
+[
+  {
+    "s": {
+      "name": "One Piece #103 Manga Japanisch Beckett BGS 9.4 Oda 1st Print",
+      "query": "One Piece 103 Manga Japanese Beckett BGS 9.4",
+      "wert": 119.38,
+      "quelle": "ebay_sold"
+    },
+    "res": null
+  },
+  {
+    "s": {
+      "name": "One Piece #1 Manga Shueisha 1997 Japanisch BGC 8.5",
+      "query": "One Piece Volume 1 1997 first printing Japanese graded Beckett 8.5",
+      "wert": 2744.66,
+      "quelle": "ebay_sold"
+    },
+    "res": null
+  },
+  {
+    "s": {
+      "name": "One Piece Portgas D. Ace OP02-013 SP Alt Art PSA 10",
+      "query": "One Piece Portgas D. Ace OP02-013 SP Alt Art PSA 10",
+      "wert": 619.18,
+      "quelle": "ebay_eu"
+    },
+    "res": {
+      "count": 5,
+      "min": 360.0,
+      "max": 950.0,
+      "median": 703.61,
+      "query": "One Piece Portgas D. Ace OP02-013 SP Alt Art PSA 10",
+      "samples": [
+        {
+          "title": "Portgas D. Ace OP02-013 SP PSA10 Japanese",
+          "price": 360.0,
+          "url": "https://www.ebay.de/itm/318558966887?_skw=One+Piece+Portgas+D.+Ace+OP02-013+SP+Alt+Art+PSA+10&hash=item4a2b981467:g:yVwAAeSwyeRqTl13",
+          "image": "https://i.ebayimg.com/images/g/yVwAAeSwyeRqTl13/s-l1600.jpg"
+        },
+        {
+          "title": "PSA 10 Ace OP02-013 SR SP Alt Art Two Legends OP-08 ONE PIECE Card Japanese",
+          "price": 455.84,
+          "url": "https://www.ebay.de/itm/146085947275?_skw=One+Piece+Portgas+D.+Ace+OP02-013+SP+Alt+Art+PSA+10&hash=item220366a78b:g:P10AAOSw9y1n5rXB",
+          "image": "https://i.ebayimg.com/images/g/P10AAOSw9y1n5rXB/s-l1200.jpg"
+        },
+        {
+          "title": "PSA 10 Ace OP02-013 SR SP Alt Art Two Legends OP-08 ONE PIECE Card Japanese",
+          "price": 703.61,
+          "url": "https://www.ebay.de/itm/397435840309?_skw=One+Piece+Portgas+D.+Ace+OP02-013+SP+Alt+Art+PSA+10&hash=item5c8905a735:g:CbEAAeSw~xtpT7Q4",
+          "image": "https://i.ebayimg.com/images/g/CbEAAeSw~xtpT7Q4/s-l1200.jpg"
+        },
+        {
+          "title": "PSA 10 Portgas D. Ace SP Alt Art OP02-013 SR Two Legends One Piece Card Japanese",
+          "price": 810.94,
+          "url": "https://www.ebay.de/itm/317895615945?_skw=One+Piece+Portgas+D.+Ace+OP02-013+SP+Alt+Art+PSA+10&hash=item4a040e25c9:g:~wIAAeSw9NpqDIPS",
+          "image": "https://i.ebayimg.com/images/g/~wIAAeSw9NpqDIPS/s-l1600.jpg"
+        },
+        {
+          "title": "PSA 10 GEM Mint Ace Holo OP02-013 Mini Manga Alt Art JP One Piece Low Pop",
+          "price": 950.0,
+          "url": "https://www.ebay.de/itm/267708769806?_skw=One+Piece+Portgas+D.+Ace+OP02-013+SP+Alt+Art+PSA+10&hash=item3e54afa60e:g:zIwAAeSwuPNqPDBp",
+          "image": "https://i.ebayimg.com/images/g/zIwAAeSwuPNqPDBp/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      360.0,
+      455.84,
+      703.61,
+      810.94,
+      950.0
+    ]
+  },
+  {
+    "s": {
+      "name": "Grand Theft Auto Vice City PS2 USA WATA 9.8 A++ Sealed",
+      "query": "Grand Theft Auto Vice City PS2 WATA 9.8 sealed",
+      "wert": 97.52,
+      "quelle": "pricecharting"
+    },
+    "res": {
+      "count": 1,
+      "min": 380.15,
+      "max": 380.15,
+      "median": 380.15,
+      "query": "Grand Theft Auto Vice City PS2 WATA 9.8 sealed",
+      "samples": [
+        {
+          "title": "Grand Theft Auto: Vice City Ps2 Sealed WATA Mint 9.8 PAL Französisch",
+          "price": 380.15,
+          "url": "https://www.ebay.de/itm/227348362429?_skw=Grand+Theft+Auto+Vice+City+PS2+WATA+9.8+sealed&hash=item34ef04b4bd:g:lz8AAOSw7R1myNbh",
+          "image": "https://i.ebayimg.com/images/g/lz8AAOSw7R1myNbh/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      380.15
+    ]
+  },
+  {
+    "s": {
+      "name": "Grand Theft Auto Vice City PS2 USA WATA 9.8 A++ Sealed",
+      "query": "GTA Vice City PS2 WATA 9.8 sealed",
+      "wert": 97.52,
+      "quelle": "pricecharting"
+    },
+    "res": {
+      "count": 1,
+      "min": 380.15,
+      "max": 380.15,
+      "median": 380.15,
+      "query": "GTA Vice City PS2 WATA 9.8 sealed",
+      "samples": [
+        {
+          "title": "Grand Theft Auto: Vice City Ps2 Sealed WATA Mint 9.8 PAL Französisch",
+          "price": 380.15,
+          "url": "https://www.ebay.de/itm/227348362429?_skw=GTA+Vice+City+PS2+WATA+9.8+sealed&hash=item34ef04b4bd:g:lz8AAOSw7R1myNbh",
+          "image": "https://i.ebayimg.com/images/g/lz8AAOSw7R1myNbh/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      380.15
+    ]
+  },
+  {
+    "s": {
+      "name": "Pokémon Glurak ex 199/165 151 Special Illustration Rare CGC 10",
+      "query": "Pokemon Charizard ex 199/165 151 CGC 10",
+      "wert": 803.99,
+      "quelle": "ebay_eu"
+    },
+    "res": {
+      "count": 2,
+      "min": 877.27,
+      "max": 950.0,
+      "median": 913.63,
+      "query": "Pokemon Charizard ex 199/165 151 CGC 10",
+      "samples": [
+        {
+          "title": "Pokemon Charizard ex 151 Mew En Special Illustration Rare #199 CGC 10 Gem Mint",
+          "price": 877.27,
+          "url": "https://www.ebay.de/itm/358630724179?_skw=Pokemon+Charizard+ex+199%2F165+151+CGC+10&hash=item53800e9253:g:z40AAeSwHH9qHzcZ",
+          "image": "https://i.ebayimg.com/images/g/z40AAeSwHH9qHzcZ/s-l1600.jpg"
+        },
+        {
+          "title": "Pokémon Glurak ex 199/165 151 Special Illustration Rare CGC 10",
+          "price": 950.0,
+          "url": "https://www.ebay.de/itm/147477896938?_skw=Pokemon+Charizard+ex+199%2F165+151+CGC+10&hash=item22565e1eea:g:JTgAAeSw0Vtqbx8k",
+          "image": "https://i.ebayimg.com/images/g/JTgAAeSw0Vtqbx8k/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      877.27,
+      950.0
+    ]
+  },
+  {
+    "s": {
+      "name": "One Piece Ace & Sabo & Luffy OP13-007 SR Englisch Near Mint",
+      "query": "One Piece OP13-007 Ace Sabo Luffy SR English",
+      "wert": 2.8,
+      "quelle": "pricecharting"
+    },
+    "res": {
+      "count": 11,
+      "min": 4.62,
+      "max": 109.96,
+      "median": 24.0,
+      "query": "One Piece OP13-007 Ace Sabo Luffy SR English",
+      "samples": [
+        {
+          "title": "One Piece TCG - OP13 - Carrying on His Will - Choose Your Singles R/SR/SEC",
+          "price": 4.62,
+          "url": "https://www.ebay.de/itm/157634826565?_skw=One+Piece+OP13-007+Ace+Sabo+Luffy+SR+English&hash=item24b3c49145:g:7G8AAeSwO2BpdQYl",
+          "image": "https://i.ebayimg.com/images/g/7G8AAeSwO2BpdQYl/s-l960.jpg"
+        },
+        {
+          "title": "Ace & Sabo & Luffy - One Piece TCG OP13-007 Carrying On His Will SR Foil NM/M",
+          "price": 4.68,
+          "url": "https://www.ebay.de/itm/327291876111?_skw=One+Piece+OP13-007+Ace+Sabo+Luffy+SR+English&hash=item4c341db30f:g:KHIAAeSwrhNqb1Ed",
+          "image": "https://i.ebayimg.com/images/g/KHIAAeSwrhNqb1Ed/s-l1600.jpg"
+        },
+        {
+          "title": "Ace & Sabo & Luffy OP13-007 SR ONE PIECE Card Game English NM",
+          "price": 5.79,
+          "url": "https://www.ebay.de/itm/318539334169?_skw=One+Piece+OP13-007+Ace+Sabo+Luffy+SR+English&hash=item4a2a6c8219:g:BjwAAeSwIwJqQQsO",
+          "image": "https://i.ebayimg.com/images/g/BjwAAeSwIwJqQQsO/s-l1600.jpg"
+        },
+        {
+          "title": "Ace & Sabo & Luffy OP13-007 SR EINTEILER!",
+          "price": 9.74,
+          "url": "https://www.ebay.de/itm/326854804126?_skw=One+Piece+OP13-007+Ace+Sabo+Luffy+SR+English&hash=item4c1a10829e:g:iFoAAeSw0qlpDyNR",
+          "image": "https://i.ebayimg.com/images/g/iFoAAeSw0qlpDyNR/s-l1600.jpg"
+        },
+        {
+          "title": "One Piece 4 x OP13-007 SR Ace & Sabo & Luffy + 4 x OP07-003 R Outlook III neuwertig ",
+          "price": 23.94,
+          "url": "https://www.ebay.de/itm/198520716792?_skw=One+Piece+OP13-007+Ace+Sabo+Luffy+SR+English&hash=item2e38c1bdf8:g:7LsAAeSwgblqYzo2",
+          "image": "https://i.ebayimg.com/images/g/7LsAAeSwgblqYzo2/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      4.62,
+      4.68,
+      5.79,
+      9.74,
+      23.94
+    ]
+  },
+  {
+    "s": {
+      "name": "One Piece Monkey.D.Luffy P-099 Gear 5 Promo Englisch NM",
+      "query": "One Piece Monkey D Luffy P-099 Promo English",
+      "wert": 58.88,
+      "quelle": "ebay_sold"
+    },
+    "res": {
+      "count": 31,
+      "min": 57.7,
+      "max": 175.45,
+      "median": 145.43,
+      "query": "One Piece Monkey D Luffy P-099 Promo English",
+      "samples": [
+        {
+          "title": "One Piece TCG Event Pack Vol. 8 Monkey.D.Luffy P-099 Promo Beschreibung lesen ",
+          "price": 57.7,
+          "url": "https://www.ebay.de/itm/287477593763?_skw=One+Piece+Monkey+D+Luffy+P-099+Promo+English&hash=item42eefff6a3:g:XTwAAeSwS~JqYJz5",
+          "image": "https://i.ebayimg.com/images/g/XTwAAeSwS~JqYJz5/s-l1600.jpg"
+        },
+        {
+          "title": "Monkey.D.Luffy P-099 Promo One Piece Karte TCG Englisch",
+          "price": 77.94,
+          "url": "https://www.ebay.de/itm/127988323912?_skw=One+Piece+Monkey+D+Luffy+P-099+Promo+English&hash=item1dccb2d648:g:zUYAAeSw9ABqYJFy",
+          "image": "https://i.ebayimg.com/images/g/zUYAAeSw9ABqYJFy/s-l1600.jpg"
+        },
+        {
+          "title": "Monkey D Luffy P-099 Promo Event Pack NM One Piece TCG Englisch",
+          "price": 81.87,
+          "url": "https://www.ebay.de/itm/358851738108?_skw=One+Piece+Monkey+D+Luffy+P-099+Promo+English&hash=item538d3af9fc:g:ZTAAAeSwB-dqZ-9p",
+          "image": "https://i.ebayimg.com/images/g/ZTAAAeSwB-dqZ-9p/s-l1600.jpg"
+        },
+        {
+          "title": "Monkey.D.Luffy (Event Pack Vol. 8) P-099 One Piece Promo One Piece Foil NM",
+          "price": 99.42,
+          "url": "https://www.ebay.de/itm/128003823886?_skw=One+Piece+Monkey+D+Luffy+P-099+Promo+English&hash=item1dcd9f590e:g:NZYAAeSw1vZqbLz1",
+          "image": "https://i.ebayimg.com/images/g/NZYAAeSw1vZqbLz1/s-l1600.jpg"
+        },
+        {
+          "title": "One Piece TCG Event Pack Vol. 8 Monkey.D.Luffy P-099 Promo NM",
+          "price": 99.42,
+          "url": "https://www.ebay.de/itm/188712277223?_skw=One+Piece+Monkey+D+Luffy+P-099+Promo+English&hash=item2bf020d4e7:g:maoAAeSweXxqafmZ",
+          "image": "https://i.ebayimg.com/images/g/maoAAeSweXxqafmZ/s-l1200.jpg"
+        }
+      ]
+    },
+    "preise": [
+      57.7,
+      77.94,
+      81.87,
+      99.42,
+      99.42
+    ]
+  },
+  {
+    "s": {
+      "name": "Pokémon Garados ex 014/078 Scarlet ex Japanisch CGC Pristine 10",
+      "query": "Gyarados ex 014/078 Scarlet ex Japanese CGC 10",
+      "wert": 17.41,
+      "quelle": "pricecharting_weak"
+    },
+    "res": null
+  },
+  {
+    "s": {
+      "name": "Pokémon Mega Charizard X ex 223/193 Mega Dream Japanisch CGC 10",
+      "query": "Pokemon Mega Charizard X ex 223/193 Mega Dream Japanese CGC 10",
+      "wert": 102.45,
+      "quelle": "ebay_sold"
+    },
+    "res": {
+      "count": 2,
+      "min": 179.99,
+      "max": 2339.37,
+      "median": 1259.68,
+      "query": "Pokemon Mega Charizard X ex 223/193 Mega Dream Japanese CGC 10",
+      "samples": [
+        {
+          "title": "CGC 10 PRISTINE MEGA CHARIZARD X EX 223/193 MEGA ATTACK RARE M2a - JAPANESE",
+          "price": 179.99,
+          "url": "https://www.ebay.de/itm/336721792273?_skw=Pokemon+Mega+Charizard+X+ex+223%2F193+Mega+Dream+Japanese+CGC+10&hash=item4e662ecd11:g:-YAAAeSwSApqb2pu",
+          "image": "https://i.ebayimg.com/images/g/-YAAAeSwSApqb2pu/s-l1600.jpg"
+        },
+        {
+          "title": "CGC PRISTINE 10 Error MEGA Charizard X Incorrect Texture MA 223/193 MEGA Dream",
+          "price": 2339.37,
+          "url": "https://www.ebay.de/itm/236782489391?_skw=Pokemon+Mega+Charizard+X+ex+223%2F193+Mega+Dream+Japanese+CGC+10&hash=item3721560f2f:g:qzgAAeSwUv5p729S",
+          "image": "https://i.ebayimg.com/images/g/qzgAAeSwUv5p729S/s-l1600.jpg"
+        }
+      ]
+    },
+    "preise": [
+      179.99,
+      2339.37
+    ]
+  },
+  {
+    "s": {
+      "name": "One Piece Ruffy Promo Karte Shueisha Summer Comics Fair 2026 Not for Sale",
+      "query": "One Piece Shueisha Summer Comics Fair Natsukomi Promo Karte Ruffy",
+      "wert": 29.36,
+      "quelle": "ebay_sold"
+    },
+    "res": null
+  },
+  {
+    "s": {
+      "name": "One Piece Band 103 Manga Japanisch 1st Printing Beckett 9.0",
+      "query": "One Piece manga volume 103 Japanese 1st print Beckett 9.0",
+      "wert": 65.0,
+      "quelle": "estimate"
+    },
+    "res": null
+  },
+  {
+    "s": {
+      "name": "Azuki TCG Gates Awakened Alley Runner Display Box versiegelt",
+      "query": "Azuki TCG Gates Awakened Alley Runner display box sealed",
+      "wert": 539.56,
+      "quelle": "pricecharting_weak"
+    },
+    "res": null
+  }
+]
