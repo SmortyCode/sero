@@ -1,6 +1,6 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 7. August 2026 (spät — CI-Datei + Sales-Reconnect-UX).** Diese Datei
+**Stand: 7. August 2026 (Nacht — Push ohne CI, Verifikation grün).** Diese Datei
 ist die einzige Wahrheit über den Zustand des Projekts. Wer hier weiterbaut
 (Cursor, ein anderes Werkzeug, ein Mensch): erst lesen, dann ändern, danach
 diese Datei aktualisieren.
@@ -11,25 +11,36 @@ Umgesetzt aus dem Audit-Canvas `sero-golive-audit`:
 
 | Punkt | Stand |
 |---|---|
-| `kv['dry_run']=true` (Üben) | gesetzt via Store wie `/dryrun on`. Vor echtem Live: `/dryrun off` oder kv zurück auf false. Bot+Web am 07.08. Abend per `launchctl kickstart` neu gestartet (dry_run-Cache frisch). |
-| Scanner / Freisteller | Rotation-first + `untergrund_trim` + `case_kontur_nachschnitt` (Label-Schutz). KEIN rembg. CGC neu aus Rohfotos, beste Variante. Pin `sero.js?v=109`. Rest-Schräge/Tisch bei schwierigen Fotos möglich — Code-Pfad für neue Scans verbessert. |
-| Alte CGC `_cut` → `slab_recut` | Neugeschnitten aus `00.jpg`/`01.jpg`; Auswahl prev/cur/new nach Score. Case komplett. |
-| `label_type` nachziehen | Exeggutor → pristine (+ Name); Garados `fb726042ce4b` → pristine aus Name; Charizard `850420d25072`, Glurak, One Piece → gem_mint |
-| 4 Error-Entwürfe | Orphans gelöscht nach `backup.sh`. 0 Error-Entwürfe übrig. |
-| Sales-Sync 403 | **Code fertig, Sven muss einmal neu verbinden:** Flag gesetzt. Profil „Neu verbinden“ (orange) + Hinweis unter Verkauf. Consent holt `sell.fulfillment`. Flag fällt nach OAuth. Token `5694742134` noch ohne Scope. |
-| Production-Env | `.env` hat weder `APP_ENV` noch `PUBLIC_BASE_URL` (LAN-HTTP ok). **Nicht** auf production gestellt — Secure-Cookie würde Handy-WLAN brechen. Schritte in `.env.example`. |
-| E2E Handy Foto→Listen | Checkliste `docs/E2E_HANDY.md`. API-Smoke: `/app/` 200, Collection/Me 401. Rest: Sven am Handy unter dry_run. |
-| GitHub Push | Remote `origin/master` — Push nach diesem Stand. |
-| CI | Datei `.github/workflows/ci.yml` lokal (pytest 3.13 + `node --check`). Push braucht Token-Scope `workflow` — aktueller `gh`-Login hat nur `repo`/`gist`/`read:org`. |
+| `kv['dry_run']=true` (Üben) | **DONE** — `true`. Vor echtem Live: `/dryrun off` + Bot-Kickstart. |
+| Scanner / Freisteller | **DONE** — Warp-pur, Case bleibt, kein rembg auf Slabs. Stichprobe CGC-Fotos ok (kein weiterer Recut). Pin `sero.js?v=109`. |
+| Alte CGC `_cut` → `slab_recut` | **DONE** — Case komplett, Label geschützt. |
+| `label_type` nachziehen | **DONE** — pristine/gem_mint gesetzt. |
+| 4 Error-Entwürfe | **DONE** — 0 übrig. |
+| Sales-Sync 403 | **CODE DONE / BLOCKED Sven** — Flag `ebay_fulfillment_fehlt_*` gesetzt; UX Reconnect; OAuth-URL enthält `sell.fulfillment` in `USER_SCOPES`. Token `5694742134` noch ohne Scope → einmal eBay neu verbinden. |
+| Production-Env | **bewusst offen** — kein `APP_ENV=production` (LAN-HTTP). |
+| E2E Handy Foto→Listen | **BLOCKED Sven** — Checkliste `docs/E2E_HANDY.md`. API-E2E (Login-Session testkunde, `/api/me`+collection+dashboard+sales, dry_run) **DONE**, kein Publish. |
+| GitHub Push | **DONE** — `origin/master` = `a362ccd` (Reconnect-UX + Doku). |
+| CI | **LOKAL READY / BLOCKED Push** — `.github/workflows/ci.yml` untracked lokal. Push braucht `workflow`-Scope. Befehl unten. |
 
 Backup vor DB-Aktionen: `backups/data-18.db`.
+
+### CI-Push (nur Sven, einmalig)
+
+```
+gh auth refresh -h github.com -s repo,workflow,gist,read:org
+# Browser: Device-Code bestätigen, dann:
+cd ~/ebay-bot && git add .github/workflows/ci.yml && \
+  git commit -m "CI: pytest + node --check auf Push/PR" && git push
+```
 
 ## CI + Reconnect-UX (07.08. Nacht)
 
 - `.github/workflows/ci.yml`: pytest auf Python 3.13 + `node --check frontend/sero.js`.
-  Push der Workflow-Datei braucht GitHub-Token mit Scope `workflow`.
+  Datei lokal vorhanden; Push blockiert ohne Scope `workflow` (Auth-Refresh braucht Browser).
 - Verkauf-Tab zeigt Reconnect-Hinweis (`ebay_needs_reconnect`); Profil-Wert orange.
-  Pin `sero.js?v=109`. E2E-Doku um Sales-401 / dry_run / Flag-Checks ergänzt.
+  Pin `sero.js?v=109`. Consent-URL baut `USER_SCOPES` inkl. `sell.fulfillment`.
+- Verifikation 07.08. Nacht: dry_run=true; web+bot running; 344 passed / 1 xfailed;
+  Smoke folgt; API-E2E mit Testkonto grün (kein eBay-Publish).
 
 ## Freisteller / Sales-Sync (07.08. spät abends)
 
@@ -122,10 +133,10 @@ reduziert auf das, was für SERO wirklich zutrifft.
 
 | | |
 |---|---|
-| Tests | **340 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` grün |
+| Tests | **344 passed, 1 xfailed** (`pytest tests/ -q`) plus `tests/smoke.sh` |
 | Installierbarkeit | Frisches venv + `requirements.txt` → alle Kernmodule importieren (geprüft) |
 | Betrieb | launchd `com.listo.web` auf 0.0.0.0:3000, KeepAlive, ohne `SERO_DEV_CODES` |
-| Frontend | `sero.js?v=109`, `sero.css?v=61` |
+| Frontend | `sero.js?v=109`, `sero.css?v=61` (Stand Push a362ccd) |
 | Datenbestand | Echtdaten von 1 Betreiber (Account 3) + Testkonten. Backup vor dem Umbau: `backups/audit-0708/` |
 
 ## Heute umgesetzt (Audit-Punkte)
