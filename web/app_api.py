@@ -675,11 +675,15 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
     def setze_preiszustand(item: dict) -> None:
         """price_state (Stufe 5): der ehrliche Anzeigezustand neben est_value.
 
-        est_value bleibt IMMER gesetzt (307,90-€-Lehre: ohne Zahl recherchiert
-        die Listing-Pipeline blind neu) — aber die App darf nur Belegtes
-        „Marktwert" nennen. belegt = echte Verkäufe oder lizenzierter Katalog ·
-        spanne = Richtwert aus Angeboten oder alten Belegen · unbekannt =
-        bester Rückfall, Grund im geschlossenen Enum."""
+        belegt = echte Verkäufe oder Kartendatenbank · spanne = Richtwert aus
+        Angeboten oder alten Belegen · unbekannt = kein tragfähiger Wert,
+        Grund im geschlossenen Enum.
+
+        Seit dem 07.08. (ADR-002) darf est_value auch None sein: ohne Belege
+        gibt es keine Zahl mehr, und ein Rohkarten-Preis am Slab wird
+        verworfen. Die Listing-Pipeline bekommt dann bewusst keine Preisbasis
+        — der Nutzer trägt den Preis selbst ein, statt dass blind recherchiert
+        wird (die alte 307,90-€-Regel gilt nur noch für BELEGTE Werte)."""
         src = item.get("price_source")
         ist_slab = bool((item.get("graded") or {}).get("grade"))
         _roh = ("cardmarket", "tcgplayer", "scryfall", "ygoprodeck", "tcgdex", "tcgcsv")
