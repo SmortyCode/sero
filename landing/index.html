@@ -6,6 +6,9 @@
 <title>SERO — Scannen. Prüfen. Bei eBay verkaufen.</title>
 <meta name="description" content="SERO erkennt dein Stück auf dem Foto, zeigt den Marktwert aus echten Belegen und bereitet den eBay-Entwurf vor. Live geht er erst nach deiner Freigabe.">
 <link rel="canonical" href="https://seromunich.com/">
+<link rel="alternate" hreflang="de" href="https://seromunich.com/">
+<link rel="alternate" hreflang="en" href="https://seromunich.com/en/">
+<link rel="alternate" hreflang="x-default" href="https://seromunich.com/">
 <link rel="icon" href="assets/sero-slab.svg" type="image/svg+xml">
 <link rel="alternate icon" href="assets/app-icon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -20,7 +23,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Unbounded:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="landing.css?v=3">
+<link rel="stylesheet" href="landing.css?v=4">
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
@@ -36,6 +39,7 @@
     <a href="#guide">Home-Screen</a>
     <a href="#faq">FAQ</a>
   </nav>
+  <a class="lang" href="en/" hreflang="en" lang="en" aria-label="Switch to English">EN</a>
   <a class="btn btn-small" href="https://app.seromunich.com/app/">Zur App</a>
 </header>
 
@@ -44,6 +48,7 @@
 <!-- ══════════════ Hero ══════════════ -->
 <section class="hero" aria-labelledby="hero-h">
   <div class="hero-light" data-parallax="0.18" aria-hidden="true"></div>
+  <div class="hero-sigil" data-parallax="0.06" aria-hidden="true"></div>
   <div class="hero-inner">
     <img class="hero-cam" data-parallax="-0.08" src="assets/scan-cam-dark.png"
          width="180" height="178" alt="" aria-hidden="true">
@@ -52,9 +57,9 @@
       Scannen.<br>Prüfen.<br><em>Bei eBay verkaufen.</em>
     </h1>
     <p class="hero-sub">
-      SERO erkennt dein Stück auf dem Foto, zeigt den Marktwert aus echten
-      Belegen und bereitet den eBay-Entwurf vor. Live geht er erst, wenn du
-      ihn freigibst.
+      SERO erkennt dein Stück auf dem Foto, belegt den Marktwert mit echten
+      Verkäufen und legt dir den fertigen eBay-Entwurf hin. Live geht er
+      erst, wenn du ihn freigibst.
     </p>
     <div class="hero-ctas">
       <a class="btn btn-primary" href="https://app.seromunich.com/app/">Direkt zur App</a>
@@ -74,25 +79,26 @@
       <span class="step-nr" aria-hidden="true">1</span>
       <div>
         <h3>Scannen</h3>
-        <p>Ein Foto oder mehrere. SERO liest Set, Nummer und Sprache —
-        bei gegradeten Stücken auch Bewerter, Note und Zertifikatsnummer
-        direkt vom Label.</p>
+        <p>Ein Foto reicht, mehrere sind besser. SERO erkennt Set, Nummer,
+        Auflage und Sprache — bei Slabs liest es PSA, CGC oder BGS samt Note
+        und Zertifikatsnummer direkt vom Label.</p>
       </div>
     </li>
     <li class="step reveal">
       <span class="step-nr" aria-hidden="true">2</span>
       <div>
         <h3>Prüfen</h3>
-        <p>Titel, Kategorie, Preis, Versand, Bilder: alles liegt als Entwurf
-        bereit. Was nicht passt, tippst du an und änderst es.</p>
+        <p>Titel in Käufersprache, Kategorie, Preisvorschlag, Versand,
+        freigestellte Fotos — alles liegt als Entwurf bereit. Was nicht
+        passt, tippst du an und änderst es.</p>
       </div>
     </li>
     <li class="step reveal">
       <span class="step-nr" aria-hidden="true">3</span>
       <div>
         <h3>Listen</h3>
-        <p>Ein Tipp, und der Entwurf geht zu eBay. Live ist er erst nach
-        deiner Freigabe — nie von allein.</p>
+        <p>Ein Tipp, und der Entwurf geht an dein eBay-Konto. Live ist er
+        erst nach deiner Freigabe — nie von allein, nie ungefragt.</p>
       </div>
     </li>
   </ol>
@@ -106,19 +112,21 @@
   <dl class="prep">
     <div class="prep-row reveal">
       <dt>Identität</dt>
-      <dd>Set, Nummer, Auflage, Sprache. Bei Slabs liest SERO Bewerter,
-      Note und Zertifikat vom Label — eine PSA 10 ist keine PSA 9.</dd>
+      <dd>Set, Nummer, Auflage, Sprache — die Details, an denen der Wert
+      hängt. Bei Slabs gehören Bewerter, Note und Zertifikat dazu: eine
+      PSA 10 ist ein anderes Stück als eine PSA 9.</dd>
     </div>
     <div class="prep-row reveal">
       <dt>Marktwert</dt>
-      <dd>Aus echten Belegen: verkaufte Stücke und aktive Angebote.
-      Reichen die Belege nicht, steht da ehrlich „Wert unbekannt" —
-      keine erfundene Zahl.</dd>
+      <dd>Aus echten Belegen: verkaufte Stücke und aktive Angebote,
+      passend zu Auflage, Sprache und Note. Reichen die Belege nicht,
+      steht da ehrlich „Wert unbekannt" — nie eine erfundene Zahl.</dd>
     </div>
     <div class="prep-row reveal">
       <dt>eBay-Entwurf</dt>
-      <dd>Titel in Käufersprache, Kategorie, Pflichtangaben, Versand.
-      Dein eigenes Foto ist freigestellt das Hauptbild.</dd>
+      <dd>Titel, den Käufer wirklich suchen, die passende Kategorie,
+      alle Pflichtangaben, Versand. Dein eigenes Foto ist freigestellt
+      das Hauptbild — kein Katalogbild.</dd>
     </div>
     <div class="prep-row reveal">
       <dt>Freigabe</dt>
@@ -136,9 +144,9 @@
   <p class="kicker reveal">Für wen</p>
   <h2 id="who-h" class="sect-title reveal">Gemacht für Sammlerware.</h2>
   <ul class="who">
-    <li class="reveal"><strong>Sammelkarten</strong><span>roh und gegradet — PSA, CGC, BGS und weitere</span></li>
-    <li class="reveal"><strong>Retro-Spiele</strong><span>Module, CDs, versiegelte Klassiker</span></li>
-    <li class="reveal"><strong>Manga &amp; Comics</strong><span>Erstauflagen, japanische Originale, Slabs</span></li>
+    <li class="reveal"><strong>Sammelkarten</strong><span>Pokémon, One Piece, Magic und mehr — roh und gegradet, PSA, CGC, BGS</span></li>
+    <li class="reveal"><strong>Retro-Spiele</strong><span>vom NES-Modul bis zum versiegelten PS2-Klassiker, auch WATA-gegradet</span></li>
+    <li class="reveal"><strong>Manga &amp; Comics</strong><span>Erstauflagen, japanische Originale, gegradete Bände</span></li>
     <li class="reveal"><strong>Weitere Stücke</strong><span>SERO erkennt auch Elektronik, Spielzeug und mehr — dort prüfst du den Vorschlag genauer</span></li>
   </ul>
 </section>
@@ -266,6 +274,6 @@
   </nav>
 </footer>
 
-<script src="landing.js?v=3" defer></script>
+<script src="landing.js?v=4" defer></script>
 </body>
 </html>

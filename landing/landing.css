@@ -90,10 +90,17 @@ a { color: var(--blue-soft); }
 }
 .top-nav a:hover { color: var(--ink); background: rgba(242, 239, 233, .06); }
 
-.top .btn-small { margin-left: auto; }
+.lang {
+  margin-left: auto;
+  color: var(--ink-dim); text-decoration: none;
+  font-size: 13px; font-weight: 600; letter-spacing: .08em;
+  min-height: 44px; display: inline-flex; align-items: center;
+  padding: 0 12px; border-radius: 999px;
+  transition: color .2s, background-color .2s;
+}
+.lang:hover { color: var(--ink); background: rgba(242, 239, 233, .06); }
 @media (min-width: 720px) {
   .top-nav { display: flex; }
-  .top .btn-small { margin-left: 0; }
 }
 
 /* ══════════════ Buttons ══════════════ */
@@ -148,6 +155,39 @@ a { color: var(--blue-soft); }
     radial-gradient(55% 45% at 18% 78%, rgba(26, 74, 140, .12), transparent 70%),
     radial-gradient(40% 36% at 85% 60%, rgba(120, 90, 40, .07), transparent 70%);
   will-change: transform;
+}
+
+/* SR-Signet als Lichtprägung in der Wand: das Monogramm-PNG dient als
+   Alpha-Maske, gefüllt mit tiefem Blau. Alle paar Sekunden wandert ein
+   schmaler Lichtschein durch die Konturen — wie Studiolicht auf Prägung.
+   Zentrierung über margin, nicht transform: transform gehört dem Parallax. */
+.hero-sigil {
+  position: absolute; z-index: -1;
+  width: 150vmin; height: 150vmin;
+  top: 50%; right: -52vmin;
+  margin-top: -78vmin;
+  -webkit-mask: url("assets/monogram-white.png") center / contain no-repeat;
+  mask: url("assets/monogram-white.png") center / contain no-repeat;
+  background:
+    linear-gradient(115deg,
+      transparent 32%,
+      rgba(127, 168, 220, .9) 50%,
+      transparent 68%),
+    linear-gradient(200deg,
+      rgba(46, 111, 204, .55),
+      rgba(26, 74, 140, .28) 55%,
+      rgba(26, 74, 140, .08));
+  background-size: 340% 100%, 100% 100%;
+  background-position: 130% 0, 0 0;
+  background-repeat: no-repeat;
+  opacity: .14;
+  animation: sigil-sweep 12s ease-in-out infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+@keyframes sigil-sweep {
+  0%, 22%   { background-position: 130% 0, 0 0; }
+  62%, 100% { background-position: -60% 0, 0 0; }
 }
 
 .hero-inner {
@@ -553,5 +593,6 @@ a { color: var(--blue-soft); }
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; filter: none; transition: none; }
   .btn, .faq-ic::before, .faq-ic::after, .faq-body { transition: none; }
-  .hero-light, .hero-cam { transform: none !important; }
+  .hero-light, .hero-cam, .hero-sigil { transform: none !important; }
+  .hero-sigil { animation: none; background-position: 50% 0, 0 0; }
 }
