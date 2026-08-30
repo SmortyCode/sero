@@ -350,9 +350,13 @@ function renderAccountPane(body, me) {
   document.getElementById("accExportFirst").onclick = (e) => exportCollection(e.currentTarget);
   const inp = document.getElementById("accDelConfirm");
   const go = document.getElementById("accDeleteGo");
-  inp.oninput = () => { go.disabled = inp.value.trim() !== "LÖSCHEN"; };
+  /* Das Bestätigungswort muss dem Label folgen, sonst tippt man in der
+     englischen App DELETE und der Knopf bleibt grau. */
+  const delWord = _L("LÖSCHEN");
+  const typedOk = () => inp.value.trim().toUpperCase() === delWord.toUpperCase();
+  inp.oninput = () => { go.disabled = !typedOk(); };
   go.onclick = async () => {
-    if (inp.value.trim() !== "LÖSCHEN") return;
+    if (!typedOk()) return;
     go.disabled = true;
     try {
       await post("/api/app/account/delete");
@@ -432,11 +436,6 @@ function themeValueLabel() {
   return ({ auto: _L("Automatisch"), light: _L("Hell"), dark: _L("Dunkel") })[cur] || _L("Automatisch");
 }
 
-function langValueLabel() {
-  const cur = (typeof storeSafe !== "undefined" ? storeSafe.getString("sero_lang", "auto") : "auto") || "auto";
-  return ({ auto: _L("Automatisch"), de: "Deutsch", en: "English" })[cur] || _L("Automatisch");
-}
-
 function catalogValueLabel() {
   const on = typeof catalogView === "function" ? catalogView() : false;
   return on ? _L("Katalogbilder, wenn verfügbar") : _L("Eigene Fotos");
@@ -453,7 +452,6 @@ function renderAppearPane(body, me, summary) {
   const nAlerts = summary?.active_alerts;
   body.innerHTML = settingsGroup("", `
     ${settingsRow({ id: "apTheme", iconName: "gear", title: "Erscheinungsbild", value: themeValueLabel() })}
-    ${settingsRow({ id: "apLang", iconName: "doc", title: "Sprache", value: langValueLabel() })}
     ${settingsRow({ id: "apCatalog", iconName: "photo", title: "Bilder in der Sammlung", value: catalogValueLabel() })}
   `) + settingsGroup(_L("Preisalarme"), `
     ${settingsRow({
@@ -476,26 +474,8 @@ function renderAppearPane(body, me, summary) {
       renderAppearPane(body, me, summary);
     });
   };
-  document.getElementById("apLang").onclick = () => {
-    const cur = storeSafe.getString("sero_lang", "auto") || "auto";
-    openOptions(_L("Sprache"), [
-      { label: _L("Automatisch"), value: "auto", sel: cur === "auto" },
-      { label: "Deutsch", value: "de", sel: cur === "de" },
-      { label: "English", value: "en", sel: cur === "en" },
-    ], (v) => {
-      storeSafe.setString("sero_lang", v);
-      document.documentElement.lang = v === "en" ? "en" : (v === "de" ? "de" : (navigator.language || "de").slice(0, 2));
-      /* Neu laden ist der einzige Weg ohne halb übersetzte Oberfläche. Damit
-         das nicht den ganzen Stapel auf die Sammlung wirft, merkt sich SERO
-         die offene Einstellungsseite und öffnet sie danach wieder. */
-      try {
-        const top = settingsNav.stack[settingsNav.stack.length - 1];
-        if (top) storeSafe.setString("sero_settings_back", top.id);
-      } catch (_) { /* */ }
-      toast(_L("Sprache gespeichert — App wird neu geladen"));
-      setTimeout(() => location.reload(), 500);
-    });
-  };
+  /* Sprachauswahl entfernt (Master 30.08.): die App ist English-only. Ein
+     Umschalter, der nur eine Sprache anbietet, ist eine leere Tür. */
   document.getElementById("apCatalog").onclick = () => {
     const on = catalogView();
     openOptions(_L("Bilder in der Sammlung"), [
@@ -707,7 +687,7 @@ function renderLegalPane(body) {
 function renderAboutPane(body) {
   body.innerHTML = `
     <div class="set-card set-pad about-card">
-      <img src="assets/app-icon.png?v=7" alt="" width="64" height="64" class="about-icon">
+      <img src="assets/app-icon.png?v=8" alt="" width="64" height="64" class="about-icon">
       <p class="set-plan-name">SERO</p>
       <p class="set-sub">${_esc(SERO_APP_VERSION)} · ${_esc(platformLabel())}</p>
       <button type="button" class="btn-secondary" id="aboutSite">${_L("Website öffnen")}</button>
@@ -754,9 +734,9 @@ function renderSettingsList(body, me, summary) {
   const ebay = document.getElementById("setEbay");
   if (ebay) ebay.onclick = () => pushPane("sell", "eBay & Verkaufssetup", (b) => renderSellPane(b, me));
   const appear = document.getElementById("setAppear");
-  if (appear) appear.onclick = () => pushPane("appear", "Darstellung & Sprache", (b) => renderAppearPane(b, me, summary));
+  if (appear) appear.onclick = () => pushPane("appear", "Darstellung", (b) => renderAppearPane(b, me, summary));
   const alerts = document.getElementById("setAlerts");
-  if (alerts) alerts.onclick = () => pushPane("appear", "Darstellung & Sprache", (b) => renderAppearPane(b, me, summary));
+  if (alerts) alerts.onclick = () => pushPane("appear", "Darstellung", (b) => renderAppearPane(b, me, summary));
   const data = document.getElementById("setData");
   if (data) data.onclick = () => pushPane("data", "Daten & Backup", (b) => renderDataPane(b));
   const help = document.getElementById("setHelp");
@@ -784,7 +764,7 @@ function paintProfileHub(sc, me, summary, statsBusy) {
         <span class="tv-ava" aria-hidden="true">
           ${me.avatar_url
             ? `<img src="${_esc(me.avatar_url)}" alt="">`
-            : `<img src="assets/app-icon.png?v=7" alt="">`}
+            : `<img src="assets/app-icon.png?v=8" alt="">`}
           <span class="tv-ava-cam">${_icon("camera", 14)}</span>
         </span>
         <span class="tv-prof-info">
@@ -841,18 +821,9 @@ async function renderProfile(into) {
 
   if (typeof paintTopAva === "function") paintTopAva();
 
-  // Nach einem Sprachwechsel dieselbe Seite wieder öffnen (siehe apLang).
-  let back = null;
-  try { back = storeSafe.getString("sero_settings_back", "") || null; } catch (_) { /* */ }
-  if (back) {
-    try { storeSafe.remove("sero_settings_back"); } catch (_) { /* */ }
-    const row = document.getElementById({
-      account: "setAccount", billing: "menuBilling", sell: "setEbay",
-      appear: "setAppear", data: "setData", help: "setHelp",
-      legal: "setLegal", about: "setAbout", settings: "menuSettings",
-    }[back] || "");
-    if (row) row.click();
-  }
+  /* Das Wiederöffnen einer Einstellungsseite nach dem Neuladen hing allein am
+     Sprachwechsel. Der ist weg (English-only), also auch dieser Umweg — den
+     Schlüssel setzte sonst niemand. */
 }
 
 function wireSettingsChrome() {

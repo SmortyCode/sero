@@ -109,7 +109,10 @@ def test_teil_b_sammlung_ohne_vier_kreise():
     assert '"1J"' in chunk
     assert "gitem-add" in JS
     assert "Wert wird ab dem 3. Stück sichtbar" in JS
-    assert '["draft", L("Entwurf")]' in JS
+    # Master 30.08. nachmittags: ein Stueck in der Sammlung ist kein Entwurf.
+    # Entwuerfe leben im Verkaufen-Reiter; hier heisst der Normalfall Bestand.
+    assert '["hold", L("Bestand")]' in JS
+    assert '["draft", L("Entwurf")]' not in JS
 
 
 def test_teil_b_scan_review_copy():

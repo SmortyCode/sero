@@ -14,24 +14,26 @@ def _fn(src, name):
     return src[i : j if j > 0 else None]
 
 
-def test_filter_logo_oder_label():
-    fn = _fn(JS, "invCatChipHtml")
-    assert "fchip-logo" in fn
-    assert "fchip-lab" in fn
-    assert "aria-label" in fn
-    assert "? `<img class=\"fchip-logo\"" in fn or '? `<img class="fchip-logo"' in fn
-    assert ': `<span class="fchip-lab">' in fn
+def test_filter_chips_sind_text():
+    """Kategorie-Chips tragen Text, keine Markenlogos.
+
+    Vorher rendeten „Pokémon" und „One Piece" ihr Marken-SVG. Im Filter
+    standen damit zwei Fremdschriften neben „Games" und „Weitere Karten" —
+    Sven hat das als Schriftfehler gemeldet. Ein Logo wäre auch nie in
+    derselben Schrift wie der Rest.
+    """
+    for name in ("invCatChipHtml", "catChipHtml"):
+        fn = _fn(JS, name)
+        assert "fchip-logo" not in fn, name
+        assert "CAT_CHIP_LOGO" not in fn, name
+        assert "aria-label" in fn, name
+        assert "L(label)" in fn, name
+    assert 'fchip-lab' in _fn(JS, "invCatChipHtml")
+    assert "CAT_CHIP_LOGO" not in JS
+    assert "fchip-logo" not in CLEAN
     assert "function invCatsChipOrder" in JS
     assert "CAT_CHIP_ORDER.filter" in _fn(JS, "invCatsChipOrder")
     assert 'const INV_CATS = ["One Piece", "Games", "Pokémon", "Sonstiges", "TCG Sonstiges"]' in JS
-
-
-def test_filter_wordmark_invert_nur_dark():
-    assert "html.skin-clean.force-light .fchip-logo { filter: none; }" in CLEAN
-    assert "html.skin-clean.force-dark .fchip-logo" in CLEAN
-    assert "filter: invert(1)" in CLEAN
-    block = CLEAN.split("html.skin-clean.force-light .fchip-logo")[1][:80]
-    assert "invert" not in block
 
 
 def test_filter_progressive_disclosure():
@@ -86,7 +88,10 @@ def test_light_tokens_und_leaks():
     assert "html.skin-clean.force-light #colGrid .gitem:not(.gitem-add)" in CLEAN
     assert "html.skin-clean.force-light .col-port-val" in CLEAN
     assert "html.skin-clean.force-light #viewLogin { background: #fff; }" in CLEAN
-    assert "html.skin-clean.force-light #splash { background: #000 !important; }" in CLEAN
+    # Splash folgt dem Thema: Weiß mit Anthrazit-Glyph, Schwarz mit weißem.
+    # Vorher war er auch im Hellen fest schwarz — der helle Start blitzte
+    # dann erst schwarz auf und sprang danach auf Weiß.
+    assert "html.skin-clean.force-light #splash { background: #fff !important; }" in CLEAN
     assert "html.skin-clean.force-light .tv-prof-card" in CLEAN
     assert "html.skin-clean.force-light .d-cta-dock" in CLEAN
     assert "html.skin-clean.force-light .d-desc-preview" in CLEAN
@@ -111,3 +116,67 @@ def test_kein_autopublish_followup():
     assert "function listingInputBusy" in JS
     assert "function enterGuestApp" in JS
     assert "function flushGuestDrafts" in JS
+
+
+def test_splash_folgt_dem_thema():
+    """Splash: Anthrazit-Glyph auf Weiß, weißes Glyph auf Schwarz.
+
+    Der Splash trug nur EIN Bild. Im Hell-Modus lag darum entweder ein
+    weisses Glyph auf Weiss oder ein dunkles auf Schwarz — je nachdem,
+    welche Regel gerade gewann.
+    """
+    block = HTML.split('id="splash"')[1].split("</div>")[0]
+    assert 'class="logo-light"' in block
+    assert 'class="logo-dark"' in block
+    assert "wordmark-navy.png" in block.split('class="logo-light"')[1][:80]
+    assert "wordmark-sero-chrome.png" in block.split('class="logo-dark"')[1][:90]
+    # Das Thema muss VOR dem ersten Anstrich stehen, sonst blitzt Schwarz auf.
+    kopf = HTML.split("</head>")[0]
+    assert "<script>" in kopf
+    assert 'localStorage.getItem("sero_theme")' in kopf
+    assert 'c.toggle("force-light", !dunkel)' in kopf
+    # Helle Startbilder werden vor den dunklen angeboten.
+    assert "startup-1170x2532-light.png" in HTML
+    assert "startup-780x1688-light.png" in HTML
+    assert HTML.index("startup-1170x2532-light.png") < HTML.index('startup-1170x2532.png?v=3')
+    assert "(prefers-color-scheme: light)" in HTML
+
+
+def test_asset_pins_einheitlich():
+    """Ein Bild, ein Pin.
+
+    Die Logos wurden neu gezeichnet, aber Topbar, Login und Leerzustände
+    zeigten weiter auf ?v=3 und die Tour auf ?v=2. Wer die alte Datei im
+    Cache hatte, sah dauerhaft das alte Glyph — genau der Fehler „weisses
+    Logo auf hellem Grund".
+    """
+    import re
+    quellen = {
+        "index.html": HTML,
+        "sero.js": JS,
+        "sero-profile.js": (ROOT / "frontend" / "sero-profile.js").read_text(encoding="utf-8"),
+    }
+    pins: dict[str, set[str]] = {}
+    for text in quellen.values():
+        for datei, v in re.findall(r"assets/([\w.-]+\.png)\?v=(\d+)", text):
+            pins.setdefault(datei, set()).add(v)
+    uneinig = {d: sorted(vs) for d, vs in pins.items() if len(vs) > 1}
+    assert not uneinig, f"Verschiedene Pins fuer dasselbe Bild: {uneinig}"
+
+
+def test_hell_scan_profil_und_fokusring():
+    """Die Flächen, die Sven im Hell-Modus schwarz gesehen hat."""
+    # Der Scan-Sucher ist randlos und fast bildschirmhoch — schwarz bleibt
+    # er im Hellen ein Block, in dem Knopf und Hinweis verschwinden.
+    for regel in ("html.skin-clean.force-light .scan-finder {",
+                  "html.skin-clean.force-light .scan-br {"):
+        assert regel in CLEAN, regel
+    for regel in ("html.skin-clean.force-light #tabProfile",
+                  "html.skin-clean.force-light #profileScroll"):
+        assert regel in CLEAN, regel
+    profil = CLEAN.split("html.skin-clean.force-light #tabProfile")[1][:220]
+    assert "#f2f2f7" in profil
+    # Fokusring bleibt sichtbar, aber nicht als 2 px reines Schwarz.
+    ring = CLEAN.split("html.skin-clean.force-light :focus-visible")[1][:260]
+    assert "outline: 2px solid #000" not in ring
+    assert "rgba(0, 0, 0, .42)" in ring

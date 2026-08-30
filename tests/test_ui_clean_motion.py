@@ -23,8 +23,11 @@ def test_chrome_nur_splash():
 
 def test_eine_primaeraktion_und_faq_in_hilfe():
     assert 'id="homeScanOne"' in JS
-    assert "home-sell-chips" in JS
-    assert 'class="scan-chip"' in JS
+    # 30.08.: Wirklich nur EINE Primäraktion. Stapel und „nur erfassen"
+    # hängen am Plus-Knopf der Bodenleiste, nicht als zweite Knopfreihe.
+    assert "home-sell-chips" not in JS
+    assert 'id="homeScanBatch"' not in JS
+    assert 'id="homeCollectOnly"' not in JS
     assert 'key: "faq"' not in JS
     assert "function faqAccordionHtml" in JS
     assert "faqAccordionHtml" in PROF

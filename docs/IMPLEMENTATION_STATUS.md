@@ -1,8 +1,70 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 30. August 2026 — aaaa.md Follow-up (Filter/Sheet/Detail/Light nachgezogen); Pins js 257 / css 166 / clean 45. Kein Deploy (Briefing).**
+**Stand: 30. August 2026 — Nachtrag zum Master (Filter-Schrift, Logos, Hell: Scan/Profil/Splash); Pins js 259 / css 168 / clean 47 / profile 25. Kein Deploy, kein Publish.**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.
+
+## Nachtrag 30.08. — Svens Rückmeldung nach dem Master-PR
+
+Branch `ui/english-only-glyph-30-08`, PR #1. Fünf gemeldete Fehler, alle mit
+Playwright-Bildern bei 390×844 nachgestellt und danach nachgewiesen behoben
+(Skript lag unter `tmp/`, ist nicht eingecheckt).
+
+| Fehler | Ursache | Behoben |
+|---|---|---|
+| „One Piece“ und „Pokémon“ in fremder Schrift | Die Chips rendeten das **Marken-SVG** statt eines Labels — `CAT_CHIP_LOGO` in `catChipHtml`/`invCatChipHtml`. Ein Logo kann nie die Schrift des Nachbarn haben. | Beide Chip-Bauer geben nur noch Text. `CAT_CHIP_LOGO`, `.fchip-logo` und `.fchip-logoed` sind weg. „Weiteres“ fehlte im Wörterbuch → „Other“. |
+| Logo hell falsch / weiß auf Weiß | Die Bilder waren neu gezeichnet, aber Topbar, Login und Leerzustände zeigten weiter auf `?v=3`, die Tour auf `?v=2`, Profil und Avatar auf `app-icon?v=7`. Wer die alte Datei im Cache hatte, sah dauerhaft das alte Glyph. | Alle Verweise auf einen Pin gezogen (`wordmark-navy/white?v=4`, `app-icon?v=8`). Neue Wache `test_asset_pins_einheitlich` schlägt an, sobald ein Bild zwei Pins hat. |
+| Splash schwarz auf schwarz / heller Start schwarz | Der Splash trug **ein** Bild, und `force-light` erzwang `#000`. Dazu stand `force-dark` fest im `html`-Tag: bis `sero.js` am Seitenende lief, blitzte immer Schwarz auf. | Splash hat jetzt `logo-light` (`wordmark-navy`) und `logo-dark` (`wordmark-sero-chrome`); hell = `#fff`. Ein kurzes Skript im `<head>` setzt das Thema vor dem ersten Anstrich. Helle Startbilder `startup-*-light.png` per `prefers-color-scheme` verdrahtet, vor den dunklen. |
+| Scan hell ein schwarzer Block | `.scan-hero` und `.scan-finder` stehen fest auf `#1c1c1e` und hatten **keine** Hell-Regel. Der schwarze „Photograph“-Knopf und der graue Hinweis verschwanden darin; randlos und fast bildschirmhoch sah der Block aus wie ein dicker schwarzer Rahmen. | Hell: Fläche `#f2f2f7`, Text `#3c3c43`/`#1c1c1e`, Sucher-Ecken `rgba(0,0,0,.28)` statt Weiß auf Weiß. |
+| Profil hell schwarz, dicker schwarzer Rand | Die Profilseite war weiß auf weiß, die Kennzahlen-Karte dagegen dunkelblau. Der „dicke Rand“ war der **Fokusring**: 2px reines Schwarz, den das Profil beim Öffnen auf den Zurück-Knopf setzt. | Gruppierte Liste nach iOS-Art: `#tabProfile`/`#profileScroll`/`.settings-view` grau `#f2f2f7`, `.tv-prof-card`/`.set-card`/`.impact-card` weiß. Fokusring bleibt sichtbar, aber `rgba(0,0,0,.42)`. |
+
+Nebenbefund: der Prüfer `tests/_ui_en_light_audit.js` verglich Selektoren per
+Präfix und CSS-Kommentare schluckten den ersten Selektor der Folgeregel. Eine
+Regel für `.scan-finder .btn-secondary` galt damit als Deckung für
+`.scan-finder` — genau deshalb blieb der Scan-Sucher unentdeckt schwarz. Jetzt
+exakter Vergleich, Kommentare vorher entfernt, `force-dark`-Regeln übersprungen.
+
+Pins: `sero.js?v=259`, `sero.css?v=168`, `sero-clean.css?v=47`,
+`sero-profile.js?v=25`, `manifest.webmanifest?v=9`, `sero-dark.css` unverändert
+`v=22`. Suite 809 passed, 4 skipped; Smoke grün. **Kein Deploy** — Contabo läuft
+weiter auf js 256 / css 165 / clean 44.
+
+**Offen:** Auf der Sammlungs-Startseite stehen weiter „Scan multiple products“
+und „Add to collection only“; der Master wollte sie nur auf der Scan-Seite
+loswerden. Ob sie auf der Sammlung bleiben, muss Sven sagen.
+
+## Auftrag 30.08. (Master Nachmittag) — English-only, Glyph, Hell fertig
+
+Master-Prompt `docs/SERO-CURSOR-MASTER-2026-08-30.md`. Nur skin-clean, keine
+zweite Haut. **Kein Contabo-Deploy, kein Publish, kein Löschen, kein OAuth-Abschluss.**
+`kv['dry_run']` unangetastet, `SERO_APP_VERSION` bleibt 4.1.0.
+
+| Stück | Stand |
+|---|---|
+| Sprache | `const LANG = "en"` fest verdrahtet. Keine Gerätesprache, kein Umschalter: Zeile `apLang` und `langValueLabel()` sind aus den Einstellungen raus, die Seite heißt nur noch „Darstellung“. `<html lang="en">`. Manifest `lang: en`, Name „SERO — Your cards. Your market.“ |
+| Wörterbuch | Der deutsche Text bleibt der Schlüssel. Copy-Tabelle des Masters zeichengenau eingetragen (Aktiv→Live, Kacheln→Grid, Darstellung→Display, Erlöse→„Sold items show up here“ …). 25 fehlende Schlüssel nachgetragen, darunter Speichern, Auslösen, LÖSCHEN, du@mail.de. Euro-Format `167,00 €` unverändert. |
+| Kontolöschung | Das Bestätigungswort folgt jetzt dem Label (`_L("LÖSCHEN")` → DELETE). Vorher stand „Type DELETE“ da und der Knopf blieb grau. |
+| Glyph | Fetter Monoline-S+O aus `wordmark-white.png` abgeleitet: Anthrazit für den hellen Kopf, weiß für Splash/Dunkel. Icons, Apple-Touch und Startup neu; nach `landing/assets/` kopiert. Kein „SERO“-Schriftzug in Kopf, Splash oder Reiter-Balken. Kein SR-Monogramm. PTR bleibt CSS-Spinner. |
+| Hell | 20 verbliebene Anthrazit-Inseln geschlossen: Login-Felder, OAuth-Knöpfe, Avatar, Kennzahlen- und Zeilenkarten, Sammelbalken im Verkauf, der ganze eBay-Bereich im Detail (`.d-sell-input`, `.d-chip`, `.d-src`, `.d-seg-sticky`). Dunkelmodus unberührt. |
+| Verkaufen | Primäre Aktion ist „List item“ und führt in den Scan-Reiter — „Photograph“ wohnt nur noch dort. Gilt für beide Leerzustände und die Pille über der Liste. |
+| Sammlung | Ein Stück in der Sammlung ist kein Entwurf mehr. Status: Sold / Live / Wunsch / **Hold** (`.gstat.hold`, gedämpft). Entwürfe leben im Verkaufen-Reiter. |
+| Layout | Scan ohne Querlauf bei 390. Preis-Chips im Defaults-Sheet brechen um, „Fest:“ ist voll tippbar. Leerzustände: 96px aus `.page-scroll` plus 24px — vorher waren zweimal 96px eingebaut und rissen ein Loch. Detail-Body 148px unter den Sticky-CTAs, `#toast` 78px. |
+| Nicht angefasst | Publish-Gate (`ebayConnectedNow` → „eBay is not connected“-Sheet, Timeout 20s, Retry), Entfernen-Sheet mit Rückgängig, Navigations- und Zurück-Wege. |
+
+Website: `~/listo-website/legal.html` sagt in §4, Titel und Fußzeile SERO statt
+Listo. **Offen:** die Nav-Wortmarke `lısto` und die übrigen Seiten (index, guide,
+onboarding) sind weiter Listo-gebrandet — das ist ein Rebrand, keine Textkorrektur,
+und braucht Svens Entscheid.
+
+Pins: `sero.js?v=258`, `sero.css?v=167`, `sero-clean.css?v=46`,
+`sero-profile.js?v=25`, `manifest.webmanifest?v=9`. `sero-dark.css` unverändert
+bei `v=22`. Logo-Dateien neu gepinnt (`wordmark-navy/white?v=3`,
+`wordmark-sero-chrome?v=6`, `app-icon/apple-touch?v=8`, `startup?v=3`) — ohne
+neuen Pin liefert der Cache dem Handy das alte Bild.
+Wache: `tests/test_ui_english_only.py` + `tests/_ui_en_light_audit.js`
+(prüft STR_EN-Lücken, statische HTML-Texte und Anthrazit-Flächen ohne Hell-Regel).
+Suite: 807 passed, 4 skipped. Smoke grün.
+**Kein Deploy gelaufen** — Contabo läuft noch auf js 256 / css 165 / clean 44.
 
 ## Auftrag 30.08. — aaaa.md (Filter, Sheet, Detail-Tabs, Light)
 

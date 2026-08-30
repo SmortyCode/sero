@@ -269,50 +269,73 @@ html.skin-clean .topbar-badge {
   border: 0;
 }
 
+/* ── Bodenleiste: Pille mit zwei Reitern, Scannen als runder Knopf rechts ──
+   Die Leiste selbst ist nur noch ein durchsichtiger Rahmen. Das Glas sitzt
+   auf der Pille; der Plus-Knopf steht frei daneben und öffnet das Scan-Menü. */
 html.skin-clean .tabbar,
 html.skin-clean.force-dark .tabbar {
   position: absolute;
   left: 50%;
   right: auto;
-  width: max-content;
-  max-width: calc(100vw - 32px);
+  width: min(430px, calc(100% - 28px));
+  max-width: none;
   transform: translateX(-50%);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
-  background: var(--glass-bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--glass-radius) !important;
-  box-shadow: var(--glass-shadow), 0 4px 14px rgba(0, 0, 0, .28) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-  padding: 5px 6px;
-  min-height: 54px;   /* 44pt Trefferfläche + Polsterung */
-  gap: 3px;
-}
-html.skin-clean .tabbar::before {
-  display: block !important;
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .14) 0%, transparent 46%);
+  pointer-events: none;   /* nur Pille und Plus fangen Tipps ab */
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0;
+  min-height: 56px;
+  gap: 0;
+}
+html.skin-clean .tabbar::before { display: none !important; }
+html.skin-clean .tabbar-pill,
+html.skin-clean.force-dark .tabbar-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100% - 74px);   /* Plus-Knopf bleibt frei */
+  min-height: 56px;
+  padding: 4px 6px;
+  gap: 2px;
+  pointer-events: auto;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 28px;
+  box-shadow: var(--glass-shadow), 0 4px 14px rgba(0, 0, 0, .28);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 html.skin-clean .tabbar .tab[data-tab="tabHome"] {
   display: none !important;
 }
 html.skin-clean .tabbar .tab[data-tab="tabCollection"] { order: 1; }
-html.skin-clean .tabbar #btnCamera { order: 2; }
+html.skin-clean .tabbar .tab-sep { order: 2; }
 /* Verkaufen ist eine Registerkarte wie die anderen: gleiches Linien-Icon,
    gleiche Breite. Die Sonderbreite war nur für die eBay-Wortmarke da. */
 html.skin-clean .tabbar .tab[data-tab="tabSales"] {
   order: 3;
   flex: 0 0 auto;
+}
+html.skin-clean .tabbar #btnCamera { order: 4; }
+/* Feiner Strich zwischen den beiden Reitern — kurz, halbtransparent. */
+html.skin-clean .tab-sep {
+  display: block;
+  flex: 0 0 auto;
+  width: 1px;
+  height: 22px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, .16);
 }
 html.skin-clean .tab {
   flex: 0 0 auto;
@@ -321,24 +344,32 @@ html.skin-clean .tab {
   min-height: 44px;
   border-radius: var(--glass-radius-sm);
   color: #8e8e93;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  gap: 0;
-  padding: 0 16px;
+  gap: 3px;
+  padding: 0 18px;
 }
+/* Aktiv heißt: Symbol und Wort in voller Farbe. Die gefüllte Kachel
+   dahinter machte die Pille unruhig — der Mockup zeigt sie ohne. */
 html.skin-clean .tab.active,
 html.skin-clean.force-dark .tab.active {
   color: #fff !important;
-  background: var(--glass-inlay) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  background: none !important;
+  box-shadow: none;
 }
 html.skin-clean .tab .tic {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 0;
   background: none !important;
   border: 0 !important;
   box-shadow: none !important;
+}
+/* Dünnere Linien: das Icon-Wörterbuch zeichnet mit Strichstärke 2. */
+html.skin-clean .tab .tic svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.6;
 }
 html.skin-clean .tab.active .tic {
   background: none !important;
@@ -358,24 +389,43 @@ html.skin-clean .tab-ebay-mark svg {
   width: auto;
   fill: currentColor;
 }
+/* Scannen: runder Knopf rechts neben der Pille, umgekehrte Farben —
+   im Dunkeln weiß auf Schwarz, im Hellen schwarz auf Weiß. */
 html.skin-clean .tab-cam,
 html.skin-clean.force-dark .tab-cam,
 html.skin-clean.force-dark #btnCamera {
+  position: absolute;
+  right: 0;
   flex: 0 0 auto;
-  width: auto;
-  height: 44px;
-  min-height: 44px;   /* gleiche 44pt-Trefferfläche wie die Reiter daneben */
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
   margin: 0;
-  border-radius: var(--glass-radius-sm);
+  padding: 0;
   gap: 0;
-  color: #8e8e93;
-  padding: 0 16px;
+  border-radius: 50%;
+  pointer-events: auto;
+  color: #000;
+  background: #ffffff !important;
+  border: 0 !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .48) !important;
+  transition: transform .16s ease;
 }
+html.skin-clean .tab-cam svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2;
+  transition: transform .24s cubic-bezier(.22, 1, .36, 1);
+}
+/* Offenes Menü: das Plus dreht sich zum Kreuz. */
+html.skin-clean .tab-cam.is-open svg { transform: rotate(45deg); }
+html.skin-clean .tab-cam:active { transform: scale(.94); }
+/* Der Scan-Reiter existiert intern weiter — der Knopf sieht dabei gleich aus. */
 html.skin-clean .tab-cam.active,
 html.skin-clean .tab-cam[aria-current="page"] {
-  background: var(--glass-inlay) !important;
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  background: #ffffff !important;
+  color: #000;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .48) !important;
 }
 html.skin-clean .tab-cam::after { display: none !important; }
 html.skin-clean .cam-ico {
@@ -390,10 +440,77 @@ html.skin-clean.force-dark .tab-cam-lab {
   font-weight: 600;
   margin: 0;
 }
-html.skin-clean .tab-cam.active .cam-ico,
-html.skin-clean .tab-cam[aria-current="page"] .cam-ico {
-  filter: grayscale(1) brightness(2);
+
+/* ── Scan-Menü: kleines Popover über dem Plus ──
+   Kein Bottom-Sheet, keine Vollbildfläche. Die Scrim fängt nur Tipps
+   außerhalb ab und bleibt unsichtbar. */
+html.skin-clean .scan-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  background: transparent;
+}
+html.skin-clean .scan-menu {
+  position: absolute;
+  right: max(14px, calc((100% - 430px) / 2));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 82px);
+  z-index: 22;
+  width: max-content;
+  min-width: 214px;
+  max-width: calc(100vw - 28px);
+  padding: 5px;
+  border-radius: 18px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), 0 16px 34px rgba(0, 0, 0, .34);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transform-origin: calc(100% - 24px) bottom;
+  transform: translateY(10px) scale(.86);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, transform .24s cubic-bezier(.22, 1, .36, 1);
+}
+html.skin-clean .scan-menu.is-open {
+  opacity: 1;
   transform: none;
+  pointer-events: auto;
+}
+html.skin-clean .scan-menu[hidden] { display: none; }
+html.skin-clean .scan-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+html.skin-clean .scan-menu-row svg {
+  flex: 0 0 auto;
+  stroke-width: 1.7;
+  opacity: .92;
+}
+html.skin-clean .scan-menu-row:active { background: var(--glass-inlay); }
+html.skin-clean .scan-menu-sep {
+  display: block;
+  height: 1px;
+  margin: 2px 12px;
+  background: var(--separator);
+}
+@media (prefers-reduced-motion: reduce) {
+  html.skin-clean .scan-menu,
+  html.skin-clean .tab-cam,
+  html.skin-clean .tab-cam svg { transition: none; }
 }
 
 html.skin-clean .gitem,
@@ -812,26 +929,6 @@ html.skin-clean .col-ebay-mini .sale-row {
 html.skin-clean .sheet .chips {
   flex-wrap: wrap;
 }
-html.skin-clean .fchip.fchip-logoed {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  min-height: 44px;
-}
-html.skin-clean .fchip-logo {
-  display: block;
-  height: 14px;
-  width: auto;
-  max-width: 78px;
-  object-fit: contain;
-  filter: none;
-  opacity: .88;
-}
-html.skin-clean.force-dark .fchip-logo,
-html.skin-clean:not(.force-light) .fchip-logo { filter: invert(1); }
-html.skin-clean.force-light .fchip-logo { filter: none; }
-html.skin-clean .fchip.on .fchip-logo { opacity: 1; }
 html.skin-clean .inv-range input.is-bad {
   border-color: var(--red);
   box-shadow: inset 0 0 0 1px var(--red);
@@ -1203,8 +1300,10 @@ html.skin-clean .d-cta-dock {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* Der Dock steht fest über dem Inhalt: 148px, damit die letzte Zeile im Detail
+   und der Teilen-Hinweis nicht darunter verschwinden. */
 html.skin-clean #detail.has-cta-dock .detail-body {
-  padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
+  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
 }
 html.skin-clean .d-ebay-cta {
   width: 100%;
@@ -1599,7 +1698,6 @@ html.skin-clean.force-light,
 html.skin-clean.force-light body,
 html.skin-clean.force-light #viewApp,
 html.skin-clean.force-light .topbar,
-html.skin-clean.force-light .tabbar,
 html.skin-clean.force-light .detail,
 html.skin-clean.force-light .detail-bar,
 html.skin-clean.force-light .settings-view,
@@ -1638,7 +1736,6 @@ html.skin-clean.force-light #toast {
   background: #f2f2f7 !important;
   color: #000;
 }
-html.skin-clean.force-light #splash { background: #000 !important; }
 html.skin-clean.force-light .ptr-spin {
   border-top-color: #1c1c1e;
   border-right-color: #1c1c1e;
@@ -2202,11 +2299,29 @@ html.skin-clean.force-light .d-cta-dock {
   border-top: 1px solid rgba(0, 0, 0, .08);
 }
 html.skin-clean.force-light .d-cta-sub { color: #8e8e93 !important; }
-html.skin-clean.force-light .tabbar {
-  background: rgba(255, 255, 255, .92) !important;
-  border: 1px solid rgba(0, 0, 0, .1) !important;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .12) !important;
+html.skin-clean.force-light .tabbar-pill {
+  background: rgba(255, 255, 255, .96) !important;
+  border: 1px solid rgba(0, 0, 0, .06) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .12) !important;
 }
+html.skin-clean.force-light .tab-sep { background: rgba(0, 0, 0, .10); }
+/* Hell: schwarzer Kreis mit weißem Plus — wie im Entwurf. */
+html.skin-clean.force-light .tab-cam,
+html.skin-clean.force-light #btnCamera,
+html.skin-clean.force-light .tab-cam.active,
+html.skin-clean.force-light .tab-cam[aria-current="page"] {
+  background: #000000 !important;
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .24) !important;
+}
+html.skin-clean.force-light .scan-menu {
+  background: rgba(255, 255, 255, .98) !important;
+  border: 1px solid rgba(0, 0, 0, .06) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .16) !important;
+}
+html.skin-clean.force-light .scan-menu-row { color: #000; }
+html.skin-clean.force-light .scan-menu-row:active { background: rgba(0, 0, 0, .05); }
+html.skin-clean.force-light .scan-menu-sep { background: rgba(0, 0, 0, .08); }
 html.skin-clean.force-light .tab,
 html.skin-clean.force-light .tab .tic,
 html.skin-clean.force-light .tab-lab { color: #8e8e93; }
@@ -2236,12 +2351,89 @@ html.skin-clean.force-light .scan-ic {
   filter: none !important;
 }
 
+html.skin-clean.force-light .d-hero-title {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .d-pill {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .empty h2,
+html.skin-clean.force-light .empty.empty-well h2 {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .empty p,
+html.skin-clean.force-light .empty.empty-well p {
+  color: #636366 !important;
+}
+html.skin-clean.force-light .empty.empty-well {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-value,
+html.skin-clean.force-light .impact-card-title {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-card {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .ebay-sec,
+html.skin-clean.force-light .d-card,
+html.skin-clean.force-light .btn-secondary,
+html.skin-clean.force-light .seg {
+  color: #1c1c1e;
+}
+html.skin-clean.force-light .btn-secondary {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .tab-page,
+html.skin-clean.force-light #tabScan .page-scroll {
+  overflow-x: hidden;
+}
+html.skin-clean #tabScan .page-scroll {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+/* Scan-Home hat genau einen Auslöser. Die Zusatz-Chips sind aus dem JS raus —
+   die Regel bleibt als Riegel, falls ein Gerät noch altes sero.js im Cache hat. */
+html.skin-clean .scan-extra { display: none !important; }
+html.skin-clean .sell-tpl-chips,
+html.skin-clean #sheetBody .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+html.skin-clean #sheetBody .fchip {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+/* Der Reiter-Balken schwebt über dem Inhalt. Die Scrollfläche hält schon 96px
+   frei (siehe .page-scroll); leere Zustände legen nur noch etwas Luft darunter,
+   damit „Filter zurücksetzen" nicht am Balken klebt. Zweimal 96px ergäbe ein
+   Loch von fast 200px. */
+html.skin-clean #colEmpty,
+html.skin-clean #colGrid .empty.compact,
+html.skin-clean #salesEmpty {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+html.skin-clean #toast {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+}
+
 html.skin-clean.force-light #viewLogin { background: #fff; }
+/* Der Fokusring bleibt sichtbar, aber nicht als 2 px reines Schwarz.
+   Das Profil setzt den Fokus beim Öffnen auf den Zurück-Knopf; im Hellen
+   sah das aus wie ein dicker schwarzer Rahmen um den Knopf. */
 html.skin-clean.force-light :focus-visible,
 html.skin-clean.force-light button:focus-visible,
 html.skin-clean.force-light a:focus-visible,
 html.skin-clean.force-light input:focus-visible {
-  outline-color: #000;
+  outline: 2px solid rgba(0, 0, 0, .42);
+  outline-offset: 2px;
 }
 html.skin-clean.force-light #colGrid .gitem:not(.gitem-add),
 html.skin-clean.force-light .impact-card,
@@ -2274,6 +2466,104 @@ html.skin-clean.force-light .seg button.on {
 }
 html.skin-clean #sheetBody .sheet-hint { margin-bottom: 8px; }
 html.skin-clean #sheetBody .inv-range { margin: 0 0 8px; }
+
+/* ── Hell: die letzten Anthrazit-Inseln ──
+   Das Grundgerüst war schon weiß, einzelne Flächen aber noch #1c1c1e/#2c2c2e:
+   Login-Felder, Kennzahlen-Kärtchen, Zeilenkarten, der Verkaufs-Sammelbalken
+   und der ganze eBay-Bereich im Detail. Auf Weiß standen dort weiße Glyphen
+   auf dunklem Grund — lesbar, aber es sah nach halbem Dunkelmodus aus. */
+html.skin-clean.force-light .login-card input,
+html.skin-clean.force-light .oauth-btn,
+html.skin-clean.force-light .login-social .btn-secondary,
+html.skin-clean.force-light .d-sell-input,
+html.skin-clean.force-light .inv-range input {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+  border: 1px solid rgba(0, 0, 0, .12) !important;
+}
+html.skin-clean.force-light .login-card input::placeholder,
+html.skin-clean.force-light .d-sell-input::placeholder,
+html.skin-clean.force-light .inv-range input::placeholder {
+  color: #8e8e93;
+}
+html.skin-clean.force-light .stat,
+html.skin-clean.force-light .card,
+html.skin-clean.force-light .rc,
+html.skin-clean.force-light .scan-done-ph,
+html.skin-clean.force-light .sales-bulk-bar,
+html.skin-clean.force-light .bulk-sum-row,
+html.skin-clean.force-light .inv-applied-chip,
+html.skin-clean.force-light .topbar-badge,
+html.skin-clean.force-light .d-ebay-photos,
+html.skin-clean.force-light .d-chip,
+html.skin-clean.force-light .d-src,
+html.skin-clean.force-light .d-pane[data-pane="ebay"] .price-tap {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+  border-color: rgba(0, 0, 0, .08);
+}
+html.skin-clean.force-light .topbar-ava { background: #e5e5ea !important; }
+html.skin-clean.force-light .d-seg-sticky { background: #fff !important; }
+html.skin-clean.force-light .d-desc-preview.is-collapsed::after {
+  background: linear-gradient(180deg, transparent, #fff) !important;
+}
+
+/* ── Hell: der Scan-Sucher ──
+   .scan-finder ist eine randlose, fast bildschirmhohe Fläche in #1c1c1e.
+   Im Hell-Modus blieb sie schwarz: der schwarze „Photograph"-Knopf und der
+   graue Hinweis verschwanden darin, und der Block sah aus wie ein dicker
+   schwarzer Rahmen unter der Kopfzeile. */
+html.skin-clean.force-light .scan-hero,
+html.skin-clean.force-light .scan-finder {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+}
+html.skin-clean.force-light .scan-hero p,
+html.skin-clean.force-light .scan-finder p {
+  color: #3c3c43 !important;
+}
+html.skin-clean.force-light .scan-hero h2,
+html.skin-clean.force-light .scan-finder h2,
+html.skin-clean.force-light .scan-finder .scan-ic {
+  color: #1c1c1e !important;
+}
+/* Die Sucher-Ecken waren weiß auf Weiß. */
+html.skin-clean.force-light .scan-br {
+  border-color: rgba(0, 0, 0, .28) !important;
+}
+
+/* ── Hell: Profil ──
+   Gruppierte Liste nach iOS-Art: die Seite grau, die Karten darauf weiß.
+   Vorher lag eine weiße Karte auf weißem Grund, die Kennzahlen-Karte war
+   dagegen dunkelblau — im Hell-Modus wirkte das wie ein schwarzer Block. */
+html.skin-clean.force-light #tabProfile,
+html.skin-clean.force-light #profileScroll,
+html.skin-clean.force-light .settings-view {
+  background: #f2f2f7 !important;
+}
+html.skin-clean.force-light .tv-prof-card,
+html.skin-clean.force-light .set-card,
+html.skin-clean.force-light .impact-card {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06) !important;
+}
+html.skin-clean.force-light .impact-card,
+html.skin-clean.force-light .impact-card-title,
+html.skin-clean.force-light .impact-value {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-card::before { background: none !important; }
+html.skin-clean.force-light .impact-badge {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .10) !important;
+  color: #3c3c43 !important;
+}
+
+/* ── Hell: Splash ──
+   Weiß mit Anthrazit-Glyph. Auf Schwarz blieb der helle Start eine
+   schwarze Fläche, und das dunkle Glyph wäre darauf unsichtbar. */
+html.skin-clean.force-light #splash { background: #fff !important; }
 
 @media (prefers-reduced-motion: reduce) {
   html.skin-clean .login-card,
