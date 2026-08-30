@@ -233,7 +233,7 @@ function mountStaticIcons() {
   $("emptyAdd").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
   $("scanHeroIcon").innerHTML = icon("scanframe", 44);
   $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
-  $("btnScanGallery").innerHTML = icon("photo", 19);
+  $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
   const tabIcons = { tabHome: "home", tabCollection: "stack", tabSales: "tag", tabProfile: "person" };
   document.querySelectorAll(".tab").forEach((t) => {
     const tic = t.querySelector(".tic");
@@ -1025,13 +1025,16 @@ function itemInvCat(item) {
     return "TCG Sonstiges";
   return "Sonstiges";
 }
+function invCatsChipOrder() {
+  const head = CAT_CHIP_ORDER.filter((c) => INV_CATS.includes(c));
+  return head.concat(INV_CATS.filter((c) => !head.includes(c)));
+}
 function invCatChipHtml(cat, on) {
   const label = catUiLabel(cat);
   const logo = CAT_CHIP_LOGO[cat];
-  // Der Name steht immer dabei. Vorher trugen One Piece und Pokémon nur ihr
-  // Logo — im gesetzten Zustand konnte niemand lesen, wonach gefiltert wird.
-  const inner = (logo ? `<img class="fchip-logo" src="${esc(logo)}" alt="">` : "")
-    + `<span class="fchip-lab">${esc(L(label))}</span>`;
+  const inner = logo
+    ? `<img class="fchip-logo" src="${esc(logo)}" alt="">`
+    : `<span class="fchip-lab">${esc(L(label))}</span>`;
   return `<button type="button" class="fchip inv-chip${logo ? " fchip-logoed" : ""} ${on ? "on" : ""}" data-c="${esc(cat)}" aria-pressed="${on ? "true" : "false"}" aria-label="${esc(L(label))}">${inner}</button>`;
 }
 function invCatsSelected(f) {
@@ -1295,9 +1298,8 @@ function invRangeRow(idFrom, idTo, fromVal, toVal, unit, phFrom, phTo) {
 }
 function invFilterGroups(cats) {
   const sel = cats || [];
-  const all = !sel.length;
-  const games = all || sel.includes("Games");
-  const tcg = all || sel.some((c) => INV_TCG_SET.has(c));
+  const games = sel.includes("Games");
+  const tcg = sel.some((c) => INV_TCG_SET.has(c));
   return { games, tcg };
 }
 function invFilterBodyHtml(draft, opts) {
@@ -1305,11 +1307,11 @@ function invFilterBodyHtml(draft, opts) {
   const cats = o.cats || [];
   const groups = invFilterGroups(cats);
   const cond = draft.cond || "";
-  const showGrade = o.strictGrade ? cond === "graded" : cond !== "raw";
+  const showGrade = cond === "graded";
   const showNote = cond === "graded";
   const catBlock = o.withCats
     ? `<p class="sheet-hint">${L("Kategorie")}</p>
-       <div class="chips" id="fltCats">${INV_CATS.map((c) => invCatChipHtml(c, cats.includes(c))).join("")}</div>`
+       <div class="chips" id="fltCats">${invCatsChipOrder().map((c) => invCatChipHtml(c, cats.includes(c))).join("")}</div>`
     : "";
   const gradeBlock = showGrade
     ? `<p class="sheet-hint">${L("Grading")}</p>
@@ -1848,7 +1850,7 @@ try { document.documentElement.lang = LANG; } catch (_) { /* */ }
 const STR_EN = {
   /* ── Navigation, Tabs, Grundgerüst ── */
   "Sammlung": "Collection", "Verkauf": "Selling", "Profil": "Profile", "Scanner": "Scanner",
-  "Start": "Home", "eBay": "eBay",
+  "Start": "Home", "eBay": "eBay", "Info": "Info",
   "Karte scannen": "Scan item", "Scannen": "Scan", "Aus Fotos auswählen": "Choose from photos",
   "Verbindungen": "Connections", "Darstellung": "Appearance", "Daten & Sync": "Data & sync",
   "Hilfe & Rechtliches": "Help & legal", "Einrichten": "Set up",
@@ -1877,6 +1879,9 @@ const STR_EN = {
   "Favorit": "Favorite", "Entfernen": "Remove", "Abbrechen": "Cancel", "Übernehmen": "Apply",
   "Wird geladen …": "Loading…",
   "Aus Mediathek": "From library",
+  "Aus Fotos": "From photos",
+  "Wert wird ab dem 3. Stück sichtbar": "Value appears from the 3rd item",
+  "Erlöse erscheinen hier": "Proceeds appear here",
   "Business Policies deines eBay-Kontos. Keine US-Dienste.":
     "Business policies of your eBay account. No US services.",
   "Weiteres Foto": "Another photo",
@@ -3239,14 +3244,14 @@ function paintTopAva() {
   const me = state.me;
   btn.hidden = false;
   if (!me) {
-    btn.innerHTML = `<img src="assets/app-icon.png?v=5" alt="SERO">`;
+    btn.innerHTML = `<img src="assets/app-icon.png?v=7" alt="SERO">`;
     btn.onclick = () => openSaveLoginSheet();
     btn.setAttribute("aria-label", L("Anmelden zum Speichern"));
     return;
   }
   btn.innerHTML = me.avatar_url
     ? `<img src="${esc(me.avatar_url)}" alt="">`
-    : `<img src="assets/app-icon.png?v=5" alt="SERO">`;
+    : `<img src="assets/app-icon.png?v=7" alt="SERO">`;
   btn.onclick = () => openSeroProfile();
   btn.setAttribute("aria-label", L("Profil"));
 }
@@ -4052,7 +4057,8 @@ function showTour() {
     const last = page === TOUR_PAGES.length - 1;
     el.innerHTML = `
       <div class="party-card tour-card">
-        <img class="tour-wordmark" src="assets/wordmark-sero-chrome.png?v=3" alt="SERO">
+        <img class="tour-wordmark logo-light" src="assets/wordmark-navy.png?v=2" alt="SERO">
+        <img class="tour-wordmark logo-dark" src="assets/wordmark-white.png?v=2" alt="SERO">
         <button type="button" class="tour-skip" id="tourSkip">${L("Überspringen")}</button>
         <h2>${L(h)}</h2>
         <p class="tour-lead voll">${L(p)}</p>
@@ -4395,6 +4401,48 @@ function colHubChartMarkup(pts) {
   </div>`;
 }
 
+function _resamplePts(attr, n) {
+  const raw = String(attr || "").trim().split(/\s+/).map((p) => {
+    const [x, y] = p.split(",");
+    return { x: Number(x), y: Number(y) };
+  }).filter((p) => isFinite(p.x) && isFinite(p.y));
+  if (raw.length < 2) return [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1) * (raw.length - 1);
+    const a = raw[Math.floor(t)];
+    const b = raw[Math.min(raw.length - 1, Math.ceil(t))];
+    const f = t - Math.floor(t);
+    out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+  }
+  return out;
+}
+
+function morphColHubChart(prevAttr, chartEl) {
+  const poly = chartEl && chartEl.querySelector("polyline");
+  if (!poly || !prevAttr) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const toAttr = poly.getAttribute("points") || "";
+  const from = _resamplePts(prevAttr, 24);
+  const dest = _resamplePts(toAttr, 24);
+  if (from.length < 2 || dest.length < 2) return;
+  const t0 = performance.now();
+  const dur = 280;
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const fmt = (pts) => pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / dur);
+    const e = ease(p);
+    const mid = from.map((a, i) => ({
+      x: a.x + (dest[i].x - a.x) * e,
+      y: a.y + (dest[i].y - a.y) * e,
+    }));
+    poly.setAttribute("points", p < 1 ? fmt(mid) : toAttr);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function colRangeDays() {
   return { "7T": 7, "30T": 30, "1J": 365 }[state.colRange || "30T"] || 30;
 }
@@ -4676,31 +4724,32 @@ const HOME_SECS = [
       </div>
     </div>`; } },
 
-  { key: "faq", label: "Häufige Fragen", fn: () => {
-    const items = [
-      ["Brauche ich einen eBay-Developer-Account?",
-       "Nein. Kein Developer-Account, keine API-Keys. Du nimmst dein normales eBay-Verkäuferkonto: anmelden, Freigabe erteilen, den Link zurück in die App einfügen, fertig. SERO sieht dein Passwort nie."],
-      ["Kann SERO etwas ohne mein Okay veröffentlichen?",
-       "Nein. Ohne deinen Tipp geht nichts live — auch nicht versehentlich. Jedes Listing wartest du dir an und gibst es erst dann frei."],
-      ["Liest SERO wirklich PSA-Labels vom Foto?",
-       "Ja. Vom Slab-Foto kommen Bewerter, Note und Zertifikatsnummer in die eBay-Felder. Ist das Label unscharf, fragt SERO nach — geraten wird nicht."],
-      ["Was passiert mit meinen Daten und Fotos?",
-       "Deine Fotos und Stückdaten bleiben bei dir im Konto, solange das Stück in der Sammlung ist. Die eBay-Freigabe liegt verschlüsselt in der EU. Verkauft werden deine Daten nicht — bezahlt wird das Abo."],
-      ["Welche Stücke funktionieren am besten?",
-       "Am besten, wofür SERO gebaut ist: Sammelkarten roh und graded, Retro- und Videospiele, Manga und Comics. Andere Sammlerware oft auch — Alltagsprodukte eher nebenbei."],
-      ["Kann ich jederzeit kündigen?",
-       "Ja. Monatlich im Konto kündbar, ohne Mindestlaufzeit und ohne Anruf."],
-    ];
-    return `<div class="ov-card home-faq-card">
-      <div class="ov-card-title">${L("Häufige Fragen")}</div>
-      <div class="home-faq">
-        ${items.map(([q, a], i) => `<details${i === 0 ? " open" : ""}>
-          <summary>${esc(L(q))}</summary>
-          <p>${esc(L(a))}</p>
-        </details>`).join("")}
-      </div>
-    </div>`; } },
 ];
+
+const FAQ_ITEMS = [
+  ["Brauche ich einen eBay-Developer-Account?",
+   "Nein. Kein Developer-Account, keine API-Keys. Du nimmst dein normales eBay-Verkäuferkonto: anmelden, Freigabe erteilen, den Link zurück in die App einfügen, fertig. SERO sieht dein Passwort nie."],
+  ["Kann SERO etwas ohne mein Okay veröffentlichen?",
+   "Nein. Ohne deinen Tipp geht nichts live — auch nicht versehentlich. Jedes Listing wartest du dir an und gibst es erst dann frei."],
+  ["Liest SERO wirklich PSA-Labels vom Foto?",
+   "Ja. Vom Slab-Foto kommen Bewerter, Note und Zertifikatsnummer in die eBay-Felder. Ist das Label unscharf, fragt SERO nach — geraten wird nicht."],
+  ["Was passiert mit meinen Daten und Fotos?",
+   "Deine Fotos und Stückdaten bleiben bei dir im Konto, solange das Stück in der Sammlung ist. Die eBay-Freigabe liegt verschlüsselt in der EU. Verkauft werden deine Daten nicht — bezahlt wird das Abo."],
+  ["Welche Stücke funktionieren am besten?",
+   "Am besten, wofür SERO gebaut ist: Sammelkarten roh und graded, Retro- und Videospiele, Manga und Comics. Andere Sammlerware oft auch — Alltagsprodukte eher nebenbei."],
+  ["Kann ich jederzeit kündigen?",
+   "Ja. Monatlich im Konto kündbar, ohne Mindestlaufzeit und ohne Anruf."],
+];
+
+function faqAccordionHtml(cls) {
+  return `<div class="${esc(cls || "help-faq")}">
+    ${FAQ_ITEMS.map(([q, a]) => `<details>
+      <summary>${esc(L(q))}</summary>
+      <p>${esc(L(a))}</p>
+    </details>`).join("")}
+  </div>`;
+}
+window.faqAccordionHtml = faqAccordionHtml;
 
 function homeBuiltByFooter() {
   const alt = "Built by a seller who was sick of typing.";
@@ -4746,8 +4795,10 @@ function homeSellHero(d) {
     <p class="home-sell-lead">${L("SERO bereitet aus deinem Foto einen editierbaren eBay-Entwurf vor. Live geht es erst nach deiner Freigabe.")}</p>
     <div class="home-sell-actions">
       <button type="button" class="btn-primary" id="homeScanOne">${icon("camera", 18)}<span>${L("Artikel fotografieren")}</span></button>
-      <button type="button" class="btn-secondary" id="homeScanBatch">${icon("stack", 17)}<span>${L("Mehrere Produkte scannen")}</span></button>
-      <button type="button" class="btn-plain home-collect-only" id="homeCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>
+      <div class="home-sell-chips">
+        <button type="button" class="scan-chip" id="homeScanBatch">${icon("stack", 16)}<span>${L("Mehrere Produkte scannen")}</span></button>
+        <button type="button" class="scan-chip" id="homeCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>
+      </div>
     </div>
     <ul class="home-trust">
       <li>${L("Automatische Vorbereitung von Titel, Kategorie und Preisvorschlag")}</li>
@@ -4821,7 +4872,7 @@ function renderDashboard() {
   $("homeScroll").innerHTML = `
     ${homeSellHero(d)}
     <div class="tab-title-glass tab-title-flush page-tab-title">${titlePair("portfolio", "Portfolio")}</div>
-    <div class="ov-hero themed" style="${heroStyle()}">
+    <div class="ov-hero">
       <div class="ov-value-row">
         ${hasChart ? `<div class="range-row ov-range">
           ${["7T", "1M", "Max"].map((r) => `<button class="range-pill ${range === r ? "on" : ""}" data-r="${r}">${L(r)}</button>`).join("")}
@@ -5308,7 +5359,7 @@ function paintColInvBar(items, hasItems) {
   if (!hasItems) return;
   const wrap = $("colSearchWrap");
   const q = state.colQuery || "";
-  if (wrap) wrap.hidden = !(state.colSearchOpen || q.trim());
+  if (wrap) wrap.hidden = false;
   const inp = $("colSearchLive");
   if (inp && document.activeElement !== inp && inp.value !== q) inp.value = q;
   const clr = $("colSearchClear");
@@ -5345,11 +5396,15 @@ function paintColInvBar(items, hasItems) {
     bar.appendChild(tools);
   }
   if (tools) {
+    const f = state.filter || {};
+    const filterOn = invCatsSelected(f).length > 0 || invSheetActive(f)
+      || f.listed || f.sold || f.fav || f.draft;
+    const sortCur = storeSafe.getString("sero_col_sort") || state.sort || "new";
+    const viewList = colViewMode() === "list";
     tools.innerHTML = `
-      <button type="button" class="inv-tool" id="btnColSearch">${esc(L("Suchen"))}</button>
-      <button type="button" class="inv-tool" id="btnColFilter">${esc(L("Filtern"))}</button>
-      <button type="button" class="inv-tool" id="btnColSort">${esc(L("Sortieren"))}</button>
-      <button type="button" class="inv-tool" id="btnColView">${esc(L(colViewMode() === "list" ? "Kacheln" : "Liste"))}</button>`;
+      <button type="button" class="inv-chip${filterOn ? " on" : ""}" id="btnColFilter">${esc(L("Filtern"))}</button>
+      <button type="button" class="inv-chip${sortCur !== "new" ? " on" : ""}" id="btnColSort">${esc(L("Sortieren"))}</button>
+      <button type="button" class="inv-chip${viewList ? " on" : ""}" id="btnColView">${esc(L(viewList ? "Liste" : "Kacheln"))}</button>`;
   }
   ensureInvSearchWired();
 }
@@ -5382,17 +5437,17 @@ function renderCollection() {
   const hiddenVals = storeSafe.getString("sero_hide") === "1";
   const liveVal = (sumVal => sumVal)(gesamtwert);
   const histPts = colChartPoints(wertItems, liveVal, filterAn);
-  const littleHist = histPts.length < 2;
-  const chartPts = littleHist
-    ? [{ t: Date.now() - 86400000, v: liveVal || 0 }, { t: Date.now(), v: liveVal || 0 }]
-    : histPts;
+  const littleHist = histPts.length < 3;
+  const chartPts = littleHist ? [] : histPts;
   const sumVal = liveVal;
   const sumTxt = hiddenVals ? "••••" : (sumVal != null && isFinite(sumVal) ? money(sumVal) : "—");
-  const sparkHtml = colHubChartMarkup(chartPts);
+  const prevPoly = $("colHubChart") && $("colHubChart").querySelector("polyline");
+  const prevPts = prevPoly ? prevPoly.getAttribute("points") : "";
+  const sparkHtml = littleHist
+    ? `<p class="col-hist-hint">${esc(L("Wert wird ab dem 3. Stück sichtbar"))}</p>`
+    : colHubChartMarkup(chartPts);
   const range = state.colRange || "30T";
-  const histHint = littleHist
-    ? `<p class="col-hist-hint">${esc(L("Verlauf ab dem ersten Scan"))}</p>`
-    : "";
+  const deltaHtml = colHubDeltaFromState();
 
   $("colHero").innerHTML = !hasItems ? "" : `
     <div id="colEbayHub"></div>
@@ -5401,11 +5456,11 @@ function renderCollection() {
         <div class="col-top-main">
           <div class="ov-value col-port-val" id="colHubSum">${sumTxt}</div>
           <div class="col-hub-date" id="colHubDate" hidden></div>
+          ${deltaHtml}
           <span class="col-count-pill">${esc(LF("{0} Stück", state.items.length))}</span>
         </div>
       </div>
       ${sparkHtml}
-      ${histHint}
       <div class="range-row col-range">
         ${["7T", "30T", "1J"].map((r) =>
           `<button type="button" class="range-pill ${range === r ? "on" : ""}" data-col-r="${r}">${L(r)}</button>`
@@ -5413,7 +5468,10 @@ function renderCollection() {
       </div>
     </div>`;
   paintEbayHub();
-  bindColHubScrub(chartPts, sumVal, hiddenVals);
+  if (!littleHist) {
+    morphColHubChart(prevPts, $("colHubChart"));
+    bindColHubScrub(chartPts, sumVal, hiddenVals);
+  }
   paintColInvBar(items, hasItems);
 
   $("colHero").querySelectorAll("[data-col-r]").forEach((p) => {
@@ -5577,14 +5635,16 @@ function renderCollection() {
     const photoInner = u
       ? `<img class="gph" src="${esc(u)}" loading="lazy" alt="" style="background:${esc(tileBg)}">`
       : `<span class="gph-none">${MONO_PH}</span>`;
+    const catChip = catLab
+      ? `<span class="gchip-cat">${esc(catLab)}</span>` : "";
     if (isList) {
-      const meta = [catLab, gradeTxt].filter(Boolean).join(" · ");
+      const meta = gradeTxt || "";
       b.innerHTML = `
         <span class="gph-box">${photoInner}</span>
         ${badge}${fav}
         <div class="gbody">
           <div class="gname">${esc(i.name)}</div>
-          <span class="gcat">${esc(meta)}</span>
+          ${catChip}${meta ? `<span class="gcat">${esc(meta)}</span>` : ""}
         </div>
         <div class="gfoot">${value}</div>`;
       return b;
@@ -5593,9 +5653,11 @@ function renderCollection() {
       <span class="gph-box">${photoInner}</span>
       ${badge}${fav}${isG4 ? "" : `<span class="gmore" data-more="1">${icon("sliders", 14)}</span>`}
       <div class="gbody">
-        <div class="gname">${esc(i.name)}</div>
-        <div class="gfoot">${value}</div>
-        <span class="gmeta">${esc(catLab)}${sealInCat}</span>
+        <div class="ghead">
+          <div class="gname">${esc(i.name)}</div>
+          <div class="gfoot">${value}</div>
+        </div>
+        ${catChip}${sealInCat}
         ${sealUnderName}
         ${statLine}
       </div>`;
@@ -5797,8 +5859,8 @@ function renderScanMode() {
       extra.id = "scanExtraActions";
       extra.className = "scan-extra";
       extra.innerHTML = `
-        <button type="button" class="btn-secondary" id="btnScanBatch">${L("Mehrere Produkte scannen")}</button>
-        <button type="button" class="btn-plain" id="btnScanCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>`;
+        <button type="button" class="scan-chip" id="btnScanBatch">${L("Mehrere Produkte scannen")}</button>
+        <button type="button" class="scan-chip" id="btnScanCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>`;
       hero.parentNode.insertBefore(extra, hero.nextSibling);
       const bb = $("btnScanBatch");
       if (bb) bb.onclick = () => startScanMode("SELL_BATCH");
@@ -5814,10 +5876,12 @@ function renderScanMode() {
     auction1: "1 € Start", fixed: L("Festpreis") }[t.price_mode] || L("Marktwert");
   const bg = { white: L("Weiß"), warm: L("Warmweiß"), black: L("Schwarz"),
     logo: L("Mein Logo") }[t.bg] || L("Schwarz");
-  box.innerHTML = `<button class="irow tap" id="sellTplBtn" style="width:100%">
+  box.innerHTML = `<button class="irow tap sell-tpl-stack" id="sellTplBtn">
     <span class="ric" style="background:#3478f6">${icon("gear", 15)}</span>
-    <span class="rlabel">${L("Standard für eBay-Entwürfe")}</span>
-    <span class="rvalue">${esc(fmt)} · ${esc(price)} · ${esc(bg)}</span>
+    <span class="sell-tpl-text">
+      <span class="rlabel">${L("Standard für eBay-Entwürfe")}</span>
+      <span class="rvalue">${esc(fmt)} · ${esc(price)} · ${esc(bg)}</span>
+    </span>
     <span class="chev">${icon("chevron", 15)}</span></button>`;
 }
 document.addEventListener("click", (e) => {
@@ -8098,6 +8162,19 @@ function saleStatusChip(r, bucket) {
   return `<span class="schip warn">${esc(L("Unvollständig"))}</span>`;
 }
 
+function paintSalesSegInk() {
+  const seg = $("salesSeg");
+  const ink = $("salesSegInk");
+  const on = seg && seg.querySelector("button.on");
+  if (!seg || !ink || !on) return;
+  ink.style.width = on.offsetWidth + "px";
+  ink.style.transform = "translateX(" + on.offsetLeft + "px)";
+}
+if (typeof window !== "undefined" && !window._seroSalesInk) {
+  window._seroSalesInk = true;
+  window.addEventListener("resize", () => { try { paintSalesSegInk(); } catch (_) { /* */ } });
+}
+
 function renderSales() {
   const emptyEl = $("salesEmpty");
   const listEl = $("salesList");
@@ -8159,6 +8236,7 @@ function renderSales() {
         </div>
       </div>
     </div>`;
+  const prevBucket = state._salesPaintBucket;
   $("salesSeg").querySelectorAll("button").forEach((b) => {
     b.classList.toggle("on", b.dataset.b === state.salesBucket);
     b.onclick = () => {
@@ -8168,6 +8246,8 @@ function renderSales() {
       renderSales();
     };
   });
+  paintSalesSegInk();
+  state._salesPaintBucket = state.salesBucket;
   $("salesList").className = mode === "list" ? "" : `sale-grid ${mode}`;
   const rawRows = bucketRows;
   const q = (state.salesQuery || "").trim().toLowerCase();
@@ -8294,6 +8374,13 @@ function renderSales() {
       <span class="chev">${icon("chevron", 15)}</span>
     </button>`;
   }).join("");
+  const listEl2 = $("salesList");
+  if (listEl2 && prevBucket && prevBucket !== bucket
+      && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    listEl2.classList.remove("sales-xfade");
+    void listEl2.offsetWidth;
+    listEl2.classList.add("sales-xfade");
+  }
   $("salesList").querySelectorAll("[data-sel-draft]").forEach((inp) => {
     inp.onclick = (ev) => { ev.stopPropagation(); };
     inp.onchange = () => {
@@ -8350,11 +8437,7 @@ function renderSales() {
       icon: "doc", titel: "Keine Entwürfe.",
       text: "Fotografiere ein Stück. SERO baut den Entwurf.",
       aktion: "Fotografieren", onAktion: openCam, well: true,
-    }) : emptyState({
-      icon: "bag", titel: "Noch nichts verkauft.",
-      text: "",
-      well: true,
-    });
+    }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
   $("salesList").querySelectorAll(".sale-row, .sale-tile").forEach((b) => {
@@ -8986,15 +9069,9 @@ function bindHeroPhotoClicks(det, images) {
 function showDetailSeg(det, seg) {
   if (!det) return;
   const wantListing = seg === "sell" || seg === "ebay";
+  det.seg = wantListing ? "sell" : "overview";
   det.showListing = wantListing;
-  det.seg = "overview";
   renderDetail(det);
-  if (wantListing) {
-    requestAnimationFrame(() => {
-      const el = document.getElementById("detailListingBlock");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
 }
 
 function hideDetailCtaDock() {
@@ -9041,14 +9118,31 @@ function syncDetailCtaDock(det) {
       ev.preventDefault();
       ev.stopPropagation();
       if (state._skipEnsureDraft) delete state._skipEnsureDraft[item.id];
-      if (!ebayConnectedNow()) {
-        showEbayNotConnectedHint();
-        return;
-      }
+      /* aaaa.md: Einstellen wechselt auf eBay-Tab. Nicht-verbunden lebt im Pane,
+         nicht als Extra unter den Notizen. */
       showDetailSeg(det, "sell");
+      if (!ebayConnectedNow()) return;
       startListingPrep(item, btn);
     };
   }
+}
+
+function paintDetailSeg(det) {
+  const onSell = !!(det && (det.showListing || det.seg === "sell"));
+  const ov = document.querySelector('#detailPanes [data-pane="overview"]');
+  const sl = document.querySelector('#detailPanes [data-pane="sell"]');
+  if (ov) ov.hidden = onSell;
+  if (sl) sl.hidden = !onSell;
+  document.querySelectorAll("#detailSeg [data-dseg]").forEach((b) => {
+    const on = (b.dataset.dseg === "sell") === onSell;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", on ? "true" : "false");
+  });
+}
+function bindDetailSegTabs(det) {
+  document.querySelectorAll("#detailSeg [data-dseg]").forEach((b) => {
+    b.onclick = () => showDetailSeg(det, b.dataset.dseg);
+  });
 }
 
 function bindDetailPaneSwipe(det) {
@@ -9547,10 +9641,16 @@ function renderDetail(det, opts) {
     html += d ? renderDraftSection(d) : "";
   }
   if (item) {
-    const listingHtml = showListing
-      ? `<div class="d-listing-block" id="detailListingBlock">${ebayPane}</div>` : "";
-    html += `<div class="d-panes" id="detailPanes">
-      <div class="d-pane" data-pane="overview">${overviewPane}${listingHtml}</div>
+    const onSell = showListing;
+    html += `<div class="d-seg" id="detailSeg" role="tablist">
+      <button type="button" role="tab" data-dseg="overview" class="${onSell ? "" : "on"}" aria-selected="${onSell ? "false" : "true"}">${esc(L("Info"))}</button>
+      <button type="button" role="tab" data-dseg="sell" class="${onSell ? "on" : ""}" aria-selected="${onSell ? "true" : "false"}">${esc(L("eBay"))}</button>
+    </div>
+    <div class="d-panes" id="detailPanes">
+      <div class="d-pane" data-pane="overview"${onSell ? " hidden" : ""}>${overviewPane}</div>
+      <div class="d-pane" data-pane="sell"${onSell ? "" : " hidden"}>
+        <div class="d-listing-block" id="detailListingBlock">${ebayPane}</div>
+      </div>
     </div>`;
   }
 
@@ -9565,23 +9665,15 @@ function renderDetail(det, opts) {
       const block = $("detailListingBlock");
       if (block) {
         block.innerHTML = ebayPane;
-      } else if (showListing) {
-        const ov = document.querySelector('#detailPanes [data-pane="overview"]');
-        if (ov) {
-          const wrap = document.createElement("div");
-          wrap.className = "d-listing-block";
-          wrap.id = "detailListingBlock";
-          wrap.innerHTML = ebayPane;
-          ov.appendChild(wrap);
-        }
+      } else {
+        const sl = document.querySelector('#detailPanes [data-pane="sell"]');
+        if (sl) sl.innerHTML = `<div class="d-listing-block" id="detailListingBlock">${ebayPane}</div>`;
       }
     } else {
       const ov = document.querySelector('#detailPanes [data-pane="overview"]');
-      if (ov) {
-        const listingHtml = showListing
-          ? `<div class="d-listing-block" id="detailListingBlock">${ebayPane}</div>` : "";
-        ov.innerHTML = overviewPane + listingHtml;
-      }
+      const sl = document.querySelector('#detailPanes [data-pane="sell"]');
+      if (ov) ov.innerHTML = overviewPane;
+      if (sl) sl.innerHTML = `<div class="d-listing-block" id="detailListingBlock">${ebayPane}</div>`;
     }
     const ht = $("detailHeroTitle");
     if (ht) {
@@ -9607,6 +9699,8 @@ function renderDetail(det, opts) {
     }
     bindDetailPaneSwipe(det);
   }
+  bindDetailSegTabs(det);
+  paintDetailSeg(det);
   const nt = $("notesToggle");
   if (nt) nt.onclick = () => {
     const box = $("detailNotes");
@@ -11376,12 +11470,17 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) prue
 
 /* Griff-Geste: Sheet nach unten ziehen schließt es */
 (() => {
-  const sh = $("sheet"), grip = document.querySelector(".sheet-grip");
-  if (!grip) return;
+  const sh = $("sheet");
+  const handle = $("sheetHead") || document.querySelector(".sheet-grip");
+  if (!sh || !handle) return;
   let sy = null;
-  grip.style.touchAction = "none";
-  grip.addEventListener("pointerdown", (e) => { sy = e.clientY; grip.setPointerCapture(e.pointerId); });
-  grip.addEventListener("pointermove", (e) => {
+  handle.style.touchAction = "none";
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.target.closest && e.target.closest("#sheetBody, .sheet-actions, input, textarea, button")) return;
+    sy = e.clientY;
+    try { handle.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+  });
+  handle.addEventListener("pointermove", (e) => {
     if (sy === null) return;
     sh.style.transition = "none";
     sh.style.transform = `translateY(${Math.max(0, e.clientY - sy)}px)`;
@@ -11393,8 +11492,8 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) prue
     if (dy > 90) closeSheet();
     else sh.style.transform = "";
   };
-  grip.addEventListener("pointerup", end);
-  grip.addEventListener("pointercancel", end);
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
 })();
 
 function openInput(cfg, onSubmit) {

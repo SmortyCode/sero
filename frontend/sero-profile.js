@@ -192,9 +192,11 @@ async function fetchProfileSummary() {
   }
 }
 
-function statCell(val, label) {
-  const show = (val === null || val === undefined) ? "—" : String(val);
-  return `<div class="tv-prof-stat"><b>${_esc(show)}</b><span>${_L(label)}</span></div>`;
+function statCell(val, label, busy) {
+  const inner = busy
+    ? `<span class="skel skel-stat" aria-hidden="true"></span>`
+    : `<b>${_esc((val === null || val === undefined) ? "—" : String(val))}</b>`;
+  return `<div class="tv-prof-stat">${inner}<span>${_L(label)}</span></div>`;
 }
 
 async function openBillingOrPlans(me) {
@@ -603,12 +605,15 @@ function renderDataPane(body) {
 }
 
 function renderHelpPane(body) {
+  const faq = (typeof window !== "undefined" && typeof window.faqAccordionHtml === "function")
+    ? window.faqAccordionHtml("help-faq")
+    : "";
   body.innerHTML = settingsGroup("Hilfe & Kontakt", `
     ${settingsRow({ id: "helpGuide", iconName: "question", title: "Anleitung öffnen", sub: "Guide auf der SERO-Website" })}
     ${settingsRow({ id: "helpReport", iconName: "bubble", title: "Problem melden", sub: "E-Mail an den Support" })}
     ${settingsRow({ id: "helpDiag", iconName: "info", title: "Diagnose kopieren", sub: "Version und Browserfamilie, ohne persönliche Daten" })}
     ${settingsRow({ id: "helpShare", iconName: "share", title: "SERO weiterempfehlen" })}
-  `);
+  `) + (faq ? settingsGroup("Häufige Fragen", faq) : "");
   document.getElementById("helpGuide").onclick = () => openExternalUrl(SERO_GUIDE_URL);
   document.getElementById("helpReport").onclick = () => {
     const sub = encodeURIComponent("SERO Support");
@@ -702,7 +707,7 @@ function renderLegalPane(body) {
 function renderAboutPane(body) {
   body.innerHTML = `
     <div class="set-card set-pad about-card">
-      <img src="assets/app-icon.png?v=5" alt="" width="64" height="64" class="about-icon">
+      <img src="assets/app-icon.png?v=7" alt="" width="64" height="64" class="about-icon">
       <p class="set-plan-name">SERO</p>
       <p class="set-sub">${_esc(SERO_APP_VERSION)} · ${_esc(platformLabel())}</p>
       <button type="button" class="btn-secondary" id="aboutSite">${_L("Website öffnen")}</button>
@@ -771,7 +776,7 @@ function paintProfileHub(sc, me, summary, statsBusy) {
   const a11y = _LF("Profil von {0} bearbeiten", me.display_name || me.username || me.email || "SERO");
   const trialLine = usage.lines[0] || "";
   const stats = statsBusy
-    ? `${statCell(null, "Aktiv")}${statCell(null, "Besitz")}${statCell(null, "Verkauft")}`
+    ? `${statCell(null, "Aktiv", true)}${statCell(null, "Besitz", true)}${statCell(null, "Verkauft", true)}`
     : `${statCell(summary.active_on_ebay, "Aktiv")}${statCell(summary.in_collection, "Besitz")}${statCell(summary.sold, "Verkauft")}`;
   sc.innerHTML = `
     <button type="button" class="tv-prof-card tv-prof-hit" id="profCard" aria-label="${_esc(a11y)}">
@@ -779,7 +784,7 @@ function paintProfileHub(sc, me, summary, statsBusy) {
         <span class="tv-ava" aria-hidden="true">
           ${me.avatar_url
             ? `<img src="${_esc(me.avatar_url)}" alt="">`
-            : `<img src="assets/app-icon.png?v=6" alt="">`}
+            : `<img src="assets/app-icon.png?v=7" alt="">`}
           <span class="tv-ava-cam">${_icon("camera", 14)}</span>
         </span>
         <span class="tv-prof-info">

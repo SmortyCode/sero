@@ -50,7 +50,7 @@ def test_a2_hauptansicht_icon_buttons_haben_aria():
     for needle in (
         'id="eyeBtn"',
         'id="dashRefresh"',
-        'id="btnColSearch"',
+        'id="colSearchLive"',
         'id="btnColFilter"',
         'id="btnColSort"',
         'id="alertBtn"',
@@ -154,8 +154,8 @@ def test_overview_kein_bewegungs_umschalter():
     # Kontrast: Light = kräftige/dunkle Titel, Dark = weiche
     assert 'title-light" src="assets/titles/sammlung-dark.png' in HTML
     assert 'title-dark" src="assets/titles/sammlung.png' in HTML
-    assert 'logo-light" src="assets/wordmark-sero-chrome.png' in HTML
-    assert 'logo-dark" src="assets/wordmark-sero-chrome.png' in HTML
+    assert 'logo-light" src="assets/wordmark-navy.png' in HTML
+    assert 'logo-dark" src="assets/wordmark-white.png' in HTML
     for name in ("portfolio", "sammlung", "scanner", "verkauf", "profil"):
         assert (ROOT / "frontend" / "assets" / "titles" / f"{name}.png").is_file()
         assert (ROOT / "frontend" / "assets" / "titles" / f"{name}-dark.png").is_file()
@@ -245,7 +245,7 @@ def test_clean_overlay_skin():
     assert "filter: none" in login_mark.group(1)
     assert "grayscale" not in login_mark.group(1)
     top_logo = re.search(
-        r"html\.skin-clean \.topbar-logo,\s*html\.skin-clean\.force-dark \.topbar-logo\.logo-light\s*\{([^}]*)\}",
+        r"html\.skin-clean \.topbar-logo\s*\{([^}]*)\}",
         clean,
     )
     assert top_logo, "Clean-Topbar-Logo fehlt"
@@ -273,10 +273,11 @@ def test_clean_overlay_skin():
 
 
 def test_tour_chrome_wordmark_kein_kreis():
-    """Onboarding-Tour: Chrome-Wordmark statt blauem SR-Kreis, Squircle-Buttons."""
+    """Onboarding-Tour: flache Wordmark statt blauem SR-Kreis, Squircle-Buttons."""
     assert "function showTour" in JS
-    assert 'class="tour-wordmark"' in JS
-    assert "assets/wordmark-sero-chrome.png" in JS
+    assert "tour-wordmark" in JS
+    assert "assets/wordmark-white.png" in JS
+    assert "assets/wordmark-navy.png" in JS
     assert "tour-ring" not in JS
     assert "party-ring tour-ring" not in JS
     tour_src = JS[JS.index("function showTour") : JS.index("function dismissSplash")]
@@ -437,7 +438,7 @@ def test_kein_sero_mascot_tabbar_content_breit():
 
 
 def test_sammlung_chart_filter_detail():
-    """Chart-Scrub, Kategorien im Filter, Übersicht ohne Listing-CTA, Content hinter der Pill."""
+    """Chart-Scrub, Kategorien im Filter, Detail-Tabs Info|eBay, Content hinter der Pill."""
     clean = (ROOT / "frontend" / "sero-clean.css").read_bytes()
     assert clean.startswith(b"/* SERO"), clean[:20]
     clean_txt = clean.decode("utf-8")
@@ -459,7 +460,7 @@ def test_sammlung_chart_filter_detail():
     assert "Listing-Design" in JS
     assert "function listingBgCss" in JS
     assert 'id="detailListingBlock"' in JS
-    assert 'id="detailSeg"' not in JS
+    assert 'id="detailSeg"' in JS
     # Pins dürfen nur steigen. Eine feste Zahl musste bei jeder Änderung
     # mitgepflegt werden und schlug dann als „Fehler“ an, obwohl der Pin korrekt
     # hochgezählt war.
@@ -493,8 +494,9 @@ def test_sammlung_chart_filter_detail():
     assert 'L("Als Entwurf behalten")' in JS
     assert 'L("Einstellen")' in JS
     assert 'L("über eBay")' in JS
-    assert 'id="detailSeg"' not in JS
-    assert 'data-pane="ebay"' not in JS
+    assert 'id="detailSeg"' in JS
+    assert 'data-pane="sell"' in JS
+    assert 'data-pane="overview"' in JS
     assert "d-cutout-err" in JS
     assert "Nochmal freistellen" in JS
     assert "function sellDescCard" in JS

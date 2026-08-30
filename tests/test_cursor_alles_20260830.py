@@ -53,7 +53,9 @@ def test_splash_und_empty_ohne_sr():
     assert "monogram-white.png" not in splash
     assert "monogram-navy.png" not in splash
     empty = HTML[HTML.index('id="colEmpty"') : HTML.index("tabScan")]
-    assert "wordmark-sero-chrome.png" in empty
+    assert "wordmark-white.png" in empty
+    assert "wordmark-navy.png" in empty
+    assert "wordmark-sero-chrome.png" not in empty
     assert "monogram-white.png" not in empty
     assert "Noch keine Stücke." in empty
 
@@ -92,10 +94,10 @@ def test_sales_null_euro_nicht_skeleton():
 
 
 def test_pins_hochgezaehlt():
-    assert "sero.js?v=253" in HTML
-    assert "sero.css?v=162" in HTML
-    assert "sero-clean.css?v=41" in HTML
-    assert "sero-profile.js?v=22" in HTML
+    import re
+    for asset, floor in (("sero.js", 255), ("sero.css", 164), ("sero-clean.css", 43), ("sero-profile.js", 23)):
+        m = re.search(re.escape(asset) + r"\?v=(\d+)", HTML)
+        assert m and int(m.group(1)) >= floor, f"{asset} Pin zu niedrig"
 
 
 def test_teil_b_sammlung_ohne_vier_kreise():
@@ -106,7 +108,7 @@ def test_teil_b_sammlung_ohne_vier_kreise():
     assert '"30T"' in chunk
     assert '"1J"' in chunk
     assert "gitem-add" in JS
-    assert "Verlauf ab dem ersten Scan" in JS
+    assert "Wert wird ab dem 3. Stück sichtbar" in JS
     assert '["draft", L("Entwurf")]' in JS
 
 

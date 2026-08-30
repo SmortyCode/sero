@@ -1,8 +1,68 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 30. August 2026 — fünfter Lauf: Gast-Sync + D5 ohne SR; Pins js 253 / css 162 / clean 41 / profile 22 / manifest 7.**
+**Stand: 30. August 2026 — aaaa.md Follow-up (Filter/Sheet/Detail/Light nachgezogen); Pins js 257 / css 166 / clean 45. Kein Deploy (Briefing).**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.
+
+## Auftrag 30.08. — aaaa.md (Filter, Sheet, Detail-Tabs, Light)
+
+Briefing `docs/sero-ui-aaaa-followup.md` (= Downloads/aaaa.md). Punkte 1–3 waren
+schon im Follow-up; Light-Leaks nachgezogen (Profil/Detail-Dock/Scan-Sekundär/
+Tab-Bar). Einstellen wechselt immer auf eBay-Tab. Kein Deploy laut Briefing.
+Kein Auto-Publish.
+
+## Auftrag 30.08. (siebter Lauf) — Filter, Sheet, Detail-Tabs, Light
+
+Briefing `docs/sero-ui-followup.md`. Baut auf Clean-Motion auf, nichts davon
+zurückgebaut. Keine neuen Features, kein Auto-Publish, Filterlogik-Kern bleibt.
+`SERO_APP_VERSION` bleibt 4.1.0. `kv['dry_run']` unangetastet. Kein Commit.
+
+| Stück | Stand |
+|---|---|
+| Filter-Chips | One Piece / Pokémon: Wordmark **oder** Label, nicht beides. `aria-label` bleibt. Reihenfolge über `CAT_CHIP_ORDER` ∩ `INV_CATS`. `INV_CATS` unverändert. |
+| Filter Dark/Light | `filter: invert(1)` nur Dark. Light: dunkle Wordmarks. |
+| Disclosure | Leer: kein Grading, keine Sprache, keine Region. Grading+Note nur bei Graded. Sprache nur TCG. Region nur Games. Wert/Jahr eine Zeile. |
+| Sheet | `max-height` 80vh. Drag an `#sheetHead` (Grip + Titel, ≥44px). Schwelle 90px. Backdrop-Tap bleibt bei `dismissible !== false`. `#sheetBody` scrollt allein. |
+| Detail-Tabs | Info \| eBay unter dem Hero. Ein Pane sichtbar. `det.seg` wirklich `overview`/`sell`. Einstellen wechselt auf eBay. CTA-Dock nur Info. `listingPaintKey` / `listingInputBusy` / `opts.ebayOnly` bleiben. |
+| Light | Canvas `#fff`, Text `#000`, Fills `#f2f2f7`/`#e5e5ea`. Overrides für Grid, Port-Wert, Login, Chips, eBay-Karten. Splash bleibt schwarz. `color-scheme: light`. Wordmark navy/white. |
+
+Sofortkauf-Tippen, Location/UUID, Gast-Scan, C6 nicht zurückgebaut.
+
+Pins: `sero.js?v=255`, `sero.css?v=164`, `sero-clean.css?v=43`,
+`sero-profile.js?v=23`, `manifest.webmanifest?v=7`.
+Wache: `tests/test_ui_followup.py`.
+Suite: 796 passed, 4 skipped. Smoke grün.
+Contabo 30.08. siebter Lauf: `sh scripts/deploy_contabo.sh` (keine `data.db`/`.env`).
+Hard-Reload `https://app.seromunich.com/app/`.
+
+## Auftrag 30.08. (sechster Lauf) — clean skin + micro-motion
+
+Briefing `docs/sero-ui-clean-motion.md`. Keine neuen Features, keine 4. Tab,
+kein Auto-Publish. Filterlogik unverändert. `SERO_APP_VERSION` bleibt 4.1.0.
+`kv['dry_run']` unangetastet. Kein Commit.
+
+| Stück | Stand |
+|---|---|
+| Wordmark | Chrome nur Splash + App-Icon. In-App (Topbar, Login, Empty, Tour) flach: `wordmark-white.png` / `wordmark-navy.png`. |
+| Glas | Tab-Bar, Sheets, Login-Karte, Suche. Kein Glas auf Content-Karten, Grid, `#salesSeg`. Clean-Blur bleibt 18px. `#viewApp.recede` nur Dim. |
+| Motion | `splashPulse` / `orbbreathe` aus. `logoIn` am Splash. Login-Karte wieder `pageIn`. Press `scale(.96)`. Sheet-Close `--spring`. Scan-Success `ticpop`. Kurve: Path-Morph 280ms. Verkaufen: Sliding-Underline + 200ms Crossfade. `prefers-reduced-motion` still. |
+| Start | Eine weiße Pille, zwei Outlined-Chips. FAQ nach Einstellungen → Hilfe. Wertkarte Near-Black, Mint nur Chart, Grün nur Delta. |
+| Scannen | Gleiche Aktions-Hierarchie. Gallery-Label „Aus Fotos“. Defaults-Zeile Label oben, Werte truncated darunter. Viewfinder Idle ohne Pulse. |
+| Sammlung | Unter 3 Punkten: „Wert wird ab dem 3. Stück sichtbar“, keine tote Hairline. 7T/30T/1J bleiben. Preis tabular, „Weiteres“ muted Chip. Suche als Icon-Field, Filter/Sort Chips, Kacheln-Toggle. `padding-bottom` 96px. |
+| Verkaufen | Underline gleitet. Empty `min-height` 220px. Verkauft: muted „Erlöse erscheinen hier“, keine weiße Pille. |
+| Profil | Nicht umgebaut. Stats: Skeleton statt „—“. FAQ in Hilfe. |
+
+Teil-A-Fixes, Sofortkauf-Tippen, Location/UUID, Gast-Scan, C6 nicht zurückgebaut.
+`listingPaintKey` / `listingInputBusy` unverändert.
+
+Pins: `sero.js?v=254`, `sero.css?v=163`, `sero-clean.css?v=42`,
+`sero-profile.js?v=23`, `manifest.webmanifest?v=7`.
+Wache: `tests/test_ui_clean_motion.py`.
+Suite: 788 passed, 4 skipped. Smoke grün.
+Contabo 30.08. sechster Lauf: `sh scripts/deploy_contabo.sh` (keine `data.db`/`.env`).
+Hard-Reload `https://app.seromunich.com/app/`.
+
+Nur mit Mockups/Brand: B 1:1-Pixel, D2 Brand-`icon.png` + iPad-Startup.
 
 ## Auftrag 30.08. (fünfter Lauf) — Gast-Sync + offene Zeilen ohne Mockups
 

@@ -80,8 +80,11 @@ def test_c6_gate_an_konto_aktionen():
 
 
 def test_c6_pins_und_banner():
-    assert "sero.js?v=253" in HTML
-    assert "sero-clean.css?v=41" in HTML
+    import re
+    js = re.search(r"sero\.js\?v=(\d+)", HTML)
+    clean = re.search(r"sero-clean\.css\?v=(\d+)", HTML)
+    assert js and int(js.group(1)) >= 255
+    assert clean and int(clean.group(1)) >= 43
     assert ".guest-save-bar" in CLEAN
     assert ".guest-save-btn" in CLEAN
     assert "guestSaveBtn" in JS

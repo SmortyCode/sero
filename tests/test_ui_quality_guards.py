@@ -168,4 +168,6 @@ def test_sammlung_30_tage_delta_clean_farben():
     assert "colHubDeltaFromPoints" in JS
     assert "Math.random" not in JS[JS.index("function colHubDeltaFromPoints"): JS.index("function colHubChartMarkup")]
     assert "html.skin-clean .col-hub-delta.up .col-hub-delta-nums" in clean
-    assert "#8e8e93" in clean
+    assert "var(--green)" in clean
+    assert "html.skin-clean .col-hub-delta.down .col-hub-delta-nums" in clean
+    assert "var(--red)" in clean
