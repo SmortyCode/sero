@@ -1,0 +1,119 @@
+{
+  "version": "cutout-gold-v1",
+  "note": "Referenzen per SHA256 geschützt; keine Bildduplikate. Human-GT Alpha optional.",
+  "pipeline_version_target": "cutout-v2.0.0",
+  "capacity_hint": "100-300 Fälle",
+  "cases": [
+    {
+      "id": "376e7889dd81",
+      "label": "Ace P-074 CGC opaque-anchor",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/376e7889dd81/00.jpg",
+      "source_sha256": "4640692401f9192cc0a297b35b3d9872159c87292a9759bd759a661c6e43b914",
+      "baseline_cut_path": "collection_photos/376e7889dd81/00_cut.png",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "Regression-Anker; Human-GT Alpha noch ausstehend"
+    },
+    {
+      "id": "446ad78526af",
+      "label": "Gavel OP03-055 canvas-touch-anchor",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/446ad78526af/00.jpg",
+      "source_sha256": "2d07aba48d654754fec72fa5316ad9829a761dc2601dbf24bceeb5de2a98fbe7",
+      "baseline_cut_path": "collection_photos/446ad78526af/00_cut.png",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "Regression-Anker; Human-GT Alpha noch ausstehend"
+    },
+    {
+      "id": "35a64a879d80",
+      "label": "Prismatische Entwicklungen Boosterbundle",
+      "kind": "sealed_product",
+      "source_path": null,
+      "source_sha256": "4de89369b42011cf62a34fcfb063b1c91212c8b716d6259eec009791f7f86e83",
+      "baseline_cut_path": "collection_photos/35a64a879d80/00_cut.png",
+      "raw_path": null,
+      "gt_alpha_path": "collection_photos/35a64a879d80/00_cut.png",
+      "approved": true,
+      "notes": "aus cutout_refs.json"
+    },
+    {
+      "id": "9c030ec7f846",
+      "label": "GTA III WATA 9.8",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/9c030ec7f846/00.jpg",
+      "source_sha256": "11c73c7688390bd8a1b021bb87377a7755a76b73a937e04cc9f87717d95fbe47",
+      "baseline_cut_path": "collection_photos/9c030ec7f846/edit1786197703_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "c9ae19782791",
+      "label": "Exeggutor CGC Pristine 10",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/c9ae19782791/00.jpg",
+      "source_sha256": "c5a8e25c9d6028042bd524cfbc568b3ea57293e6d145d8f57223fe7ccc683ad9",
+      "baseline_cut_path": "collection_photos/c9ae19782791/edit1786197715_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "fb726042ce4b",
+      "label": "Gyarados CGC Pristine 10",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/fb726042ce4b/00.jpg",
+      "source_sha256": "aadd9123d477d7903f37c89b0ce4f3a704aa7ca83df0acea540c7fb289c6a483",
+      "baseline_cut_path": "collection_photos/fb726042ce4b/edit1786198116_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "850420d25072",
+      "label": "Mega Charizard X CGC 10",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/850420d25072/00.jpg",
+      "source_sha256": "852dfce275c7a6b5850d1b3103562afb0eb46af46635d2087b8b0745cc8a8089",
+      "baseline_cut_path": "collection_photos/850420d25072/edit1786198103_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "18f01dca776b",
+      "label": "Glurak CGC 10",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/18f01dca776b/00.jpg",
+      "source_sha256": "0007f9cbbfebeaa344b6a40ecc88766bb4509629aef98c0652aadcd1ac7b0a8d",
+      "baseline_cut_path": "collection_photos/18f01dca776b/edit1786197651_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "a4c192e0a6a5",
+      "label": "Umbreon CGC Pristine 10",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/a4c192e0a6a5/00.jpg",
+      "source_sha256": "1faa1ec0b24365367a9823e3f9a61311b4e4f2644544e8a71b0daf4fd22281f8",
+      "baseline_cut_path": "collection_photos/a4c192e0a6a5/edit1786197666_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    },
+    {
+      "id": "17b27e96af84",
+      "label": "GTA Vice City WATA 9.8",
+      "kind": "graded_slab",
+      "source_path": "collection_photos/17b27e96af84/00.jpg",
+      "source_sha256": "b438b2db038a38359d87cffe9dca383f32d10fac26e06352d5d86cb6e52626e3",
+      "baseline_cut_path": "collection_photos/17b27e96af84/edit1786197689_00.jpg",
+      "gt_alpha_path": null,
+      "approved": false,
+      "notes": "aus cutout_refs.json — kind graded_slab"
+    }
+  ]
+}

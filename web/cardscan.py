@@ -1,39 +1,44 @@
 """Karten-Freisteller + Stapel-Gruppierung für den Scanner.
 
 ═══════════════════════════════════════════════════════════════════════════
-RENDER-STANDARD (Svens Dauer-Entscheid, 03.08.2026 — FEST, Änderung nur mit
-seinem ausdrücklichen Ja; Referenzbild: Exeggutor CGC 10):
+RENDER-STANDARD (Sven 08.08.2026 — Freistellen wie Collection-Norm):
 
-  slab   → Aufrichten per ROTATION (minAreaRect/Hough + warpAffine) + enger
-           Zuschnitt (Ecken, kanten_trim, tisch_trim, untergrund_trim,
-           case_kontur_nachschnitt, ggf. Label/Fenster-Box) +
-           belichtung_normalisieren.
-           KEINE Perspektiv-Streckung als Normalfall (Sven: „Don't distort,
-           just straighten"). Perspektiv nur wenn Symmetrie-Gates greifen
-           UND der Slab schon nahezu aufrecht ist (sonst bleibt die Schräge
-           im Vision-AABB stecken). Warp selbst: KEINE selektive Nachbearbeitung.
-           KEIN rembg danach: klares Case-Plastik sieht für BiRefNet wie
-           Hintergrund aus — Label und Karte schweben getrennt (Sven 07.08.,
-           CGC Pristine). Tisch/Kork/Filz weg; hartes Plastik-Case
-           (Rahmen + Label + Karte) bleibt.
-  sleeve → Segmentierer (_cutout): nur die gedruckte Karte, ohne Hülle.
-  raw    → Segmentierer (_cutout): die Karte, eng beschnitten.
-  sonst  → ORIGINAL behalten. Nie ein schlechtes Bild speichern.
+  Klassifikation VOR dem Cutout (Glance, nicht erst nach 90s Analyse):
+    product | card | slab  — siehe web/cutout_v2/routing.py
 
-Jedes Ergebnis läuft vor dem Speichern durch bild_ok() — fällt es durch,
-bleibt das Original stehen. Drei gescheiterte Kosmetik-Anläufe an einem Tag
-(Milchglas, Dunkel-Regeln, Schutzboxen) sind der Grund: Nachbearbeitung
-IM Warp erzeugt Artefakte. rembg ist nur für sleeve/raw und als Fallback,
-wenn der Warp bei einem Slab reißt — nie auf einem gelungenen Warp.
+  Alle Scan-Fotos:
+    1) EXIF-Orientierung
+    2) Nur flache Karten/Slabs aufrichten (Ecken-Warp / Rotation, KEINE Kosmetik).
+       Flasche, Sneaker, Handy, Buch, sonst 3D: KEIN Warp (sonst verbiegt die
+       Zylinder-Perspektive das Label).
+       - Rohkarte: Warp aufs Karten-Rechteck (alte Rechteck-Technik), dann rembg
+       - Slab: Warp aufs Case-Rechteck (nicht die Karte im Fenster entbiegen)
+    3) Hintergrund weg mit rembg → echte Alpha-Maske
+       - Rohkarte: `birefnet-general` + Rechteck-Vorlage
+       - Hülle/Toploader: `birefnet-general` + weiches Alpha (kein Rechteck);
+         Außenkanten des Halters, nicht die gedruckte Karte allein
+       - Graded/Slab: `isnet-general-use` + weiches Alpha (kein opakes Rechteck)
+       - Alltagsstücke: `isnet-general-use` als normaler Background-Remover
+         (kein Rechteck, keine Politur, kein Studio)
+    4) Bounding-Box aus Alpha, enger Zuschnitt mit ~1,5 % transparentem Rand
+    5) PNG mit Alphakanal speichern
+    6) bild_ok() — sonst Original behalten
+
+  Warp selbst: KEINE selektive Nachbearbeitung (kein Milchglas, kein Studio-
+  Bleichen). rembg liefert die Transparenz; Layout kommt NUR aus der Alpha-
+  Maske, nie aus „nahezu weißen Pixeln".
+
+  Referenzfälle (nicht überschreiben): siehe
+  `tests/fixtures/cutout_refs.json` und Svens manuelle `edit*.jpg` /
+  `00_cut.png` in der Collection.
+
 Wer den Warp selbst anfasst, macht erst tests/test_render_standard.py grün.
 ═══════════════════════════════════════════════════════════════════════════
 
-- crop_photos: EIN Vision-Blick je Foto (detect_card), dann der Pfad laut
-  Standard oben.
-- slab_recut: der Warp über die Case-Ecken; eigenständig auch als Rettung
-  nach der Analyse, wenn crop_photos den Slab nicht erkannte.
-- group_photos: ordnet einen Foto-Stapel physischen Objekten zu (Vorder- und
-  Rückseite derselben Karte = EIN Objekt, Vorderseite zuerst).
+- glance_scan: schneller Vision-Blick product|card|slab + grader.
+- crop_photos: Klassifikation, dann Warp (Karte/Slab) + rembg-Cutout.
+- slab_recut: nur Aufrichten/Zuschnitt; Freistellen danach über _cutout.
+- group_photos: Vorder-/Rückseite demselben Objekt zuordnen.
 """
 
 from __future__ import annotations
@@ -52,6 +57,8 @@ except ImportError:
     _logging.getLogger("cardscan").warning(
         "pillow-heif fehlt — HEIC-Fotos können nicht gelesen werden!")
 
+import os
+import threading
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
@@ -60,6 +67,8 @@ from PIL import Image, ImageOps
 log = logging.getLogger("cardscan")
 
 VISION_MODEL = "claude-sonnet-5"   # Eckpunkte müssen präzise sein — kein Haiku
+GLANCE_MODEL = "claude-haiku-4-5-20251001"  # nur product|card|slab, kein Ecken-JSON
+GLANCE_TIMEOUT_S = 12.0
 MAX_BATCH = 24
 
 _client: AsyncAnthropic | None = None
@@ -71,7 +80,8 @@ def _anthropic(api_key: str) -> AsyncAnthropic:
     Keep-Alive zwischen den Vision-Blicken desselben Scans."""
     global _client
     if _client is None:
-        _client = AsyncAnthropic(api_key=api_key)
+        # Ohne Timeout hing detect_card still — UI blieb auf „Stelle Karte frei".
+        _client = AsyncAnthropic(api_key=api_key, timeout=90.0, max_retries=2)
     return _client
 
 
@@ -104,28 +114,36 @@ def _json_of(text: str) -> dict:
     return json.loads(cleaned)
 
 
-DETECT_PROMPT = """Du siehst das Foto einer Sammelkarte. Antworte NUR mit JSON:
+DETECT_PROMPT = """Du siehst ein Foto. Es kann eine flache Sammelkarte sein ODER
+ein Alltagsgegenstand (Flasche, Schuh, Handy, Dose, Verpackung). Erfinde KEINE
+Karten-Ecken, wenn keine flache Karte zu sehen ist. Antworte NUR mit JSON:
 {"kind": "...", "corners": [[x,y],[x,y],[x,y],[x,y]], "confidence": "high|low"}
 
 "kind":
 - "slab"   = Karte steckt in einem Grading-Case (PSA, CGC, Beckett …) mit Bewertungslabel
-- "sleeve" = Karte steckt in einer Schutzhülle oder einem Toploader (Plastik ohne Label)
-- "raw"    = lose Karte ohne Plastik
-- "other"  = keine einzelne Karte klar erkennbar (z. B. Display, mehrere Karten, unscharf)
+- "sleeve" = Karte steckt in einer Schutzhülle, Softsleeve, Semi-Rigid oder Toploader
+  (Plastik ohne Bewertungslabel). Auch wenn das Plastik klar/durchsichtig und der
+  Rand schmal ist — und auch auf hellem Tisch, wo der Rand kaum sichtbar ist.
+- "raw"    = lose Karte OHNE jedes Plastik um die Karte. Ein durchsichtiger Rand,
+  Toploader oder Softsleeve = IMMER "sleeve", nie "raw".
+- "other"  = keine flache einzelne Sammelkarte. Pflicht bei Flasche, Sneaker,
+  Handy, Dose, Display, mehreren Karten, Unscharfem. Dann KEINE corners erfinden.
 
 "corners": die vier Eckpunkte in PROZENT der Bildbreite (x) und Bildhöhe (y),
 Reihenfolge [oben-links, oben-rechts, unten-rechts, unten-links].
 - Bei "slab": die AUSSENKANTEN des kompletten HARTEN Plastik-Cases inklusive
   Bewertungslabel — der Slab gehört zum Sammlerstück und bleibt im Bild.
-  Eine lose Schutzfolie oder Tüte UM den Case zählt NICHT: die Punkte liegen
-  auf den harten Case-Kanten, die Folie bleibt draußen.
+  Warp gilt NUR für dieses Case-Rechteck, niemals für die Karte im Sichtfenster
+  (die darf im Case schief sitzen). Eine lose Schutzfolie oder Tüte UM den Case
+  zählt NICHT: die Punkte liegen auf den harten Case-Kanten, die Folie bleibt draußen.
   KRITISCH: Tisch, Holz, Kork, Stoff, Hände und Schatten gehören NICHT in die
   Ecken. Die vier Punkte liegen ENG auf der harten Case-Außenkante — nach dem
   Zuschnitt soll das Case den Rahmen füllen (höchstens 1–2 % Luft). Lieber
   2 % zu eng am Plastik als 5 % Tischfläche mitnehmen.
-- Bei "sleeve": die Kanten der GEDRUCKTEN KARTE SELBST — Hülle/Toploader-Ränder
-  liegen AUSSERHALB der Punkte und werden weggeschnitten.
-- Bei "raw": die Kartenkanten.
+- Bei "sleeve": die AUSSENKANTEN der Schutzhülle / des Toploaders (Plastik-Rahmen).
+  Die gedruckte Karte liegt INNERHALB — Halter bleibt im Bild und wird NICHT
+  weggeschnitten. Lieber 1–2 % Luft am Plastik als die Karte allein.
+- Bei "raw": die Kartenkanten (kein Plastik-Rahmen).
 Die Punkte müssen exakt auf den Kanten liegen (Perspektive einbeziehen — die vier
 Punkte dürfen ein schiefes Viereck bilden).
 
@@ -168,6 +186,9 @@ async def detect_card(client: AsyncAnthropic, path: str) -> dict | None:
                 model=VISION_MODEL, max_tokens=2500,
                 messages=[{"role": "user", "content": inhalt}])
             data = _json_of(_text_of(r))
+            if data.get("kind") == "other":
+                return {"kind": "other",
+                        "confidence": data.get("confidence") or "low"}
             corners = data.get("corners")
             if not (data.get("kind") in ("slab", "sleeve", "raw")
                     and isinstance(corners, list) and len(corners) == 4
@@ -187,6 +208,83 @@ async def detect_card(client: AsyncAnthropic, path: str) -> dict | None:
         return None
 
 
+
+
+async def glance_scan(api_key: str, path: str,
+                      item: dict | None = None) -> dict | None:
+    """Schneller Vision-Blick: product | card | slab + grader.
+
+    Haiku, kleines Bild, wenige Tokens — vor dem Cutout, nicht nach der
+    90-Sekunden-Analyse. Bei Fehler None (Aufrufer nimmt Geometrie).
+    """
+    from web.cutout_v2.routing import GLANCE_PROMPT, normalize_glance, scan_kind_from_item
+    known = scan_kind_from_item(item)
+    if known in ("product", "card", "slab") and (
+            (item or {}).get("graded") or (item or {}).get("canonical_identity")):
+        grader = None
+        g = (item or {}).get("graded") or (item or {}).get("graded_info") or {}
+        if isinstance(g, dict):
+            grader = g.get("grader")
+        return {"kind": known, "grader": grader, "confidence": "high",
+                "source": "item"}
+    if not api_key or len(str(api_key).strip()) < 20:
+        return None
+    try:
+        data_b64 = await asyncio.to_thread(_b64, path, 800)
+        r = await _anthropic(api_key).messages.create(
+            model=GLANCE_MODEL, max_tokens=180,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64",
+                                             "media_type": "image/jpeg",
+                                             "data": data_b64}},
+                {"type": "text", "text": GLANCE_PROMPT},
+            ]}])
+        return normalize_glance(_json_of(_text_of(r)))
+    except Exception as e:  # noqa: BLE001
+        log.warning("cardscan: Glance fehlgeschlagen für %s: %s", path, e)
+        return None
+
+
+def flat_rectangle_hint(path: str) -> str | None:
+    """Konservativer Geometrie-Fallback ohne Netz: flaches Rechteck?
+
+    card/slab wenn die größte Kontur kartenförmig ist, sonst None (Alltag).
+    """
+    from web.cutout_v2.routing import kind_from_rectangle
+    try:
+        import cv2
+        import numpy as np
+        img = np.array(ImageOps.exif_transpose(Image.open(path)).convert("RGB"))
+    except Exception:  # noqa: BLE001
+        return None
+    H, W = img.shape[:2]
+    if H < 80 or W < 60:
+        return None
+    scale = min(1.0, 640 / max(H, W))
+    if scale < 1.0:
+        img = cv2.resize(img, (max(1, int(W * scale)), max(1, int(H * scale))),
+                         interpolation=cv2.INTER_AREA)
+        H, W = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 40, 120)
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    edges = cv2.morphologyEx(cv2.dilate(edges, k, iterations=2),
+                             cv2.MORPH_CLOSE, k, iterations=2)
+    cnts, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    area = float(cv2.contourArea(c))
+    frac = area / max(H * W, 1)
+    if not (0.08 < frac < 0.97):
+        return None
+    (rw, rh) = cv2.minAreaRect(c)[1]
+    if rw < 8 or rh < 8:
+        return None
+    rectangularity = area / max(rw * rh, 1)
+    aspect = max(rw, rh) / min(rw, rh)
+    return kind_from_rectangle(aspect, rectangularity)
 
 
 def kanten_trim(warped):
@@ -623,6 +721,71 @@ def _crop_ecken(img, pts, pad: int = 2):
     return img[y0:y1, x0:x1], (x0, y0)
 
 
+def listing_suggests_sleeve(listing: dict | None) -> bool:
+    """Analyse-Text nennt Schutzhülle/Toploader — unabhängig vom Cutout-Blick.
+
+    Der Freisteller läuft VOR der Claude-Analyse. Deshalb kann die Analyse
+    „Schutzhülle" schreiben, während der Cutout schon als raw-Rechteck
+    gelaufen ist. Dieser Hinweis steuert die Sleeve-Nachbesserung."""
+    if not listing:
+        return False
+    teile = [
+        listing.get("condition_description"),
+        listing.get("title"),
+        listing.get("notes"),
+        listing.get("packaging"),
+    ]
+    aspects = listing.get("aspects") or listing.get("item_specifics") or {}
+    if isinstance(aspects, dict):
+        teile.extend(f"{k} {v}" for k, v in aspects.items())
+    blob = " ".join(str(t) for t in teile if t).lower()
+    if not blob:
+        return False
+    schluessel = (
+        "schutzhülle", "schutzhuelle", "schutzfolie", "toploader", "top loader",
+        "top-loader", "softsleeve", "soft sleeve", "semi-rigid", "semirigid",
+        "kartenhalter", "card holder", "cardholder", "sleeve", "hülle", "huelle",
+    )
+    return any(k in blob for k in schluessel)
+
+
+def _sleeve_precrop_path(path: str, det: dict | None) -> str:
+    """Eng an die Halter-Außenecken schneiden (mit kleiner Luft nach außen).
+
+    Auf hellem Tisch verschwindet klares Plastik für rembg oft im Hintergrund —
+    dann bleibt nur die Karte und raw-minAreaRect macht eckige Kanten. Der
+    Vorzuschnitt hält Tisch draußen, damit der Sleeve-Soft-Alpha den Halter sieht."""
+    if not det or not isinstance(det.get("corners"), list) or len(det["corners"]) != 4:
+        return path
+    try:
+        import numpy as np
+        from PIL import Image, ImageOps
+        img = np.array(ImageOps.exif_transpose(Image.open(path)).convert("RGB"))
+        H, W = img.shape[:2]
+        pts = np.array(
+            [[min(max(float(x), 0), 100) / 100 * W,
+              min(max(float(y), 0), 100) / 100 * H]
+             for x, y in det["corners"]],
+            dtype=np.float32,
+        )
+        # Leicht nach außen, damit der Plastikrand nicht abgeschnitten wird.
+        c = pts.mean(axis=0)
+        pts = (c + (pts - c) * 1.04).astype(np.float32)
+        pad = max(6, int(min(W, H) * 0.012))
+        crop, _ = _crop_ecken(img, pts, pad=pad)
+        if crop is img or crop.shape[0] < 120 or crop.shape[1] < 80:
+            return path
+        # Unplausibel eng (= eher Kartenfenster statt Halter) → Original behalten.
+        if crop.shape[0] * crop.shape[1] < H * W * 0.18:
+            return path
+        tmp = str(Path(path).with_name(Path(path).stem + "_sleeve_tmp.jpg"))
+        Image.fromarray(crop).save(tmp, quality=94)
+        return tmp
+    except Exception as e:  # noqa: BLE001
+        log.warning("cardscan: Sleeve-Vorzuschnitt fehlgeschlagen für %s: %s", path, e)
+        return path
+
+
 def belichtung_normalisieren(warped):
     """Globale Belichtungsangleichung — wie der Auto-Modus jeder Kamera-App.
 
@@ -646,8 +809,10 @@ def bild_ok(path: str, kind: str | None = None) -> bool:
     """Selbstprüfung nach dem Rendern — die Wache vor dem Speichern.
 
     Svens Auftrag (03.08.): ein festes System statt Korrekturschleifen. Kein
-    Ergebnis erreicht die Sammlung, das diese vier Prüfungen nicht besteht;
+    Ergebnis erreicht die Sammlung, das diese Prüfungen nicht besteht;
     fällt es durch, bleibt das Original stehen und der Scan läuft weiter.
+
+    Seit Cutout v2 zusätzlich Alpha-/Rand-Hard-Fails (opak, Canvas-Touch).
     """
     try:
         import numpy as np
@@ -656,160 +821,389 @@ def bild_ok(path: str, kind: str | None = None) -> bool:
             if w < 300 or h < 300:
                 return False                     # Winzling — Zuschnitt verrutscht
             ratio = h / max(w, 1)
-            if kind == "slab" and not (1.05 <= ratio <= 2.1):
-                return False                     # Slabs sind Hochkant-Rechtecke
+            # Slab inkl. Label ist deutlich höher als die Rohkarte (~1.35–1.4).
+            # Unter ~1.48 fehlt fast immer das Bewertungslabel (Case „abgeschnitten").
+            if kind == "slab" and not (1.48 <= ratio <= 2.1):
+                return False
             if kind in ("sleeve", "raw") and not (1.15 <= ratio <= 1.65):
                 return False                     # Karten haben ~1.39
-            klein = np.asarray(im.convert("L").resize((64, 64)), dtype=np.float32)
+            # RGBA: Transparenz nicht als „schwarz" werten — sonst fällt eine
+            # schlanke Flasche/ein Schuh mit viel Alpharand durch (Augustiner).
+            if im.mode == "RGBA":
+                bg = Image.new("RGB", im.size, (128, 128, 128))
+                bg.paste(im, mask=im.split()[3])
+                work = bg
+            else:
+                work = im.convert("RGB")
+            klein = np.asarray(work.convert("L").resize((64, 64)), dtype=np.float32)
             if klein.std() < 12:
                 return False                     # nahezu einfarbig — leerer Crop
             # Extremwert-Flächen: >85 % fast weiß oder fast schwarz heißt,
             # der Zuschnitt hat das Stück verloren
             if ((klein > 235).mean() > 0.85) or ((klein < 20).mean() > 0.85):
                 return False
+        # Alpha-QA nur für echte Cutout-PNGs (nicht Warp/Original-JPEG).
+        if kind in ("slab", "raw", "sleeve") and str(path).endswith("_cut.png"):
+            try:
+                from web.cutout_v2.qa import evaluate_candidate
+                from web.cutout_v2.types import legacy_kind_to_cutout
+                ck = legacy_kind_to_cutout(kind)
+                if ck is not None:
+                    ev = evaluate_candidate(path, ck, require_margin=True)
+                    if not ev["ok"]:
+                        log.info("cardscan: bild_ok Alpha-QA fail %s %s",
+                                 path, ev["hard_fails"])
+                        return False
+            except Exception as e:  # noqa: BLE001
+                log.warning("cardscan: Alpha-QA übersprungen (%s)", e)
         return True
     except Exception as e:  # noqa: BLE001
         log.warning("cardscan: bild_ok scheiterte für %s: %s", path, e)
         return False
 
 
-_rembg_session = None
+def cutout_usable(path: str, kind: str | None = None) -> bool:
+    """Darf der Freisteller in die Sammlung?
 
-
-def _studio_hintergrund(rgb, alpha, form=None, boxen=None):
-    """Studio-Look für Slabs: der Untergrund, der durch transparentes
-    Case-Plastik scheint (Svens dunkler Tisch, 03.08.), wird zu neutralem
-    Hell gemischt — als stünde der Slab im Lichtzelt.
-
-    Die rembg-Alpha trennt sauber: Buch, Label und Karte tragen hohes Alpha
-    und bleiben pixelgenau unangetastet; der Durchblick trägt niedriges und
-    wird aufgehellt. Reflexe im Plastik liegen dazwischen und bleiben so als
-    zarte Zeichnung erhalten — das Case soll sichtbar bleiben, nicht
-    weggebügelt werden.
-
-    rgb: np.uint8 HxWx3 · alpha: np.uint8 HxW (rembg) · form: bool-Maske des
-    Zuschnitts oder None für ganzflächig. Gibt das gemischte RGB zurück.
+    Karten-QA zuerst (Slab-Format, Alpha-Rand). Fällt die durch — typisch
+    Hand+Case, Objekt am Fotorand — reicht die Alltags-Prüfung: lieber
+    rembg-only als das Original mit Küche/Hand im Listing.
     """
-    import cv2 as _cv
+    if not path or not Path(path).exists():
+        return False
+    if bild_ok(path, kind):
+        return True
+    if kind in ("slab", "sleeve", "raw") and bild_ok(path, "other"):
+        log.info("cardscan: %s-QA fail, rembg-only bleibt (%s)", kind, path)
+        return True
+    return False
+
+
+_rembg_session = None          # isnet — Graded/Slabs + Alltagsstücke
+_rembg_session_product = None  # BiRefNet — Rohkarte / Hülle
+_rembg_init_lock = threading.Lock()
+REMBG_MODEL_SLAB = "isnet-general-use"      # Case + Label bleiben (Sven 09.08.)
+REMBG_MODEL_CARD = "birefnet-general"       # Rohkarte / Top-Loader
+REMBG_MODEL_PRODUCT = "isnet-general-use"   # Alltag: normaler Background-Remover
+# Aliase für ältere Tests / Warmup
+REMBG_MODEL_CARDS_DEFAULT = REMBG_MODEL_SLAB
+REMBG_MODEL = REMBG_MODEL_CARD
+
+
+def rembg_max_side(kind: str | None = None) -> int:
+    """Längste Kante für rembg.
+
+    12-MP + beide Modelle haben Contabo (8 GB) per OOM erschlagen.
+    Karten behalten mehr Kante; Alltag kleiner (Tempo + RAM).
+    Override: SERO_REMBG_MAX_SIDE=640…2000."""
+    raw = (os.environ.get("SERO_REMBG_MAX_SIDE") or "").strip()
+    if raw.isdigit():
+        return max(640, min(2000, int(raw)))
+    karte = kind in ("slab", "sleeve", "raw")
+    if (os.environ.get("APP_ENV") or "").strip() == "production":
+        return 1280 if karte else 1024
+    return 2000 if karte else 1280
+
+
+def ensure_rembg_session(slab: bool):
+    """Modell einmal laden — Warmup und erster Cutout dürfen sich nicht
+    überholen (sonst zwei volle ONNX-Kopien im RAM)."""
+    global _rembg_session, _rembg_session_product
+    from rembg import new_session
+    with _rembg_init_lock:
+        if slab:
+            if _rembg_session is None:
+                _rembg_session = new_session(REMBG_MODEL_SLAB)
+            return _rembg_session
+        if _rembg_session_product is None:
+            _rembg_session_product = new_session(REMBG_MODEL_PRODUCT)
+        return _rembg_session_product
+
+
+# Transparenter Rand nach Alpha-BBox — gemessen an Collection-cut.png (~1 %)
+CUTOUT_PAD_FRAC = 0.015
+
+
+def layout_aus_alpha(out: "Image.Image", pad_frac: float = CUTOUT_PAD_FRAC) -> "Image.Image":
+    """Enger Zuschnitt anhand der Alphamaske + gleichmäßiger transparenter Rand."""
+    bbox = out.getbbox()
+    if not bbox:
+        return out
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+    pad = max(4, int(pad_frac * max(w, h)))
+    W, H = out.size
+    return out.crop((max(0, bbox[0] - pad), max(0, bbox[1] - pad),
+                     min(W, bbox[2] + pad), min(H, bbox[3] + pad)))
+
+
+def _smooth_column_silhouette(mask):
+    """Hochkantige Vollkörper: geglättete L/R-Grenzen + weiches float-Alpha.
+
+    Gibt (bool_mask, float_alpha|None) zurück. Seiten in der Mitte werden
+    linearisiert (Dose = gerade Flanke), Deckel/Boden bleiben rund.
+    Weiches Alpha ohne int-Runden — sonst neue Treppen."""
     import numpy as np
+    from scipy import ndimage
 
-    a = alpha.astype(np.float32) / 255.0
-    # Mischgewicht: unter 0.15 voll Studio, ab 0.75 voll Original
-    w = np.clip((0.75 - a) / 0.60, 0.0, 1.0)
-    # weich machen, damit keine harte Kante zwischen Objekt und Plastik steht
-    w = _cv.GaussianBlur(w, (0, 0), 3.0)
+    H, W = mask.shape
+    rows = np.flatnonzero(mask.any(1))
+    cols = np.flatnonzero(mask.any(0))
+    if rows.size < 40 or cols.size < 8:
+        return mask, None
+    y0, y1 = int(rows[0]), int(rows[-1])
+    x0, x1 = int(cols[0]), int(cols[-1])
+    h = y1 - y0 + 1
+    w = x1 - x0 + 1
+    if h / max(w, 1) < 1.55:
+        return mask, None
+    if float(mask[y0:y1 + 1, x0:x1 + 1].mean()) < 0.72:
+        return mask, None
 
-    # Schutz-Kerne: die undurchsichtigen Rechtecke im Case (Label, Buch,
-    # Karte). Erste Wahl sind die VISION-BOXEN aus detect_card — exakte
-    # Semantik statt Masken-Deutung. Ohne Boxen greift die Heuristik über
-    # die größte Komponente (Bounding-Box hält auch bei löchriger Alpha,
-    # etwa beim hellen Mond des 103er-Covers) plus Label-Zeilen-Trim.
-    H_, W_ = alpha.shape
-    L = _cv.cvtColor(rgb, _cv.COLOR_RGB2GRAY).astype(np.float32)
-    if boxen:
-        # Gegenprobe Vision ↔ Segmentierung: das größte Polygon (Sichtfenster)
-        # muss die Hauptkomponente der Alpha-Maske treffen. Beim zweiten 103er
-        # (03.08.) lagen die Konsens-Boxen versetzt — das Milchglas legte sich
-        # ÜBERS Cover. Passen die zwei unabhängigen Quellen nicht zusammen,
-        # gibt es keine Kosmetik.
-        gross = _cv.morphologyEx((alpha > 200).astype(np.uint8), _cv.MORPH_CLOSE,
-                                 np.ones((35, 35), np.uint8))
-        ng, lg, sg, _ = _cv.connectedComponentsWithStats(gross)
-        if ng > 1:
-            gi = 1 + int(sg[1:, _cv.CC_STAT_AREA].argmax())
-            hx0, hy0 = sg[gi, _cv.CC_STAT_LEFT], sg[gi, _cv.CC_STAT_TOP]
-            hx1 = hx0 + sg[gi, _cv.CC_STAT_WIDTH]
-            hy1 = hy0 + sg[gi, _cv.CC_STAT_HEIGHT]
-            fenster = max(boxen, key=lambda p: _cv.contourArea(np.float32(p)))
-            fx = [p[0] for p in fenster]; fy = [p[1] for p in fenster]
-            ix0, iy0 = max(min(fx), hx0), max(min(fy), hy0)
-            ix1, iy1 = min(max(fx), hx1), min(max(fy), hy1)
-            schnitt = max(0, ix1 - ix0) * max(0, iy1 - iy0)
-            verein = ((max(fx) - min(fx)) * (max(fy) - min(fy))
-                      + (hx1 - hx0) * (hy1 - hy0) - schnitt)
-            if schnitt / max(verein, 1e-6) < 0.5:
-                log.info("cardscan: Vision-Boxen passen nicht zur Maske "
-                         "(IoU %.2f) — keine Studio-Kosmetik", schnitt / max(verein, 1e-6))
-                boxen = None
-    if boxen:
-        # Vision-Boxen sind die Wahrheit: Label und Sichtfenster bleiben
-        # pixelgenau, ALLES andere ist Case-Plastik samt Durchblick — dort
-        # täuscht weder Alpha (rembg sagt „Objekt") noch Helligkeit (der
-        # Tisch ist braungrau, L≈118, kein Schwarz — gemessen 03.08.).
-        # Plastik wird Milchglas: Studio-Grund, die Helligkeitsstruktur der
-        # Reflexe und Kanten bleibt als zarte Zeichnung erhalten.
-        # Polygone, nicht Bounding-Boxen: nach einem Warp bläht sich die
-        # achsenparallele Box auf und schützt fremden Hintergrund mit
-        # (der dunkle Balken hinter Svens Band-1-Label).
-        schutz = np.zeros((H_, W_), dtype=np.uint8)
-        for poly in boxen:
-            pts = np.float32(poly)
-            mitte = pts.mean(axis=0)
-            pts = mitte + (pts - mitte) * 1.02      # 2 % Luft um den Druck
-            _cv.fillPoly(schutz, [np.intp(pts)], 1)
-        sw = _cv.GaussianBlur(schutz.astype(np.float32), (0, 0), 4.0)[:, :, None]
-        hell = np.empty_like(rgb)
-        hell[:] = (246, 247, 249)
-        verlauf = np.linspace(1.0, 0.94, H_, dtype=np.float32)[:, None, None]
-        milch = (hell.astype(np.float32) * verlauf
-                 * (0.80 + 0.20 * (L / 255.0))[:, :, None])
-        aus = rgb.astype(np.float32) * sw + milch * (1 - sw)
-        if form is not None:
-            aus[~form] = rgb[~form]
-        return np.clip(aus, 0, 255).astype(np.uint8)
+    left = np.full(H, np.nan, dtype=np.float64)
+    right = np.full(H, np.nan, dtype=np.float64)
+    for y in range(y0, y1 + 1):
+        xs = np.flatnonzero(mask[y])
+        if xs.size:
+            left[y] = float(xs[0])
+            right[y] = float(xs[-1])
 
-    # OHNE verlässliche Boxen keine weitere Kosmetik. Jede Heuristik, die
-    # hier stand (Komponenten-Rechtecke, Dunkel-Flächen-Regel), hat im
-    # Abnahme-Panel vom 03.08. Artefakte erzeugt — Querbalken über dem
-    # Cover, ausgewaschene Ecken. Ein ehrliches dunkleres Bild schlägt ein
-    # kaputtes; es bleibt bei der sanften Alpha-Mischung.
+    def _fill_nan(arr):
+        out = arr.copy()
+        nans = np.isnan(out)
+        if not nans.any() or nans.all():
+            return out
+        good = ~nans
+        out[nans] = np.interp(np.flatnonzero(nans), np.flatnonzero(good), out[good])
+        return out
 
-    if form is not None:
-        w[~form] = 0.0
-    hell = np.empty_like(rgb)
-    hell[:] = (246, 247, 249)
-    # sanfter Verlauf nach unten, damit es nach Licht aussieht, nicht nach Fläche
-    H = rgb.shape[0]
-    verlauf = np.linspace(1.0, 0.94, H, dtype=np.float32)[:, None, None]
-    hell = (hell.astype(np.float32) * verlauf).astype(np.uint8)
-    w3 = w[:, :, None]
-    return (rgb.astype(np.float32) * (1 - w3) + hell.astype(np.float32) * w3).astype(np.uint8)
+    left = _fill_nan(left)
+    right = _fill_nan(right)
+    sigma = max(12.0, h * 0.035)
+    left_s = ndimage.gaussian_filter1d(left, sigma=sigma, mode="nearest")
+    right_s = ndimage.gaussian_filter1d(right, sigma=sigma, mode="nearest")
+
+    cap = max(14, int(h * 0.18))
+    y_a, y_b = y0 + cap, y1 - cap
+    if y_b > y_a + 20:
+        ys = np.arange(y_a, y_b + 1)
+        # Gerade Flanke: Linie durch die Mitte (Dose/Flasche)
+        left_s[ys] = np.polyval(np.polyfit(ys, left_s[ys], 1), ys)
+        right_s[ys] = np.polyval(np.polyfit(ys, right_s[ys], 1), ys)
+
+    # Breite stabil halten
+    mid = 0.5 * (left_s + right_s)
+    half_src = np.maximum(0.5 * (right - left), 2.0)
+    half_src_s = ndimage.gaussian_filter1d(half_src, sigma=sigma, mode="nearest")
+    half = np.maximum(0.5 * (right_s - left_s), half_src_s * 0.96)
+    left_s = mid - half
+    right_s = mid + half
+
+    # Deckel/Boden: stark geglättetes Original (Rundung), nicht die Treppen
+    left_cap = ndimage.gaussian_filter1d(left, sigma=max(6.0, h * 0.02), mode="nearest")
+    right_cap = ndimage.gaussian_filter1d(right, sigma=max(6.0, h * 0.02), mode="nearest")
+    for y in range(y0, y1 + 1):
+        if y < y0 + cap or y > y1 - cap:
+            dist = (y - y0) if y < y0 + cap else (y1 - y)
+            t = dist / max(cap, 1)
+            # am Pol: geglättetes Original; zur Mitte: lineare Flanke
+            u = min(1.0, max(0.0, (t - 0.1) / 0.75))
+            left_s[y] = (1 - u) * left_cap[y] + u * left_s[y]
+            right_s[y] = (1 - u) * right_cap[y] + u * right_s[y]
+
+    xs = np.arange(W, dtype=np.float64)
+    alpha = np.zeros((H, W), dtype=np.float32)
+    feather = 3.6
+    for y in range(y0, y1 + 1):
+        lo, hi = left_s[y], right_s[y]
+        if hi <= lo + 1:
+            continue
+        dist = np.minimum(xs - lo, hi - xs)
+        alpha[y] = np.clip(dist / feather, 0.0, 1.0).astype(np.float32)
+    alpha = np.clip(ndimage.gaussian_filter(alpha, sigma=(1.4, 0.7)), 0.0, 1.0)
+    return alpha > 0.04, alpha
 
 
-def _cutout(path: str, out_path: str) -> bool:
-    """PicsArt-Style Hintergrundentferner: KI-Segmentierung (rembg/BiRefNet)
-    findet das Objekt (Karte, Slab, Toploader), danach Form-Reparatur — Karten
-    sind konvexe Rechtecke, also werden Löcher (dunkle Holo-Flächen) und
-    Randbisse per Zeilen-/Spalten-Spannen aufgefüllt. Ergebnis: transparentes
-    PNG, eng beschnitten.
+def _polish_product_cutout(out: "Image.Image") -> "Image.Image":
+    """Rand säubern und Silhouette glätten.
 
-    Einsatz: sleeve/raw direkt. Bei Slabs nur Fallback, wenn der Ecken-Warp
-    reißt — nie auf einem gelungenen Warp (klares Plastik = „Hintergrund")."""
-    global _rembg_session
+    rembg liefert oft harte Treppenkanten und einen hellen Farbsaum. Dagegen:
+    1) größte Form behalten
+    2) Maske leicht einziehen; Fuß-Schatten nur am äußeren Rand (nicht Motiv)
+    3) Hochkant-Vollkörper: L/R-Kante linearisieren + weiches Alpha
+    4) sonst: Blur mit stärkerer horizontaler Glättung
+    5) Randfarbe vom Inneren holen
+    Ohne scipy unverändert zurück."""
     try:
         import numpy as np
-        from rembg import new_session, remove
+        from PIL import Image
+        from scipy import ndimage
+    except Exception:  # noqa: BLE001
+        return out
+    arr = np.array(out)
+    if arr.ndim != 3 or arr.shape[2] != 4:
+        return out
+    alpha0 = arr[:, :, 3].astype(np.float32)
+    mask = alpha0 >= 40
+    if not mask.any():
+        return out
+    labels, n = ndimage.label(mask)
+    if n > 1:
+        sizes = ndimage.sum(mask, labels, range(1, n + 1))
+        mask = labels == (int(np.argmax(sizes)) + 1)
+    mask = ndimage.binary_erosion(mask, iterations=2)
+    if not mask.any():
+        return out
+    rgb = arr[:, :, :3].copy().astype(np.float32)
+    solid = ndimage.binary_erosion(mask, iterations=4)
+    if not solid.any():
+        solid = ndimage.binary_erosion(mask, iterations=2)
+    interior_lum = float(rgb[solid].mean()) if solid.any() else 128.0
+    rows = np.flatnonzero(mask.any(1))
+    if rows.size and solid.any():
+        y1 = int(rows[-1])
+        foot_h = max(6, int((rows[-1] - rows[0] + 1) * 0.05))
+        foot = np.zeros_like(mask)
+        foot[max(0, y1 - foot_h):y1 + 1] = True
+        # Nur äußerer Rand — dunkles Motiv (Skyline) nicht als Schatten werten
+        rim = mask & ~ndimage.binary_erosion(mask, iterations=4)
+        lum = rgb.mean(axis=2)
+        shadow = foot & rim & (lum < interior_lum - 45)
+        if shadow.any():
+            mask &= ~ndimage.binary_dilation(shadow, iterations=1)
+            if not mask.any():
+                return out
+            solid = ndimage.binary_erosion(mask, iterations=4)
+            if not solid.any():
+                solid = ndimage.binary_erosion(mask, iterations=2)
+            if solid.any():
+                interior_lum = float(rgb[solid].mean())
+
+    mask, column_alpha = _smooth_column_silhouette(mask)
+    if not mask.any():
+        return out
+    solid = ndimage.binary_erosion(mask, iterations=3)
+    if not solid.any():
+        solid = ndimage.binary_erosion(mask, iterations=2)
+    if not solid.any():
+        solid = mask
+
+    nearest = None
+    if solid.any():
+        # Farbquelle tiefer innen — sonst färbt der helle rembg-Saum den Rand
+        color_src = ndimage.binary_erosion(mask, iterations=6)
+        if not color_src.any():
+            color_src = ndimage.binary_erosion(mask, iterations=4)
+        if not color_src.any():
+            color_src = solid
+        idx = ndimage.distance_transform_edt(
+            ~color_src, return_distances=False, return_indices=True)
+        nearest = rgb[tuple(idx)].copy()
+        ring = ndimage.binary_dilation(mask, iterations=3) & ~solid
+        rgb[ring] = nearest[ring]
+        lum = rgb.mean(axis=2)
+        fringe = mask & (lum > interior_lum + 28)
+        rgb[fringe] = nearest[fringe]
+
+    if column_alpha is not None:
+        a = np.clip(column_alpha * 255.0, 0, 255)
+        # Nur leicht horizontal nachfedern — kein erneutes Auf-Treppen-Schwellwerten
+        a = ndimage.gaussian_filter(a, sigma=(0.8, 2.2))
+        a = np.clip(a, 0, 255)
+    else:
+        ys, xs = np.nonzero(mask)
+        span = float(max(ys.max() - ys.min() + 1, xs.max() - xs.min() + 1))
+        sig_y = max(4.0, min(10.0, span * 0.008))
+        sig_x = max(6.0, min(14.0, span * 0.014))
+        mf = ndimage.gaussian_filter(mask.astype(np.float32), sigma=(sig_y, sig_x))
+        rounded = (mf > 0.42).astype(np.float32)
+        mf2 = ndimage.gaussian_filter(rounded, sigma=(sig_y * 0.45, sig_x * 0.55))
+        a = np.clip(mf2 * 255.0, 0, 255)
+        a[mf2 >= 0.88] = 255
+        a[mf2 <= 0.05] = 0
+    if nearest is not None:
+        soft = (a > 6) & (a < 250)
+        rgb[soft] = nearest[soft]
+    # Heller Farbsaum: auch bei weichem Alpha nachfärben
+    if solid.any() and nearest is not None:
+        lum = rgb.mean(axis=2)
+        fringe2 = (a > 20) & (lum > interior_lum + 24) & ~solid
+        rgb[fringe2] = nearest[fringe2]
+    out_arr = np.dstack([np.clip(rgb, 0, 255).astype(np.uint8), a.astype(np.uint8)])
+    out_arr[out_arr[:, :, 3] == 0, :3] = 0
+    return Image.fromarray(out_arr, "RGBA")
+
+
+def _cutout(path: str, out_path: str, kind: str | None = None) -> bool:
+    """Hintergrund entfernen (rembg) → RGBA-PNG, eng beschnitten.
+
+    Rohkarte (raw): BiRefNet → Form-Reparatur → Rechteck-Vorlage (opakes Inneres ok).
+
+    Sleeve/Toploader: BiRefNet, weiches Alpha (Matting) — kein opakes MinAreaRect.
+
+    Slabs/Graded: isnet, weiches Alpha — Case/Label bleiben; kein opakes Rechteck
+    (sonst Tisch hinter Plastik eingebrannt; CutoutPipelineV2).
+
+    Alles andere: `isnet-general-use` als normaler Background-Remover.
+    Kein Warp, keine Politur, kein Rechteck-Auffüllen (sonst Tisch/Stuhl
+    im Freisteller; Sven 18.08.2026 Augustiner-Flasche)."""
+    try:
+        import numpy as np
+        from rembg import remove
         from PIL import Image, ImageFilter, ImageOps
-        if _rembg_session is None:
-            _rembg_session = new_session("birefnet-general")
+        karte = kind in ("slab", "sleeve", "raw")
+        slab = kind == "slab"
+        sleeve = kind == "sleeve"
+        # Nur Rohkarte: hartes post_process + opakes Rechteck. Slab/Sleeve: Matting.
+        rect_fill = kind == "raw"
+        # Graded/Slab + Alltag: isnet. Roh/Hülle: BiRefNet.
+        model = REMBG_MODEL_SLAB if slab else (
+            REMBG_MODEL_CARD if karte else REMBG_MODEL_PRODUCT
+        )
+        use_isnet = model == REMBG_MODEL_SLAB or model == REMBG_MODEL_PRODUCT
+        session = ensure_rembg_session(slab=use_isnet)
         img = ImageOps.exif_transpose(Image.open(path)).convert("RGB")
-        img.thumbnail((2000, 2000))   # 12-MP-Fotos quälen die CPU ohne Sichtgewinn
-        out = remove(img, session=_rembg_session, post_process_mask=True)
-        a = np.array(out.split()[3])
-        # niedrige Schwelle: transparentes Slab-Plastik hat schwaches Alpha;
-        # danach morphologisch schließen, damit der Case eine Form wird
+        side = rembg_max_side(kind)
+        img.thumbnail((side, side))   # 12-MP-Fotos quälen CPU/RAM ohne Sichtgewinn
+        # Nur Rohkarte: post_process härtet für Rechteck-Pfad. Slab/Sleeve/Produkt:
+        # weiches Alpha behalten — sonst Tisch hinter Plastik eingebrannt.
+        rem = remove(img, session=session, post_process_mask=rect_fill)
+        a = np.array(rem.split()[3])
+        # Weißes Buch / helles Cover: isnet hält oft nur das Cover-Motiv
+        # (Schachfigur) und verwirft den Karton. u2netp sieht die Fläche.
+        if not karte and float((a > 28).mean()) < 0.10:
+            try:
+                from rembg import new_session as _ns_fb
+                rem_fb = remove(img, session=_ns_fb("u2netp"),
+                                post_process_mask=False)
+                a_fb = np.array(rem_fb.split()[3])
+                frac_fb = float((a_fb > 28).mean())
+                if 0.18 <= frac_fb < 0.92:
+                    log.info("cardscan: isnet nur %.0f %% — u2netp %.0f %%",
+                             float((a > 28).mean()) * 100, frac_fb * 100)
+                    rem, a = rem_fb, a_fb
+            except Exception as e:  # noqa: BLE001
+                log.warning("cardscan: u2netp-Fallback fehlgeschlagen: %s", e)
         import cv2 as _cv
-        m = a > 40
-        # CLOSE groß genug, um die transparente Lücke Label<->Karte im Case zu
-        # überbrücken (sonst zerfällt der Slab); OPEN klein, nur gegen Fransen.
-        m = _cv.morphologyEx(m.astype(np.uint8), _cv.MORPH_CLOSE,
-                             np.ones((61, 61), np.uint8))
-        m = _cv.morphologyEx(m, _cv.MORPH_OPEN, np.ones((7, 7), np.uint8)).astype(bool)
+        # Slab/Sleeve: niedrigere Schwelle — durchsichtiges Plastik hat schwaches Alpha
+        m = a > (18 if (slab or sleeve) else 40)
+        if karte:
+            # CLOSE groß genug für Lücke Label<->Karte; OPEN klein gegen Fransen
+            close_sz = 81 if slab else (51 if sleeve else 61)
+            m = _cv.morphologyEx(m.astype(np.uint8), _cv.MORPH_CLOSE,
+                                 np.ones((close_sz, close_sz), np.uint8))
+            m = _cv.morphologyEx(m, _cv.MORPH_OPEN,
+                                 np.ones((7, 7), np.uint8)).astype(bool)
+        else:
+            # Produkt: weiches Alpha möglichst erhalten — harte OPEN-Maske
+            # erzeugt Treppen an geraden Kanten (Dose).
+            m = a > 28
+            m = _cv.morphologyEx(m.astype(np.uint8), _cv.MORPH_OPEN,
+                                 np.ones((3, 3), np.uint8)).astype(bool)
         if not m.any():
             return False
         # 1) nur die Komponente um die Bildmitte behalten (Finger/Krümel fliegen raus)
         H, W = m.shape
-        _rot_M = None                   # gesetzt, falls unten rotiert wird
         small = np.array(Image.fromarray(m.astype(np.uint8) * 255)
                          .resize((240, 240), Image.NEAREST)) > 0
         keep = np.zeros_like(small)
@@ -824,93 +1218,176 @@ def _cutout(path: str, out_path: str) -> bool:
             if 0 <= y < 240 and 0 <= x < 240 and small[y, x] and not keep[y, x]:
                 keep[y, x] = True
                 stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
-        # Slab-Label-Rettung (Svens Band 1, 03.08.): das Beckett-Label liegt
-        # ÜBER der Karte, durch transparentes Plastik getrennt — als eigene
-        # Komponente flog es hier raus und der Case war „weg". Komponenten,
-        # die im selben Spalten-Band wie die Mittel-Komponente liegen, gehören
-        # zum Stück; Finger kommen von der Seite und bleiben draußen.
-        xs_keep = np.nonzero(keep.any(0))[0]
-        if xs_keep.size:
-            kx0, kx1 = xs_keep[0], xs_keep[-1]
-            n_lbl, lbl = _cv.connectedComponents(small.astype(np.uint8))
-            for li in range(1, n_lbl):
-                comp = lbl == li
-                if (comp & keep).any():
-                    continue
-                cxs = np.nonzero(comp.any(0))[0]
-                ueberlapp = max(0, min(kx1, cxs[-1]) - max(kx0, cxs[0]) + 1)
-                if (comp.sum() >= 58                       # ≥ ~0,1 % des Bildes
-                        and ueberlapp / max(cxs[-1] - cxs[0] + 1, 1) > 0.6):
-                    keep |= comp
-        m &= np.array(Image.fromarray(keep.astype(np.uint8) * 255)
-                      .resize((W, H), Image.BILINEAR)) > 127
-        # 2) Svens Vorlagen-Idee: Slabs/Toploader/Karten SIND Rechtecke — das minimale
-        # rotierte Rechteck um die Maske fitten und als Schnittform verwenden.
-        # Deckt die Maske das Rechteck gut ab, gewinnt die Vorlage (gerade Kanten,
-        # nichts angefressen); sonst konvexe Zeilen-/Spalten-Reparatur als Fallback.
-        import cv2
-        pts = cv2.findNonZero(m.astype(np.uint8))
-        rect = cv2.minAreaRect(pts)
-        (rw, rh) = rect[1]
-        solid = None
-        if rw > 1 and rh > 1 and m.sum() / (rw * rh) > 0.55:
-            # NUR ROTIEREN, NIE VERZERREN (Svens iPhone-Test: Perspektiv-Warp
-            # zerrte Karten). Rotation macht gerade und kann nichts kaputtziehen.
-            angle = rect[2]
-            if angle > 45:
-                angle -= 90
-            if 0.4 < abs(angle) < 20:
-                M = cv2.getRotationMatrix2D((W / 2, H / 2), angle, 1.0)
-                img = Image.fromarray(cv2.warpAffine(
-                    np.array(img), M, (W, H), flags=cv2.INTER_CUBIC,
-                    borderValue=(0, 0, 0)))
-                m = cv2.warpAffine(m.astype(np.uint8) * 255, M, (W, H)) > 127
-                a = cv2.warpAffine(a, M, (W, H))   # Alpha mitdrehen (Studio-Look)
-                _rot_M = M                          # Boxen später mitdrehen
-                out = img.convert("RGBA")
-                pts = cv2.findNonZero(m.astype(np.uint8))
-                rect = cv2.minAreaRect(pts)
-            box_i = np.intp(cv2.boxPoints(rect))
-            tmpl = np.zeros((H, W), dtype=np.uint8)
-            cv2.fillPoly(tmpl, [box_i], 255)
-            solid = tmpl > 0
-        if solid is None:
-            rows, cols = m.any(1), m.any(0)
-            x0 = m.argmax(1); x1 = W - 1 - m[:, ::-1].argmax(1)
-            y0 = m.argmax(0); y1 = H - 1 - m[::-1, :].argmax(0)
-            xi, yi = np.arange(W), np.arange(H)
-            rowspan = (xi >= x0[:, None]) & (xi <= x1[:, None]) & rows[:, None]
-            colspan = (yi[:, None] >= y0[None, :]) & (yi[:, None] <= y1[None, :]) & cols[None, :]
-            solid = rowspan & colspan
-        frac = solid.mean()
-        if frac < 0.05 or frac > 0.98:
-            return False   # nichts Brauchbares gefunden bzw. Vollbild — Original behalten
-        # 3) weiche, halofreie Kante — auf dem ORIGINALBILD, nicht auf dem
-        # rembg-Ergebnis: rembg malt entfernte Pixel schwarz, und was die
-        # Rechteck-Vorlage davon wieder sichtbar macht (transparentes
-        # Slab-Plastik), wurde zur schwarzen Fläche (Svens Band 103, 03.08.).
-        am = Image.fromarray((solid * 255).astype("uint8"))
-        am = am.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(1.4))
-        rgb = _studio_hintergrund(np.array(img), a, form=solid)
-        out = Image.fromarray(rgb).convert("RGBA")
-        out.putalpha(am)
-        bbox = out.getbbox()
-        if not bbox:
+        if karte:
+            # Slab-Label-Rettung: Label über der Karte als eigene Komponente
+            xs_keep = np.nonzero(keep.any(0))[0]
+            if xs_keep.size:
+                kx0, kx1 = xs_keep[0], xs_keep[-1]
+                n_lbl, lbl = _cv.connectedComponents(small.astype(np.uint8))
+                for li in range(1, n_lbl):
+                    comp = lbl == li
+                    if (comp & keep).any():
+                        continue
+                    cxs = np.nonzero(comp.any(0))[0]
+                    if cxs.size == 0:
+                        continue
+                    ueberlapp = max(0, min(kx1, cxs[-1]) - max(kx0, cxs[0]) + 1)
+                    # Slab: auch kleinere Label-Komponenten retten
+                    min_px = 40 if slab else 58
+                    if (comp.sum() >= min_px
+                            and ueberlapp / max(cxs[-1] - cxs[0] + 1, 1) > 0.55):
+                        keep |= comp
+        keep_full = np.array(Image.fromarray(keep.astype(np.uint8) * 255)
+                             .resize((W, H), Image.BILINEAR)) > 127
+        m &= keep_full
+        if not m.any():
             return False
-        pad = 8
-        out = out.crop((max(0, bbox[0] - pad), max(0, bbox[1] - pad),
-                        min(W, bbox[2] + pad), min(H, bbox[3] + pad)))
+
+        if rect_fill:
+            # 2) Rechteck-Vorlage NUR für Rohkarte (gerade Kanten)
+            import cv2
+            pts = cv2.findNonZero(m.astype(np.uint8))
+            rect = cv2.minAreaRect(pts)
+            (rw, rh) = rect[1]
+            solid = None
+            if rw > 1 and rh > 1 and m.sum() / (rw * rh) > 0.55:
+                angle = rect[2]
+                if angle > 45:
+                    angle -= 90
+                if 0.4 < abs(angle) < 20:
+                    M = cv2.getRotationMatrix2D((W / 2, H / 2), angle, 1.0)
+                    img = Image.fromarray(cv2.warpAffine(
+                        np.array(img), M, (W, H), flags=cv2.INTER_CUBIC,
+                        borderValue=(0, 0, 0)))
+                    m = cv2.warpAffine(m.astype(np.uint8) * 255, M, (W, H)) > 127
+                    pts = cv2.findNonZero(m.astype(np.uint8))
+                    rect = cv2.minAreaRect(pts)
+                box_i = np.intp(cv2.boxPoints(rect))
+                tmpl = np.zeros((H, W), dtype=np.uint8)
+                cv2.fillPoly(tmpl, [box_i], 255)
+                solid = tmpl > 0
+            if solid is None:
+                rows, cols = m.any(1), m.any(0)
+                x0 = m.argmax(1); x1 = W - 1 - m[:, ::-1].argmax(1)
+                y0 = m.argmax(0); y1 = H - 1 - m[::-1, :].argmax(0)
+                xi, yi = np.arange(W), np.arange(H)
+                rowspan = (xi >= x0[:, None]) & (xi <= x1[:, None]) & rows[:, None]
+                colspan = ((yi[:, None] >= y0[None, :])
+                           & (yi[:, None] <= y1[None, :]) & cols[None, :])
+                solid = rowspan & colspan
+            frac = solid.mean()
+            if frac < 0.05 or frac > 0.98:
+                return False
+            am = Image.fromarray((solid * 255).astype("uint8"))
+            am = am.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(1.4))
+            out = img.convert("RGBA")
+            out.putalpha(am)
+        elif slab or sleeve:
+            # Weiches Alpha (Matting): kein opakes MinAreaRect — Plastik bleibt
+            # durchscheinend, fotografierter Tisch wird nicht eingebrannt.
+            soft = a.astype(np.float32)
+            keep_soft = _cv.dilate(m.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+            soft[~keep_soft] = 0
+            soft[~m] = 0
+            soft = np.where(m, np.maximum(soft, 220.0), soft)
+            soft = _cv.GaussianBlur(soft, (0, 0), sigmaX=1.2, sigmaY=1.2)
+            soft[~keep_soft] = 0
+            frac = (soft > 40).mean()
+            if frac < 0.02 or frac > 0.98:
+                return False
+            rgb = np.array(img.convert("RGB"), dtype=np.float32)
+            solid_core = soft > 240
+            if solid_core.any():
+                ys, xs = np.where(solid_core)
+                cy, cx = int(ys.mean()), int(xs.mean())
+                patch = rgb[max(0, cy - 2):cy + 3, max(0, cx - 2):cx + 3]
+                if patch.size:
+                    core_rgb = patch.mean(axis=(0, 1))
+                    lum = rgb.mean(axis=2)
+                    fringe = (soft > 20) & (soft < 250) & (lum > float(core_rgb.mean()) + 28)
+                    rgb[fringe] = core_rgb
+            out_arr = np.dstack([
+                np.clip(rgb, 0, 255).astype(np.uint8),
+                np.clip(soft, 0, 255).astype(np.uint8),
+            ])
+            out_arr[out_arr[:, :, 3] == 0, :3] = 0
+            out = Image.fromarray(out_arr, "RGBA")
+        else:
+            # Produkt: rembg-Alpha × Mittel-Komponente, enger Zuschnitt.
+            # Kein Warp, keine Politur (Sven: normaler Background-Remover).
+            soft = a.astype(np.float32)
+            keep_soft = _cv.dilate(m.astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
+            soft[~keep_soft] = 0
+            soft[~m] = np.minimum(soft[~m], 90)  # Fransen außerhalb nur schwach
+            frac = (soft > 40).mean()
+            if frac < 0.02 or frac > 0.95:
+                return False
+            am = Image.fromarray(np.clip(soft, 0, 255).astype("uint8"))
+            out = img.convert("RGBA")
+            out.putalpha(am)
+
+        out = layout_aus_alpha(out)
+        if not out.getbbox():
+            return False
+        # Slab ohne Label früh verwerfen (gleiche Schwelle wie bild_ok)
+        if slab:
+            bw, bh = out.size
+            if bh / max(bw, 1) < 1.48:
+                log.info("cardscan: Slab-Cutout zu flach (%.2f) — Label fehlt vermutlich",
+                         bh / max(bw, 1))
+                return False
         out.save(out_path, "PNG")
-        for muster in ("_w*.jpg", "_w*.webp"):
-            for tp in Path(out_path).parent.glob(Path(out_path).stem + muster):
-                tp.unlink(missing_ok=True)
-        for muster in ("_w*.png", "_w*.webp"):
-            for tp in Path(out_path).parent.glob(Path(out_path).stem + muster):
+        stem = Path(out_path).stem
+        parent = Path(out_path).parent
+        for muster in (f"{stem}_w*.jpg", f"{stem}_w*.webp",
+                       f"{stem}_w*.png"):
+            for tp in parent.glob(muster):
                 tp.unlink(missing_ok=True)
         return True
     except Exception as e:  # noqa: BLE001
         log.warning("cardscan: Cutout fehlgeschlagen für %s: %s", path, e)
         return False
+
+
+def _cutout_via_child(path: str, out_path: str, kind: str | None = None) -> bool:
+    """rembg in einem frischen Python-Prozess.
+
+    Am 18.08.2026 hat BiRefNet im uvicorn-Prozess Contabo (8 GB) per
+    OOM-Killer beendet — RSS immer ~7,8 GB, UI blieb auf „Stelle Karte frei".
+    Stirbt nur das Kind, bleibt die App stehen und der Scan geht ohne Alpha
+    weiter (fail-open, wie bisher bei Cutout-Fehler)."""
+    import subprocess
+    import sys
+    env = os.environ.copy()
+    env["OMP_NUM_THREADS"] = "1"
+    env["SERO_CUTOUT_CHILD"] = "1"
+    kind_s = kind or ""
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "web.cutout_worker", path, out_path, kind_s],
+            env=env,
+            timeout=180,
+            capture_output=True,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+    except subprocess.TimeoutExpired:
+        log.warning("cardscan: Cutout-Kindprozess Timeout für %s", path)
+        return False
+    if r.returncode == 0 and Path(out_path).exists():
+        return True
+    err = (r.stderr or b"").decode("utf-8", "replace")[-400:]
+    log.warning("cardscan: Cutout-Kindprozess rc=%s für %s %s",
+                r.returncode, path, err)
+    return False
+
+
+def _cutout_job(path: str, out_path: str, kind: str | None = None) -> bool:
+    """Produktion: eigenes Kind. Mac/Tests: inline (monkeypatch bleibt)."""
+    if (os.environ.get("APP_ENV") or "").strip() == "production":
+        if os.environ.get("SERO_CUTOUT_CHILD") == "1":
+            return _cutout(path, out_path, kind)
+        return _cutout_via_child(path, out_path, kind)
+    return _cutout(path, out_path, kind)
 
 
 # Der Freisteller (BiRefNet) rechnet auf der CPU und nutzt dabei selbst alle
@@ -920,72 +1397,229 @@ def _cutout(path: str, out_path: str) -> bool:
 _cut_lock = asyncio.Semaphore(1)
 
 
-async def crop_photos(api_key: str, paths: list[str]) -> tuple[list[str], dict]:
-    """Alle Fotos eines Stücks freistellen (Hintergrund weg, transparentes PNG).
-    Läuft lokal (rembg) — bei Misserfolg bleibt das jeweilige Original stehen.
+async def crop_photos(api_key: str, paths: list[str],
+                      confirmed_kind: str | None = None,
+                      item: dict | None = None) -> tuple[list[str], dict]:
+    """Fotos freistellen. Karten/Slabs: Warp dann rembg. Alltag: nur rembg.
 
-    Vorweg fragt ein Vision-Blick nach Label- und Fenster-Box: bei Slabs
-    steuern die den Studio-Look pixelgenau (Svens Manga, 03.08.). Schlägt
-    die Erkennung fehl, arbeitet der Freisteller mit seiner Heuristik weiter."""
+    Klassifikation (Glance/Item/Geometrie) vor dem Cutout. Misserfolg →
+    Original bleibt. Vorder-/Rückseite (idx < 2) werden freigestellt;
+    weitere Aufnahmen bleiben Zusatzbilder.
+
+    confirmed_kind / item: deterministisches Routing (Graded bleibt Slab) —
+    Alltagsstücke (generic) bekommen keinen Warp, auch wenn Vision früher
+    fälschlich „slab“ gesagt hat.
+    """
     def one(p: str, kind: str | None) -> str:
         out = str(Path(p).with_name(Path(p).stem + "_cut.png"))
-        if _cutout(p, out) and bild_ok(out, kind):
+        # CutoutPipelineV2 (Flag) — gemeinsamer Kern
+        from web.pipeline_flags import cutout_v2_enabled
+        _iid = (item or {}).get("id") if item else None
+        cut_kind = None if kind in ("other", "product") else kind
+        if cut_kind and cutout_v2_enabled(_iid):
+            try:
+                from web.cutout_v2 import CutoutRequest, run_cutout
+                from web.cutout_v2.types import legacy_kind_to_cutout
+                ck = legacy_kind_to_cutout(cut_kind)
+                if ck is not None:
+                    res = run_cutout(CutoutRequest(
+                        source_path=Path(p),
+                        confirmed_kind=ck,
+                        kind_source="confirmed",
+                        output_path=Path(out),
+                        item_id=_iid,
+                    ))
+                    if res.status == "SUCCESS" and res.selected_path:
+                        return str(res.selected_path)
+                    return p
+            except Exception as e:  # noqa: BLE001
+                log.warning("cardscan: cutout_v2 Fallback auf Legacy (%s)", e)
+        if _cutout_job(p, out, cut_kind) and bild_ok(out, cut_kind):
             return out
-        return p                     # Standard: lieber Original als schlechtes Bild
+        return p
+
+    # Routing: bestätigt > persistiert > Glance > Geometrie. Alltag → other.
+    forced_kind = confirmed_kind
+    try:
+        from web.cutout_v2.routing import (
+            resolve_kind, should_warp, item_is_non_card,
+        )
+        from web.cutout_v2.types import cutout_kind_to_legacy
+        if item_is_non_card(item):
+            forced_kind = "other"
+        else:
+            rk, _, _, _ = resolve_kind(item=item, persisted_kind=confirmed_kind)
+            if rk is not None:
+                forced_kind = cutout_kind_to_legacy(rk)
+    except Exception:  # noqa: BLE001
+        from web.cutout_v2.routing import should_warp  # noqa: F811
+        pass
+
+    async def _classify_photo(p: str, kind: str | None) -> tuple[str | None, dict | None]:
+        """Glance kurz, sonst Rechteck-Geometrie, sonst detect_card."""
+        det = None
+        if kind in ("other", "product"):
+            return "other", None
+        if kind is not None:
+            return kind, None
+        glance = None
+        try:
+            glance = await asyncio.wait_for(
+                glance_scan(api_key, p, item), timeout=GLANCE_TIMEOUT_S)
+        except Exception as e:  # noqa: BLE001
+            log.warning("cardscan: Glance übersprungen für %s: %s", p, e)
+        geo = None
+        try:
+            geo = flat_rectangle_hint(p)
+        except Exception:  # noqa: BLE001
+            geo = None
+        try:
+            from web.cutout_v2.routing import resolve_scan_kind, scan_kind_to_legacy
+            sk, src = resolve_scan_kind(item=item, glance=glance, geometry_hint=geo)
+            if sk:
+                log.info("cardscan: Scan-Kind %s (%s) für %s", sk, src, p)
+                return scan_kind_to_legacy(sk), None
+        except Exception:  # noqa: BLE001
+            pass
+        # Letzter Ausweg (Tests + API-Ausfall): detect_card wie bisher.
+        try:
+            det = await detect_card(_anthropic(api_key), p)
+        except Exception as e:  # noqa: BLE001
+            log.warning("cardscan: Erkennungs-Blick fehlgeschlagen für %s: %s", p, e)
+        return (det.get("kind") if det else None), det
 
     loop = asyncio.get_running_loop()
-    # Nur Vorder- und Rückseite verdienen den teuren Freisteller (~18 s/Foto);
-    # weitere Aufnahmen bleiben unbearbeitete Zusatzbilder.
     results = []
+    kinds_seen: list[str | None] = []
     for idx, p in enumerate(paths):
         if idx < 2:
             det1 = None
-            try:
-                det1 = await detect_card(_anthropic(api_key), p)
-            except Exception as e:  # noqa: BLE001
-                log.warning("cardscan: Erkennungs-Blick fehlgeschlagen für %s: %s", p, e)
-            # Slab? Dann ist der ECKEN-WARP der Normalfall (Svens Referenzbild
-            # 03.08., 20:48: begradigt, Schnitt exakt an der Case-Kante, kein
-            # Schleier). KEIN rembg danach — klares Plastik wird sonst
-            # mitgefressen (Hen-Ei / Case-weg, 07.08.). Segmentierer nur
-            # Fallback, wenn die Warp-Schutzchecks reißen.
-            if det1 and det1.get("kind") == "slab":
-                out = str(Path(p).with_name(Path(p).stem + "_cut.png"))
+            kind = forced_kind
+            if kind in ("other", "product"):
+                kind = "other"
+            elif kind is None:
+                kind, det1 = await _classify_photo(p, None)
+            elif forced_kind in ("slab", "sleeve", "raw"):
+                # Ecken für Warp (Slab/Raw) bzw. Vorzuschnitt (Sleeve) holen.
+                # Slab bleibt bestätigt (nie auf raw zurückstufen).
                 try:
-                    if await slab_recut(api_key, p, out, det=det1) and bild_ok(out, "slab"):
-                        results.append(out)
-                        continue
+                    det1 = await detect_card(_anthropic(api_key), p)
+                    if det1 and forced_kind == "slab":
+                        det1 = {**det1, "kind": "slab"}
+                    elif det1 and forced_kind == "raw" and det1.get("kind") in (
+                            "sleeve", "slab"):
+                        kind = det1["kind"]
+                    elif det1:
+                        det1 = {**det1, "kind": forced_kind}
                 except Exception as e:  # noqa: BLE001
-                    log.warning("cardscan: Slab-Warp fehlgeschlagen für %s: %s", p, e)
+                    log.warning("cardscan: Erkennungs-Blick fehlgeschlagen für %s: %s", p, e)
+            corners = (det1 or {}).get("corners") if det1 else None
+            try:
+                do_warp = should_warp(kind, item, corners)
+            except Exception:  # noqa: BLE001
+                do_warp = kind in ("slab", "raw")
+            if kind in ("slab", "raw") and not do_warp and corners:
+                kind = "other"
+            kinds_seen.append(kind)
+            out = str(Path(p).with_name(Path(p).stem + "_cut.png"))
+            # Karte/Slab: erst aufrichten (Rechteck), dann rembg.
+            if do_warp:
+                warp_tmp = str(Path(p).with_name(Path(p).stem + "_warp_tmp.png"))
+                warped = False
+                try:
+                    warped = bool(
+                        await slab_recut(api_key, p, warp_tmp, det=det1)
+                        and Path(warp_tmp).exists()
+                    )
+                except Exception as e:  # noqa: BLE001
+                    log.warning("cardscan: Rechteck-Warp fehlgeschlagen für %s: %s", p, e)
+                rembg_kind = "slab" if kind == "slab" else "raw"
+                src_for_cut = warp_tmp if warped else p
+                async with _cut_lock:
+                    ok = await loop.run_in_executor(
+                        None, _cutout_job, src_for_cut, out, rembg_kind)
+                Path(warp_tmp).unlink(missing_ok=True)
+                if ok and cutout_usable(out, rembg_kind):
+                    results.append(out)
+                    continue
+                # Warp/QA schlecht → rembg-only, nicht Original liegen lassen.
+                if not (ok and Path(out).exists() and cutout_usable(out, "other")):
+                    Path(out).unlink(missing_ok=True)
+                    async with _cut_lock:
+                        ok = await loop.run_in_executor(
+                            None, _cutout_job, p, out, "other")
+                if ok and cutout_usable(out, "other"):
+                    log.info("cardscan: Warp-Fallback rembg-only für %s", p)
+                    results.append(out)
+                    continue
+                Path(out).unlink(missing_ok=True)
+                results.append(p)
+                continue
+            if kind == "sleeve":
+                # Vorzuschnitt auf Halter-Außenkante, dann Soft-Alpha — nie raw-Rect.
+                sleeve_tmp = _sleeve_precrop_path(p, det1)
+                async with _cut_lock:
+                    ok = await loop.run_in_executor(
+                        None, _cutout_job, sleeve_tmp, out, "sleeve")
+                if sleeve_tmp != p:
+                    Path(sleeve_tmp).unlink(missing_ok=True)
+                if ok and cutout_usable(out, "sleeve"):
+                    results.append(out)
+                    continue
+                Path(out).unlink(missing_ok=True)
+                async with _cut_lock:
+                    ok = await loop.run_in_executor(
+                        None, _cutout_job, p, out, "other")
+                if ok and cutout_usable(out, "other"):
+                    log.info("cardscan: Sleeve-Fallback rembg-only für %s", p)
+                    results.append(out)
+                    continue
+                Path(out).unlink(missing_ok=True)
+                results.append(p)
+                continue
             async with _cut_lock:
-                results.append(await loop.run_in_executor(
-                    None, one, p, det1.get("kind") if det1 else None))
+                results.append(await loop.run_in_executor(None, one, p, kind))
         else:
             results.append(p)
-    info = {"cropped": sum(1 for r, p in zip(results, paths) if r != p), "total": len(paths)}
+            kinds_seen.append(None)
+    primary = next((k for k in kinds_seen if k in ("slab", "sleeve", "raw", "other")), None)
+    cropped_n = sum(1 for r, p in zip(results, paths) if r != p)
+    info = {
+        "cropped": cropped_n,
+        "total": len(paths),
+        "kinds": kinds_seen,
+        "kind": primary,
+        "error": None if cropped_n else "no_cutout",
+    }
     return results, info
 
 
 async def slab_recut(api_key: str, src_path: str, out_path: str,
                      min_area_frac: float = 0.0,
                      det: dict | None = None) -> bool:
-    """Slab-Garantie: Case-Ecken → aufrecht → eng zuschneiden.
+    """Rechteck-Warp: Case- oder Karten-Ecken → aufrecht → eng zuschneiden.
+
+    Slab: NUR das Case-Rechteck (Außenkanten). Die Karte im Sichtfenster
+    wird nicht extra entzerrt — sie darf im Case schief sitzen.
+
+    Rohkarte: Warp aufs Karten-Rechteck (alte Rechteck-Technik), keine Kosmetik.
 
     Wenn gegenüberliegende Kanten fast gleich lang sind (Symmetrie-Gates),
     richtet ein Perspektiv-Warp auf die Ecken auf — das ist für ein
     Parallelogramm kein Zerren und schneidet eng. Sonst nur ROTATION
     (warpAffine), nie strecken (Sven: „Don't distort, just straighten").
 
-    min_area_frac: Flächenanteil am Rohbild, den das gefundene Case ÜBERTREFFEN
-    muss. Der Aufrufer übergibt den Anteil des bisherigen Zuschnitts × Reserve —
-    so ersetzt der Zuschnitt nur dann, wenn der Segmentierer wirklich etwas
-    verschluckt hat, und lässt einen korrekten Studio-Freisteller in Ruhe."""
+    min_area_frac: Flächenanteil am Rohbild, den das gefundene Rechteck
+    ÜBERTREFFEN muss. Der Aufrufer übergibt den Anteil des bisherigen
+    Zuschnitts × Reserve — so ersetzt der Zuschnitt nur dann, wenn der
+    Segmentierer wirklich etwas verschluckt hat."""
     if det is None:
         # Eigenständiger Lauf (Rettungspfad nach der Analyse) — sonst reicht
         # der Aufrufer den Blick aus crop_photos durch und spart den Call.
         det = await detect_card(_anthropic(api_key), src_path)
-    if not det or det.get("kind") != "slab":
+    if not det or det.get("kind") not in ("slab", "raw"):
         return False
+    is_slab = det.get("kind") == "slab"
     try:
         import cv2
         import numpy as np
@@ -994,13 +1628,13 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         H, W = img.shape[:2]
         pts = np.array([[min(max(x, 0), 100) / 100 * W, min(max(y, 0), 100) / 100 * H]
                         for x, y in det["corners"]], dtype=np.float32)
-        # 5 % Einzug: Vision-Ecken sitzen oft am Tisch außerhalb der Case-Kante.
+        # 5 % Einzug: Vision-Ecken sitzen oft am Tisch außerhalb der Kante.
         _c = pts.mean(axis=0)
         pts = (_c + (pts - _c) * 0.95).astype(np.float32)
         if min_area_frac > 0:
             frac = float(cv2.contourArea(pts)) / max(W * H, 1)
             if frac < min_area_frac:
-                log.info("cardscan: slab_recut — Case (%.0f %%) nicht größer als "
+                log.info("cardscan: slab_recut — Rechteck (%.0f %%) nicht größer als "
                          "Zuschnitt, Studio-Bild bleibt", frac * 100)
                 return False
         tl, tr, br, bl = pts
@@ -1011,21 +1645,22 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
         # Deckel: 48-MP-iPhone-Fotos erzeugten Gigapixel-Warps (Thumbnail-Bombe!)
         _sc = min(1.0, 2000 / max(W2, H2))
         W2, H2 = max(1, int(W2 * _sc)), max(1, int(H2 * _sc))
-        # Plausibilität: Slabs sind Hochkant-Rechtecke. Entartete Ecken (2000×196!)
-        # -> lieber beim Studio-Freisteller bleiben als ein kaputtes Bild liefern.
-        if not (1.1 <= H2 / max(W2, 1) <= 2.0):
+        # Plausibilität: Karten/Slabs sind Hochkant-Rechtecke.
+        ar_lo, ar_hi = (1.1, 2.0) if is_slab else (1.15, 1.75)
+        if not (ar_lo <= H2 / max(W2, 1) <= ar_hi):
             log.warning("cardscan: slab_recut-Ecken unplausibel (%dx%d) — verworfen", W2, H2)
             return False
         _top = np.linalg.norm(tr - tl); _bot = np.linalg.norm(br - bl)
         _lft = np.linalg.norm(bl - tl); _rgt = np.linalg.norm(br - tr)
         asym_tb = abs(_top - _bot) / max(_top, _bot)
         asym_lr = abs(_lft - _rgt) / max(_lft, _rgt)
-        # Vorab: steckt der Slab schief in einem Vision-AABB? Dann zieht
+        # Vorab: steckt das Rechteck schief in einem Vision-AABB? Dann zieht
         # Perspektiv die Schräge NICHT raus — Rotation zuerst.
         rough0, _ = _crop_ecken(img, pts, pad=max(8, int(min(W, H) * 0.01)))
         ang_ecken0 = _norm_winkel_45(float(np.degrees(np.arctan2(
             (tr - tl)[1], (tr - tl)[0]))))
-        ang_inhalt0 = _slab_inhalt_winkel(rough0)
+        # Slab: nur Case-Außenkanten — die Karte im Fenster nicht entbiegen.
+        ang_inhalt0 = 0.0 if is_slab else _slab_inhalt_winkel(rough0)
         # Perspektiv nur hinter engen Symmetrie-Gates UND wenn schon nahezu
         # aufrecht (sonst: Vision-Rechteck um schiefen Slab → Schräge bleibt).
         # Sven: „Don't distort, just straighten" → Rotation ist der Normalfall.
@@ -1061,9 +1696,9 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
                 _ra = _norm_winkel_45(_ra)
                 if abs(_ra) >= 0.5 and abs(angle) < 0.5:
                     angle = -_ra
-            # Inhalt gewinnt, wenn Hough klar schiefer als Vision-Ecken
-            # (Vision liefert oft ein leicht geneigtes AABB um den Slab).
-            if abs(ang_inhalt) >= 0.8 and abs(ang_inhalt) > abs(angle) + 0.5:
+            # Inhalt gewinnt nur bei Rohkarte. Slab: Case-Kanten, nicht Fensterkarte.
+            if (not is_slab and abs(ang_inhalt) >= 0.8
+                    and abs(ang_inhalt) > abs(angle) + 0.5):
                 angle = -ang_inhalt
             ang_kontur = _slab_kontur_winkel(rough0)
             if abs(ang_kontur) >= 0.6 and abs(ang_kontur) > abs(angle) + 0.3:
@@ -1079,22 +1714,25 @@ async def slab_recut(api_key: str, src_path: str, out_path: str,
             M_box[0, 2] -= cx0
             M_box[1, 2] -= cy0
 
-        # Nachschnitt über Label- + Fenster-Box (eng am Case, Plastikrand bleibt).
-        warped = _case_nach_boxen(warped, det, pts, M_box, W, H)
+        # Slab: Nachschnitt über Label+Fenster (Plastikrand bleibt).
+        # Rohkarte: kein Case-Fenster — nur Kanten/Tisch.
+        if is_slab:
+            warped = _case_nach_boxen(warped, det, pts, M_box, W, H)
         # BEWUSST keine Studio-Kosmetik: Warp/Rotation allein IST der Look —
         # aufrecht, Schnitt an der Case-Kante, Plastik wie fotografiert.
         warped = kanten_trim(warped)     # Gradient an der Case-Kante
         warped = tisch_trim(warped)      # warmen Tisch/Kork am Rand weg
         warped = untergrund_trim(warped)  # Filz/Stoff/Studio-Rand weg
-        warped = case_kontur_nachschnitt(warped)  # Kontur → aufrecht + eng
-        # Restneigung (≤4,5°): ein Pass. Darüber = oft Holo-Artefakt.
-        _fein = _slab_inhalt_winkel(warped)
-        if 0.5 <= abs(_fein) <= 4.5:
-            warped, _ = _affine_drehen(warped, -_fein)
-            warped = kanten_trim(warped)
-            warped = tisch_trim(warped)
-            warped = untergrund_trim(warped)
-            warped = case_kontur_nachschnitt(warped)
+        if is_slab:
+            warped = case_kontur_nachschnitt(warped)  # Kontur → aufrecht + eng
+        # Restneigung der Karte selbst nur bei Rohkarte, nie Case-Innere.
+        if not is_slab:
+            _fein = _slab_inhalt_winkel(warped)
+            if 0.5 <= abs(_fein) <= 4.5:
+                warped, _ = _affine_drehen(warped, -_fein)
+                warped = kanten_trim(warped)
+                warped = tisch_trim(warped)
+                warped = untergrund_trim(warped)
         warped = belichtung_normalisieren(warped)
         W2, H2 = warped.shape[1], warped.shape[0]
         if W2 < 100 or H2 < 100 or not (1.05 <= H2 / max(W2, 1) <= 2.1):

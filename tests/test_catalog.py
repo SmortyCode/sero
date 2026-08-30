@@ -80,6 +80,31 @@ def test_fehlmatch_set_groesse_wird_erkannt():
     assert catalog.card_passt_zu_info(falsch, info) is False
 
 
+def test_fehlmatch_parallel_vs_basis():
+    """OP10-111: Basis-Rare (~1 $) und Parallel/Alt Art (~19 $) teilen die Nummer."""
+    basis = {"name": "Monkey.D.Luffy (111)", "number": "111", "ref_id": "617160"}
+    parallel = {"name": "Monkey.D.Luffy (111) (Parallel)", "number": "111",
+                "ref_id": "617161"}
+    info_basis = {"number": "111", "name": "Monkey D. Luffy"}
+    info_par = {"number": "111", "name": "Monkey D. Luffy", "edition": "Parallel"}
+    assert catalog.card_passt_zu_info(basis, info_basis) is True
+    assert catalog.card_passt_zu_info(parallel, info_basis) is False
+    assert catalog.card_passt_zu_info(parallel, info_par) is True
+    # Parallel gewünscht, nur Basis in der DB → Rückfall ok (Preis näher als nichts)
+    assert catalog.card_passt_zu_info(basis, info_par) is True
+
+
+def test_fehlmatch_parallel_nicht_sp():
+    """Luffy-Tarou Parallel darf nicht den OP11-SP-Preis (~270 $) bekommen."""
+    sp = {"name": "Luffy-Tarou (SP)", "number": None, "ref_id": "632509"}
+    basis = {"name": "Luffy-Tarou", "number": None, "ref_id": "581035"}
+    info = {"name": "Luffy-Tarou", "number": "5", "set_hint": "ST18",
+            "edition": "Parallel"}
+    assert catalog.card_passt_zu_info(sp, info) is False
+    # Keine Parallel-SKU bei TCGplayer → Basis ist erlaubter Rückfall
+    assert catalog.card_passt_zu_info(basis, info) is True
+
+
 def test_secret_rare_official_set_total():
     """Iono 199/165: TCGdex total=207 (mit Secrets), Analyse liefert official 165.
     set_total muss gegen total ODER official passen (Claude-Review A2)."""
@@ -256,21 +281,9 @@ async def test_belegter_pc_treffer_zaehlt_normal(store, monkeypatch):
     assert row["source"] == "pricecharting" and row["value_eur"] == 50.0
 
 
-@pytest.mark.xfail(reason="Befund 03.08.: Karten mit einstelligem Zähler haben kein "
-                          "prüfbares Hard-Token — gehört in Stufe 4 (Wächter)",
-                   strict=True)
 @pytest.mark.asyncio
 async def test_einstellige_kartennummer_verliert_die_belegbarkeit(store, monkeypatch):
-    """Offener Befund, absichtlich rot.
-
-    Bei „Glurak 4/102" bleibt für die Relevanz-Prüfung nichts übrig: die 4 fällt
-    durch `len(t) > 1`, die 102 gilt als Nenner der Set-Größe. Ohne Hard-Token
-    ist `pc_trusted` immer False — ein vollkommen korrekter PriceCharting-Treffer
-    wird als unsicher abgestempelt, und der Ausreißer-Wächter verliert seine
-    Referenz. Betrifft ausgerechnet die wertvollen Base-Set-Karten.
-
-    Wird dieser Test grün, ist der Befund behoben und der xfail-Marker kann weg.
-    """
+    """Einstellige Kartennummer (4/102) ist Hard-Token — PC-Treffer gilt als belegt."""
     treffer = {**PC_TREFFER,
                "detail": {"pc_product": "Charizard 4/102", "pc_console": "Pokemon Base Set"}}
     _quellen(monkeypatch, pc=treffer)

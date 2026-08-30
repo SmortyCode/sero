@@ -23,7 +23,7 @@ tests/          20+ Testdateien; tests/smoke.sh prüft das laufende System
 docs/           IMPLEMENTATION_STATUS.md (Stand der Wahrheit) + ADRs
 ```
 
-Das Frontend (Vanilla-JS-PWA, kein Framework) liegt in `~/sero-app/web`.
+Das Frontend (Vanilla-JS-PWA, kein Framework) liegt in `frontend/` und wird unter `/app/` ausgeliefert.
 
 ## Einrichtung aus frischem Checkout
 
@@ -60,7 +60,10 @@ fail-closed-Checkout) — wer sie entfernt, öffnet einen bekannten Fehler wiede
 
 - **Ehrliche Preise:** Marktwert aus echten Belegen, sonst „unbekannt". Nie aus
   dem Sprachmodell.
-- **Nichts geht ohne Freigabe live.** `DRY_RUN=true` ist der Default.
+- **Nichts geht ohne Freigabe live.** `kv['dry_run']` ist **false** (Default
+  für neue Installs ebenfalls false). Publish geht zu eBay und kostet echte
+  Gebühren. Telegram `/dryrun` bleibt als Notfall, in der App gibt es keinen
+  Testmodus.
 - **Das eigene freigestellte Foto ist das Hauptbild.**
 - **Bild-Standard:** Warp pur, keine selektive Nachbearbeitung (siehe
   Docstring in `web/cardscan.py` und `tests/test_render_standard.py`).
@@ -72,3 +75,17 @@ fail-closed-Checkout) — wer sie entfernt, öffnet einen bekannten Fehler wiede
 `docs/IMPLEMENTATION_STATUS.md` ist die einzige Wahrheit über Zustand,
 bekannte Lücken und nächste Schritte. Bitte dort weiterlesen, bevor du
 irgendetwas umbaust.
+
+
+## Lokale Prüfung
+
+```
+./.venv/bin/python -m pytest tests/ -q
+node --check frontend/sero.js
+sh tests/smoke.sh          # gegen laufenden com.listo.web (Port 3000)
+```
+
+Identity-Eval (opt-in, offline Manifest): `python scripts/eval_identity.py docs/eval_identity_manifest.example.json`
+Live-Netz nur mit `SERO_EVAL_LIVE=1` (Fotos nicht committen).
+
+Hinter einem Reverse-Proxy: `SERO_TRUST_PROXY=1` setzen, sonst wird `X-Forwarded-Host` ignoriert.

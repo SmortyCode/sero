@@ -34,7 +34,9 @@ def _quelle_an(monkeypatch):
     ("Nintendo 64", "game"),
     ("Super Nintendo", "game"),
     ("Sega Genesis", "game"),
-    ("Amiibo", "other"),
+    ("Funko POP Animation", "merch"),
+    ("Amiibo", "merch"),
+    ("Mystery Console XYZ", "other"),
     (None, "other"),
     ("", "other"),
 ])
@@ -109,6 +111,37 @@ def _produkt_cache(store, prod, preise):
 
 
 @pytest.mark.asyncio
+async def test_pc_bevorzugt_alternate_art_wenn_query_parallel(store):
+    """OP10-111: Basis und Alt Art in der Trefferliste — Parallel-Query nimmt Alt Art."""
+    basis = {"id": "8828316", "product-name": "Monkey.D.Luffy OP10-111",
+             "console-name": "One Piece Royal Blood"}
+    alt = {"id": "8828317", "product-name": "Monkey.D.Luffy [Alternate Art] OP10-111",
+           "console-name": "One Piece Royal Blood"}
+    q = "onepiece Monkey D. Luffy 111 Parallel Alternate Art"
+    _kandidaten_cache(store, q, [basis, alt])
+    _produkt_cache(store, alt, {"loose-price": 1898})
+    res = await lookup_pc(store, q, None, 1.0, domain="tcg")
+    assert res is not None
+    assert res["detail"]["pc_id"] == "8828317"
+    assert res["value"] == 18.98
+
+
+@pytest.mark.asyncio
+async def test_pc_basis_wenn_keine_variante_in_query(store):
+    """Ohne Parallel/Alt Art in der Query bleibt die Basis-Rare vor der Alt Art."""
+    basis = {"id": "8828316", "product-name": "Monkey.D.Luffy OP10-111",
+             "console-name": "One Piece Royal Blood"}
+    alt = {"id": "8828317", "product-name": "Monkey.D.Luffy [Alternate Art] OP10-111",
+           "console-name": "One Piece Royal Blood"}
+    q = "onepiece Monkey D. Luffy 111"
+    _kandidaten_cache(store, q, [alt, basis])  # Alt Art steht absichtlich vorn
+    _produkt_cache(store, basis, {"loose-price": 99})
+    res = await lookup_pc(store, q, None, 1.0, domain="tcg")
+    assert res is not None
+    assert res["detail"]["pc_id"] == "8828316"
+
+
+@pytest.mark.asyncio
 async def test_gate_verwirft_fremde_domaene_und_nimmt_die_richtige(store):
     """DIE Prüfvorgabe aus dem Umsetzungsplan: comic_manga gegen „One Piece
     Romance Dawn" → verworfen; gegen „Comic Books One Piece" → akzeptiert.
@@ -149,14 +182,29 @@ async def test_gate_alles_fremd_liefert_nichts(store):
 @pytest.mark.asyncio
 async def test_pc_other_bleibt_durchlaessig(store):
     """„other" auf PC-Seite ist kein Urteil — durchlassen, sonst verlieren
-    Exoten (Amiibo & Co.) grundlos ihren Preis."""
+    Exoten grundlos ihren Preis. Funko/Amiibo sind merch und fliegen bei TCG raus."""
     exot = {"id": "333", "product-name": "Azuki Booster Box",
-            "console-name": "Amiibo"}
+            "console-name": "Mystery Widget Line"}
     q = "Azuki Booster Box"
     _kandidaten_cache(store, q, [exot])
     _produkt_cache(store, exot, {"loose-price": 4000})
     res = await lookup_pc(store, q, None, 1.0, domain="tcg")
     assert res is not None and res["value"] == 40.0
+
+
+@pytest.mark.asyncio
+async def test_pc_funko_nicht_als_tcg(store):
+    """Luffy-SEC darf keinen Funko-POP-Preis bekommen."""
+    funko = {"id": "7469843", "product-name": "Monkey D. Luffy #1771",
+             "console-name": "Funko POP Animation"}
+    karte = {"id": "685333", "product-name": "Monkey.D.Luffy (EB04-061)",
+             "console-name": "One Piece Extra Booster EB04"}
+    q = "onepiece Monkey D. Luffy 61 EB04"
+    _kandidaten_cache(store, q, [funko, karte])
+    _produkt_cache(store, karte, {"loose-price": 1270})
+    res = await lookup_pc(store, q, None, 1.0, domain="tcg")
+    assert res is not None
+    assert res["detail"]["pc_id"] == "685333"
 
 
 @pytest.mark.asyncio

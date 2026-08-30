@@ -32,7 +32,8 @@ FULL_BOX = {"cx": 0.50, "cy": 0.50, "w": 0.92, "h": 0.92}
 
 # Farb-Canvas für Kunden ohne eigenes Template
 CANVAS_SIZE = (1600, 1600)
-DEFAULT_BG_COLOR = "#FFFFFF"
+DEFAULT_BG_COLOR = "#0B0B0D"  # Hintergrund 3 (Schwarz); Weiß-Töne wählbar als listing_bg
+
 HEX_COLOR_REGEX = __import__("re").compile(r"^#?[0-9a-fA-F]{6}$")
 
 
@@ -417,17 +418,42 @@ def alpha_bbox_and_centroid(cutout: Image.Image) -> tuple[tuple[int, int, int, i
     return bbox, centroid_x
 
 
+def photo_is_existing_cutout(photo_path: str | Path) -> bool:
+    """True wenn das Bild schon ein Scanner-Freisteller ist (Alpha-PNG / *_cut).
+
+    Beim Draft-Anlegen aus der Sammlung darf dann kein erneutes rembg/_cutout laufen.
+    """
+    p = Path(photo_path)
+    if not p.is_file():
+        return False
+    if p.suffix.lower() == ".png" and p.stem.endswith("_cut"):
+        return True
+    try:
+        with Image.open(p) as im:
+            if im.mode not in ("RGBA", "LA") and "A" not in im.getbands():
+                return False
+            im = ImageOps.exif_transpose(im)
+            if im.mode != "RGBA":
+                im = im.convert("RGBA")
+            a = im.getchannel("A")
+            lo, hi = a.getextrema()
+            return lo < 240 and hi >= 250
+    except (OSError, ValueError):
+        return False
+
+
 def render_product(photo_path: str | Path, out_path: str | Path, *,
-                   bg_color: str | None = None, bg_path: str | Path | None = None) -> str:
+                   bg_color: str | None = None, bg_path: str | Path | None = None,
+                   cutout_kind: str | None = None) -> str:
     """Produkt freistellen und auf den Hintergrund setzen.
 
     bg_path gesetzt: eigenes Kunden-Hintergrundbild (z.B. Weißton mit Logo) mit Logo-Box.
     bg_color gesetzt: Farb-Canvas, Produkt maximal skaliert.
     beides None: Admin-Template (assets/background.png) mit Logo-Box.
+    cutout_kind: optional slab/raw/sleeve — bestätigt vom Item, kein stilles None.
     """
     if bg_path is None and bg_color is None and not background_available():
         raise RenderError("Kein Hintergrund gesetzt (Bild mit Caption 'hintergrund' an den Bot schicken).")
-    from rembg import remove  # lazy
 
     img = Image.open(photo_path)
     _fmt = img.format   # VOR convert() sichern — danach ist es weg
@@ -450,11 +476,29 @@ def render_product(photo_path: str | Path, out_path: str | Path, *,
     if cutout is None:
         # 2) Studio-Freisteller der App (BiRefNet + Rechteck-Vorlage + Aufrichten)
         try:
-            from web.cardscan import _cutout as studio_cutout
+            import os as _os
+            kind = cutout_kind or _os.environ.get("SERO_RENDER_CUTOUT_KIND")
             tmp_png = Path(out_path).with_name(Path(out_path).stem + "_cut.png")
-            if studio_cutout(str(photo_path), str(tmp_png)):
-                cutout = Image.open(tmp_png).convert("RGBA")
-                log.info("Render: Studio-Freisteller verwendet (%s)", Path(photo_path).name)
+            if _os.environ.get("SERO_CUTOUT_V2") == "1" and kind:
+                from web.cutout_v2 import CutoutRequest, run_cutout
+                from web.cutout_v2.types import legacy_kind_to_cutout
+                ck = legacy_kind_to_cutout(kind)
+                if ck is not None:
+                    res = run_cutout(CutoutRequest(
+                        source_path=Path(photo_path),
+                        confirmed_kind=ck,
+                        kind_source="confirmed",
+                        output_path=tmp_png,
+                    ))
+                    if res.status == "SUCCESS" and res.selected_path:
+                        cutout = Image.open(res.selected_path).convert("RGBA")
+                        log.info("Render: cutout_v2 verwendet (%s)", Path(photo_path).name)
+            if cutout is None:
+                from web.cardscan import _cutout as studio_cutout
+                if studio_cutout(str(photo_path), str(tmp_png), kind):
+                    cutout = Image.open(tmp_png).convert("RGBA")
+                    log.info("Render: Studio-Freisteller verwendet (%s kind=%s)",
+                             Path(photo_path).name, kind)
         except Exception as e:  # noqa: BLE001 — Fallback unten
             log.warning("Render: Studio-Freisteller nicht verfügbar (%s)", e)
     if cutout is None:
@@ -466,16 +510,55 @@ def render_product(photo_path: str | Path, out_path: str | Path, *,
             rgba[..., 3] = (card_mask * 255).astype(np.uint8)
             cutout = Image.fromarray(rgba, "RGBA")
         else:
+            from rembg import remove  # lazy — nur wenn wirklich freigestellt werden muss
             cutout = remove(img, session=_get_session())
         cutout = clean_cutout(cutout)
 
+    return _write_cutout_on_bg(cutout, out_path, photo_path,
+                               bg_color=bg_color, bg_path=bg_path,
+                               min_area_ref=img.size)
+
+
+def composite_cutout_on_background(photo_path: str | Path, out_path: str | Path, *,
+                                   bg_color: str | None = None,
+                                   bg_path: str | Path | None = None,
+                                   cutout_kind: str | None = None) -> str:
+    """Fertigen Freisteller auf den Listing-Hintergrund legen — ohne rembg.
+
+    cutout_kind wird ignoriert (gleiche Signatur wie render_product).
+    """
+    del cutout_kind
+    if not photo_is_existing_cutout(photo_path):
+        raise RenderError("Kein Freisteller — erst zuschneiden.")
+    return place_on_listing_bg(photo_path, out_path, bg_color=bg_color, bg_path=bg_path)
+
+
+def place_on_listing_bg(photo_path: str | Path, out_path: str | Path, *,
+                        bg_color: str | None = None,
+                        bg_path: str | Path | None = None,
+                        cutout_kind: str | None = None) -> str:
+    """Bestehendes Foto auf den Listing-Grund legen — nie rembg, nie neu freistellen."""
+    del cutout_kind
+    img = Image.open(photo_path)
+    img = ImageOps.exif_transpose(img).convert("RGBA")
+    return _write_cutout_on_bg(img, out_path, photo_path,
+                               bg_color=bg_color, bg_path=bg_path)
+
+
+def _write_cutout_on_bg(cutout: Image.Image, out_path: str | Path, photo_path: str | Path,
+                        *, bg_color: str | None, bg_path: str | Path | None,
+                        min_area_ref: tuple[int, int] | None = None) -> str:
+    """Freisteller zuschneiden, platzieren, als JPEG speichern."""
+    if bg_path is None and bg_color is None and not background_available():
+        raise RenderError("Kein Hintergrund gesetzt (Bild mit Caption 'hintergrund' an den Bot schicken).")
     stats = alpha_bbox_and_centroid(cutout)
     if not stats:
         raise RenderError("Freisteller hat nichts erkannt (Bild komplett transparent).")
     bbox, centroid_x = stats
     cutout = cutout.crop(bbox)
     centroid_x -= bbox[0]  # Schwerpunkt relativ zum Zuschnitt
-    if (cutout.width * cutout.height) < MIN_CUTOUT_AREA * (img.width * img.height):
+    ref_w, ref_h = min_area_ref or (cutout.width, cutout.height)
+    if (cutout.width * cutout.height) < MIN_CUTOUT_AREA * (ref_w * ref_h):
         raise RenderError("Freisteller-Ergebnis verdächtig klein — Original wird verwendet.")
 
     if bg_path is not None:

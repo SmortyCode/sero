@@ -103,10 +103,19 @@ def test_price_rules():
     assert suggest_fixed_price(100.00) == "94.90"
     assert suggest_fixed_price(3.00) == "2.85"   # Kleinpreise: einfach 5% unter Median
     assert suggest_fixed_price(0.50) == "1.00"   # nie unter 1 €
-    # Auktion: immer 1 € Start
-    draft = {"format": "AUCTION", "price_research": {"median": 50.0}}
+    # Auktion ohne Vorlage/Markt: kein stiller 1-€-Default
+    draft = {"format": "AUCTION", "price_research": {"median": 50.0}, "listing": {}}
+    apply_price_rule(draft)
+    assert draft["price"] is None
+    # Auktion mit Vorlage „1 € Start"
+    draft = {"format": "AUCTION", "listing": {"tpl_price": AUCTION_START_PRICE}}
     apply_price_rule(draft)
     assert draft["price"] == AUCTION_START_PRICE == "1.00"
+    # Auktion mit belegtem Marktwert
+    draft = {"format": "AUCTION",
+             "listing": {"market_value": "60.00", "price_state": "belegt"}}
+    apply_price_rule(draft)
+    assert float(draft["price"]) == 60.0 or float(draft["price"]) <= 60.0
     # Festpreis ohne Recherche: kein Preis (Nutzer muss setzen)
     draft = {"format": "FIXED_PRICE", "price_research": None}
     apply_price_rule(draft)
@@ -241,6 +250,28 @@ def test_resolve_condition_card_category_rejects_phantom_3000():
     assert resolve_condition("LIKE_NEW", allowed, "x", is_graded=True) == ("LIKE_NEW", False)
 
 
+def test_ensure_card_condition_raw_card_not_graded():
+    """Rohkarte darf trotz leerem graded_info / „Neuwertig“ nicht Graded werden."""
+    from bot.ebay.metadata import ensure_card_condition, has_real_graded_info
+
+    assert has_real_graded_info(None) is False
+    assert has_real_graded_info({}) is False
+    assert has_real_graded_info({"grader": "PSA"}) is False
+    assert has_real_graded_info({"grader": "PSA", "grade": "10"}) is True
+
+    allowed = ["2750", "4000"]
+    listing = {"condition": "LIKE_NEW", "graded_info": {}}
+    assert ensure_card_condition(listing, allowed, "Luffy Leader One Piece") == "USED_VERY_GOOD"
+    assert "graded_info" not in listing
+
+    listing2 = {"condition": "Neuwertig", "graded_info": {"grader": "", "grade": ""}}
+    assert ensure_card_condition(listing2, allowed, "Pikachu Holo") == "USED_VERY_GOOD"
+
+    listing3 = {"condition": "USED_VERY_GOOD",
+                "graded_info": {"grader": "PSA", "grade": "9", "cert_number": "1"}}
+    assert ensure_card_condition(listing3, allowed, "Glurak") == "LIKE_NEW"
+
+
 def test_offer_payload_quantity():
     from bot.ebay.inventory import build_offer_payload
     cfg = _policies()
@@ -297,12 +328,16 @@ def test_user_price_overrides_everything():
              "listing": {"user_price": "70.00"}}
     apply_price_rule(draft)
     assert draft["price"] == "70.00"
-    # Auktion: expliziter Startpreis schlägt die 1-€-Regel
+    # Auktion: expliziter Startpreis schlägt alles
     draft = {"format": "AUCTION", "listing": {"user_price": "5,00"}}
     apply_price_rule(draft)
     assert draft["price"] == "5.00"
-    # Ohne Verkäuferpreis: bisherige Regeln unverändert
+    # Ohne Verkäuferpreis und ohne Vorlage: kein stiller 1-€-Default
     draft = {"format": "AUCTION", "listing": {}}
+    apply_price_rule(draft)
+    assert draft["price"] is None
+    # Vorlage „1 € Start" bleibt möglich
+    draft = {"format": "AUCTION", "listing": {"tpl_price": "1.00"}}
     apply_price_rule(draft)
     assert draft["price"] == "1.00"
 

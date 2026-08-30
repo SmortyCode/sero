@@ -99,6 +99,7 @@ class Store:
         self._ensure_column("accounts", "avatar_path", "TEXT")
         self._ensure_column("accounts", "render_bg_path", "TEXT")
         self._ensure_column("accounts", "ebay_shop", "TEXT")
+        self._ensure_column("accounts", "phone", "TEXT")
         self._conn.commit()
         if not existed:
             os.chmod(path, 0o600)
@@ -170,6 +171,57 @@ class Store:
             "SELECT * FROM accounts WHERE telegram_id = ?", (telegram_id,)
         ).fetchone()
         return dict(row) if row else None
+
+    def get_account_by_phone(self, phone: str) -> Optional[dict]:
+        row = self._conn.execute(
+            "SELECT * FROM accounts WHERE phone = ?", (phone.strip(),)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def create_account_telegram(self, telegram_id: int, *,
+                                username: str | None = None,
+                                display_name: str | None = None) -> dict:
+        """Login/Signup per Telegram Login Widget — synthetische E-Mail."""
+        tid = int(telegram_id)
+        existing = self.get_account_by_telegram(tid)
+        if existing:
+            fields = {}
+            if username and not existing.get("username"):
+                fields["username"] = username[:24]
+            if display_name and not existing.get("display_name"):
+                fields["display_name"] = display_name[:40]
+            if fields:
+                self.update_account(existing["id"], **fields)
+                return self.get_account(existing["id"]) or existing
+            return existing
+        email = f"tg_{tid}@telegram.sero.local"
+        account = self.create_account(email)
+        fields = {"telegram_id": tid}
+        if username:
+            fields["username"] = username[:24]
+        if display_name:
+            fields["display_name"] = display_name[:40]
+        self.update_account(account["id"], **fields)
+        return self.get_account(account["id"]) or account
+
+    def create_account_phone(self, phone_e164: str) -> dict:
+        """Login/Signup per Telefon — synthetische E-Mail + phone-Spalte."""
+        import re as _re
+        phone = phone_e164.strip()
+        existing = self.get_account_by_phone(phone)
+        if existing:
+            return existing
+        digits = _re.sub(r"\D", "", phone)
+        email = f"ph_{digits}@phone.sero.local"
+        by_email = self.get_account_by_email(email)
+        if by_email:
+            if not by_email.get("phone"):
+                self.update_account(by_email["id"], phone=phone)
+            return self.get_account(by_email["id"]) or by_email
+        account = self.create_account(email)
+        self.update_account(account["id"], phone=phone)
+        return self.get_account(account["id"]) or account
+
 
     def update_account(self, account_id: int, **fields) -> None:
         if not fields:

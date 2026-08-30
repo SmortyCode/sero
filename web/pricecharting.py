@@ -37,15 +37,19 @@ _PC_TCG_WOERTER = (
     "flesh and blood", "star wars unlimited", "cardfight", "vanguard",
     "cards",   # „Baseball Cards", „Basketball Cards", …
 )
+# Nie als TCG durchlassen — sonst wird aus Luffy-SEC ein Funko-POP-Preis
+_PC_MERCH_WOERTER = ("funko", "amiibo", "hot wheels", "action figure")
 
 
 def domain_of_pc(console_name: str | None) -> str:
-    """PriceCharting-console-name → Warenart: comic / game / tcg / other."""
+    """PriceCharting-console-name → Warenart: comic / game / tcg / merch / other."""
     c = (console_name or "").lower()
     if not c:
         return "other"
     if c.startswith("comic"):
         return "comic"
+    if any(w in c for w in _PC_MERCH_WOERTER):
+        return "merch"
     if any(w in c for w in _PC_GAME_WOERTER):
         return "game"
     if any(w in c for w in _PC_TCG_WOERTER):
@@ -84,6 +88,19 @@ def domain_of_item(item: dict) -> str | None:
             or any(w in blob for w in _PC_TCG_WOERTER[:-1]):
         return "tcg"
     return None
+
+
+def erlaubt_ki_richtwert(item: dict | None) -> bool:
+    """Alltagsprodukte und Retro-Spiele: KI-/dünner-Markt-Richtwert erlaubt.
+
+    Sammelkarten/TCG und Manga/Comics bleiben fail-closed (ADR-002).
+    Spiele haben oft genug eBay-Angebote — min_count=1 bzw. KI-Tipp als
+    Fallback, klar als unsicher gekennzeichnet.
+    """
+    if not item:
+        return False
+    d = domain_of_item(item)
+    return d is None or d == "game"
 
 
 def _grade_fields(graded: dict | None) -> list[str]:
@@ -179,9 +196,14 @@ async def lookup_pc(store, query: str, graded: dict | None, usd_rate: float | No
             return None
         store.kv_set(qkey, {"ts": time.time(), "v": kandidaten})
 
-    # Gate: erster Kandidat, dessen Warenart zum Stück passt. „other" auf
-    # PC-Seite bleibt durchlässig — dort ist kein Urteil möglich.
-    gewinner = None
+    # Gate + Varianten-Wahl: Domäne muss passen; Parallel/Alt Art und Basis
+    # teilen oft denselben Suchtreffer — die Query entscheidet, welche Version.
+    # „Manga" allein zählt hier NICHT (Comic-Bücher heißen oft so) — nur
+    # Parallel / Alternate Art als Druckvariante der Sammelkarte.
+    import re as _re
+    wants_var = bool(_re.search(
+        r"alt(?:ernate)?(?:\s+art)?|parallel", query or "", _re.I))
+    gefiltert = []
     for k in kandidaten:
         if not k.get("id"):
             continue
@@ -189,53 +211,65 @@ async def lookup_pc(store, query: str, graded: dict | None, usd_rate: float | No
             pc_dom = domain_of_pc(k.get("console-name"))
             if pc_dom != "other" and pc_dom != domain:
                 continue
-        gewinner = k
-        break
-    if not gewinner:
+        gefiltert.append(k)
+    if not gefiltert:
         if kandidaten and domain:
             log.info("pricecharting: alle %d Treffer zu %r fremder Domäne (%s) — verworfen",
                      len(kandidaten), query[:50], domain)
         return None
 
-    # Stufe B: Preisfelder des Gewinners (gecacht je Produkt-ID)
-    pkey = f"pcp_{gewinner['id']}"
-    cached = store.kv_get(pkey)
-    if cached and time.time() - cached.get("ts", 0) < TTL:
-        prod = cached.get("v")
-    else:
-        try:
-            r = await _http.get("https://www.pricecharting.com/api/product",
-                                params={"t": token, "id": gewinner["id"]})
-            r.raise_for_status()
-            prod = r.json()
-            if not prod.get("id"):
+    def _var_score(k: dict) -> tuple:
+        blob = f"{k.get('product-name') or ''} {k.get('console-name') or ''}"
+        is_var = bool(_re.search(
+            r"alt(?:ernate)?(?:\s+art)?|parallel|\[alternate", blob, _re.I))
+        # passende Variante zuerst (0), dann unpassende (1); Reihenfolge sonst stabil
+        return (0 if is_var == wants_var else 1,)
+
+    gefiltert.sort(key=_var_score)
+
+    # Pricing v2: alle Kandidaten prüfen, bis einer Preisfelder hat —
+    # kein Early-Exit nach dem ersten leeren Detail.
+    for gewinner in gefiltert[:8]:
+        pkey = f"pcp_{gewinner['id']}"
+        cached = store.kv_get(pkey)
+        if cached and time.time() - cached.get("ts", 0) < TTL:
+            prod = cached.get("v")
+        else:
+            try:
+                r = await _http.get("https://www.pricecharting.com/api/product",
+                                    params={"t": token, "id": gewinner["id"]})
+                r.raise_for_status()
+                prod = r.json()
+                if not prod.get("id"):
+                    prod = None
+            except Exception as e:  # noqa: BLE001
+                log.warning("pricecharting: %s", e)
                 prod = None
-        except Exception as e:  # noqa: BLE001
-            log.warning("pricecharting: %s", e)
-            return None
-        store.kv_set(pkey, {"ts": time.time(), "v": prod})
-    if not prod:
-        return None
-    cents = None
-    used = None
-    for f in _grade_fields(graded):
-        if prod.get(f):
-            cents, used = prod[f], f
-            break
-    if not cents:
-        return None
-    # PriceCharting kennt nur grobe Stufen (9 / 9.5 / 10). Eine BGS 9.4 und eine
-    # BGS 9.0 landen dadurch im selben Feld und bekommen denselben Preis —
-    # obwohl die bessere Erhaltung deutlich mehr bringt. Zwischen den bekannten
-    # Stufen wird deshalb linear eingeordnet, sofern beide Nachbarwerte
-    # vorliegen. Nur eine Feinabstufung, keine erfundene Zahl.
-    cents = _zwischenstufe(prod, graded, cents, used)
-    eur = round(cents / 100 * usd_rate, 2)
-    grade_note = "" if used == "loose-price" else f" ({(graded or {}).get('grader', '')} {(graded or {}).get('grade', '')})".rstrip()
-    return {
-        "value": eur, "source": "pricecharting",
-        "source_label": f"PriceCharting-Verkäufe{grade_note}",
-        "detail": {"pc_usd": round(cents / 100, 2), "pc_field": used,
-                   "pc_product": prod.get("product-name"),
-                   "pc_console": prod.get("console-name"), "pc_id": prod.get("id")},
-    }
+            store.kv_set(pkey, {"ts": time.time(), "v": prod})
+        if not prod:
+            continue
+        cents = None
+        used = None
+        for f in _grade_fields(graded):
+            if prod.get(f):
+                cents, used = prod[f], f
+                break
+        if not cents:
+            continue
+        # PriceCharting kennt nur grobe Stufen (9 / 9.5 / 10). Eine BGS 9.4 und eine
+        # BGS 9.0 landen dadurch im selben Feld und bekommen denselben Preis —
+        # obwohl die bessere Erhaltung deutlich mehr bringt. Zwischen den bekannten
+        # Stufen wird deshalb linear eingeordnet, sofern beide Nachbarwerte
+        # vorliegen. Nur eine Feinabstufung, keine erfundene Zahl.
+        cents = _zwischenstufe(prod, graded, cents, used)
+        eur = round(cents / 100 * usd_rate, 2)
+        grade_note = "" if used == "loose-price" else f" ({(graded or {}).get('grader', '')} {(graded or {}).get('grade', '')})".rstrip()
+        return {
+            "value": eur, "source": "pricecharting",
+            "source_label": f"PriceCharting-Verkäufe{grade_note}",
+            "detail": {"pc_usd": round(cents / 100, 2), "pc_field": used,
+                       "pc_product": prod.get("product-name") or gewinner.get("product-name"),
+                       "pc_console": prod.get("console-name") or gewinner.get("console-name"),
+                       "pc_id": prod.get("id") or gewinner.get("id")},
+        }
+    return None

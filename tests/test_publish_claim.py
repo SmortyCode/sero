@@ -83,7 +83,14 @@ def test_upload_pfad_nutzt_claim():
     start = quelle.index("async def app_run_upload")
     ende = quelle.index("async def app_run_update")
     upload = quelle[start:ende]
-    assert "claim_draft" in upload, "app_run_upload muss den atomaren Claim setzen"
+    assert ("claim_draft" in upload or "claim_or_create_intent" in upload), \
+        "app_run_upload muss den atomaren Claim / Intent setzen"
     assert "release_draft_claim" in upload, "app_run_upload muss den Claim im finally lösen"
-    assert upload.index("claim_draft") < upload.index("upload_image"), \
+    claim_pos = (upload.index("claim_or_create_intent")
+                 if "claim_or_create_intent" in upload else upload.index("claim_draft"))
+    assert claim_pos < upload.index("upload_image"), \
         "Der Claim muss VOR der ersten eBay-Arbeit stehen"
+    assert "execute_publish" in upload, "app_run_upload muss den gemeinsamen Publish-Kern nutzen"
+    assert "build_add_item_xml" in upload
+    assert "trading_payload" in upload
+    assert upload.index("legacy =") < upload.index("build_add_item_xml")

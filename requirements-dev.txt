@@ -1,0 +1,4 @@
+# Nur Entwicklung / CI — nicht für den Live-Betrieb nötig
+-r requirements.txt
+playwright==1.54.0
+pytest-playwright==0.7.0

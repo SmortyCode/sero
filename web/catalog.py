@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import time
 
@@ -57,6 +58,9 @@ def card_passt_zu_info(card: dict | None, card_info: dict | None) -> bool:
     Set-Größe: TCGdex „total" zählt Secret Rares mit (199/165 → total 207).
     Die Analyse liefert die offizielle Nenner-Zahl (165). Passt set_total zu
     total ODER official, ist der Treffer ok (Claude-Review A2).
+
+    Druckvariante: Basis-Rare und Parallel/Alt Art teilen oft dieselbe Nummer —
+    der DB-Name muss zur gewünschten Variante passen (OP10-111: 0,86 € vs. ~11 €).
     """
     if not card:
         return False
@@ -67,13 +71,18 @@ def card_passt_zu_info(card: dict | None, card_info: dict | None) -> bool:
     if info_num and card_num and info_num != card_num:
         return False
     info_total = str(card_info.get("set_total") or "").lstrip("0")
-    if not info_total:
-        return True
-    card_totals = {
-        str(card.get("total") or "").lstrip("0"),
-        str(card.get("official") or "").lstrip("0"),
-    } - {""}
-    if card_totals and info_total not in card_totals:
+    if info_total:
+        card_totals = {
+            str(card.get("total") or "").lstrip("0"),
+            str(card.get("official") or "").lstrip("0"),
+        } - {""}
+        if card_totals and info_total not in card_totals:
+            return False
+    from web.prices import card_variant_kind, variants_compatible
+    want = card_variant_kind(
+        card_info.get("edition"), card_info.get("name"), card_info.get("set_hint"))
+    have = card_variant_kind(card.get("name"), card.get("edition"))
+    if not variants_compatible(want, have, allow_base_fallback=True):
         return False
     return True
 
@@ -92,12 +101,24 @@ def card_key_of(card: dict, solo_id: str | None = None) -> str:
     geteilten Schlüssel — sonst kollidierten unidentifizierte Stücke auf
     einer Zeile. Der Solo-Schlüssel ist jetzt aber an die Stück-ID gebunden
     und damit über Aufrufe hinweg stabil.
+
+    Pricing v2 (Flag SERO_PRICING_V2): Identity-Key aus Domain/Set/Nummer/
+    Parallel/Sprache/Form — ref_id nur Alias, nie alleiniger Key.
     """
+    if os.environ.get("SERO_PRICING_V2") == "1":
+        try:
+            from web.pricing_v2.keys import identity_key_v2
+            k = identity_key_v2(card)
+            if k:
+                return k
+        except Exception:  # noqa: BLE001
+            pass
     game = card.get("game") or "x"
-    if card.get("ref_id"):
+    if card.get("ref_id") and os.environ.get("SERO_PRICING_V2") != "1":
         return f"{game}:{card['ref_id']}"
     if not card.get("name"):
         return "solo:" + (solo_id or "unbekannt")
+    # Auch ohne Flag: Edition/Parallel in den Hash — Base ≠ Parallel
     base = _norm("|".join([game] + [str(card.get(k) or "") for k in
                                     ("name", "number", "set_name", "language", "edition")]))
     return "h:" + hashlib.sha1(base.encode()).hexdigest()[:16]
@@ -245,9 +266,15 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
             gtoks |= {t for x in gtoks for t in x.split()}
         # Set-Größen („199/165" → 165) führt PC nie im Namen — nicht verlangen
         denoms = {m.group(2) for m in re.finditer(r"(\d+)\s*/\s*(\d+)", query or "")}
-        qhard = [t for t in _norm(query).split()
-                 if any(c.isdigit() for c in t) and len(t) > 1
-                 and t not in gtoks and t not in denoms]
+        # Hard-Tokens inkl. einstelliger Zähler (4/102 → „4") — Stufe 4 / Pricing v2
+        try:
+            from web.pricing_v2.keys import hard_number_tokens
+            qhard = [t for t in hard_number_tokens(query or "")
+                     if t not in gtoks and t not in {_norm(d) for d in denoms}]
+        except Exception:  # noqa: BLE001
+            qhard = [t for t in _norm(query).split()
+                     if any(c.isdigit() for c in t) and len(t) > 1
+                     and t not in gtoks and t not in denoms]
         # Plattform-Synonyme (PC schreibt „Playstation 2", Verkäufer „PS2")
         SYN = {"ps1": "playstation", "ps2": "playstation 2", "ps3": "playstation 3",
                "ps4": "playstation 4", "ps5": "playstation 5", "n64": "nintendo 64",
@@ -389,6 +416,23 @@ async def refresh_price(store, card_key: str, grade: str, query: str,
     else:
         zustand = ("unbekannt", "UNBEKANNT_KEINE_BELEGE")
     detail["price_state"], detail["price_reason"] = zustand
+
+    # Monotones Merge: verified darf nicht durch weak/error verdrängt werden
+    try:
+        from web.pricing_v2.merge import should_replace
+        existing = get_price(store, card_key, grade)
+        incoming = {"value": value, "source": source,
+                    "confidence": "weak" if source == "pricecharting_weak" else "verified"}
+        if existing and not should_replace(
+            {"value": existing.get("value_eur"), "source": existing.get("source"),
+             "confidence": "weak" if (existing.get("source") or "").endswith("weak") else "verified"},
+            incoming,
+        ):
+            log.info("catalog: schwächerer Lauf verworfen für %s %s (%s ≯ %s)",
+                     card_key, grade, source, existing.get("source"))
+            return existing
+    except Exception as e:  # noqa: BLE001
+        log.warning("catalog: merge-check übersprungen (%s)", e)
 
     store._conn.execute(  # noqa: SLF001
         "INSERT INTO card_prices (card_key, grade, value_eur, source, source_label, "

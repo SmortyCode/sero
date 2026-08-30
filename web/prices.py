@@ -61,8 +61,8 @@ def _tcgp_fields(usd, rate) -> dict:
 async def identify_card(anthropic_key: str, listing: dict, notes: str | None) -> dict | None:
     """Aus der vorhandenen Listing-Analyse die Karten-Stammdaten ziehen.
 
-    Rückgabe: {game, name, number, set_total, set_hint, single} oder None.
-    single=False bedeutet: Sealed-Produkt/Display/Sonstiges -> keine Karten-DB.
+    Rückgabe: {game, name, number, set_total, set_hint, single, edition, language}
+    oder None. single=False bedeutet: Sealed-Produkt/Display/Sonstiges -> keine Karten-DB.
     """
     import anthropic
     blob = json.dumps({
@@ -84,7 +84,11 @@ async def identify_card(anthropic_key: str, listing: dict, notes: str | None) ->
                 ' "name": "Kartenname OHNE Zusätze wie Sprache/Zustand (z.B. Mega-Quajutsu-ex)",\n'
                 ' "number": "Kartennummer im Set ohne führende Nullen, z.B. 100 (aus 100/086), sonst null",\n'
                 ' "set_total": "Zahl hinter dem Schrägstrich, z.B. 086 -> 86, sonst null",\n'
-                ' "set_hint": "Set-Name oder Set-Code falls erkennbar, sonst null}'
+                ' "set_hint": "Set-Name oder Set-Code falls erkennbar, sonst null",\n'
+                ' "edition": "Parallel"|"Alternate Art"|"Manga"|null  // Druckvariante NUR wenn '
+                "im Titel/Merkmalen klar (Parallel, Alt Art, Alternate Art, Manga). "
+                "Basisdruck/normale Rare ohne Sonderhinweis → null. Nie raten.\n"
+                ' "language": "Japanisch"|"Englisch"|"Deutsch"|"Koreanisch"|"Chinesisch"|null  // aus Titel/Merkmalen}'
             ),
             messages=[{"role": "user", "content": blob}],
         )
@@ -94,10 +98,99 @@ async def identify_card(anthropic_key: str, listing: dict, notes: str | None) ->
         data = json.loads(raw)
         if not isinstance(data, dict):
             return None
-        return data
+        return normalize_card_edition(data, listing.get("title"), notes)
     except Exception as e:  # noqa: BLE001 — Identifikation ist optional
         log.warning("identify_card fehlgeschlagen: %s", e)
         return None
+
+
+_WANTS_VARIANT_RE = re.compile(
+    r"alt[ -]?art|alternate(?:\s+art)?|parallel|manga(?:\s+rare)?|\bsp\b", re.I)
+# Produktnamen bei TCGplayer — Parallel und SP sind VERSCHIEDENE Varianten
+_CARD_VARIANT_NAME_RE = re.compile(
+    r"\((Parallel|Alternate(?:\s+Art)?|Reprint|SP|Manga|Box Topper|Pre-?Release|Winner|Judge|Serial)",
+    re.I)
+
+
+def card_variant_kind(*parts: str | None) -> str | None:
+    """Druckfamilie: parallel | alt | manga | sp — oder None (Basis).
+
+    Parallel/Alt Art und SP dürfen sich NICHT gegenseitig erfüllen
+    (sonst: Luffy-Tarou Parallel → 270-$-SP aus OP11).
+    """
+    blob = " ".join(str(p) for p in parts if p)
+    if not blob:
+        return None
+    if re.search(r"\bsp\b|\(sp\)", blob, re.I):
+        return "sp"
+    if re.search(r"manga(?:\s+rare)?|\(manga\)", blob, re.I):
+        return "manga"
+    if re.search(r"alt[ -]?art|alternate(?:\s+art)?", blob, re.I):
+        return "alt"
+    if re.search(r"parallel", blob, re.I):
+        return "parallel"
+    return None
+
+
+def wants_card_variant(*parts: str | None) -> bool:
+    """True wenn Titel/Edition eine Sonderdruck-Variante meint (Parallel/Alt Art/SP)."""
+    return card_variant_kind(*parts) is not None
+
+
+def card_name_is_variant(name: str | None) -> bool:
+    """TCGplayer-/PC-Produktname trägt Parallel/Alt Art/SP o.ä. in Klammern."""
+    return card_variant_kind(name) is not None
+
+
+def variants_compatible(want: str | None, have: str | None,
+                        *, allow_base_fallback: bool = False) -> bool:
+    """Passen gewünschte und gefundene Variante zusammen?
+
+    allow_base_fallback: Parallel/Alt Art darf auf die Basis-SKU zurückfallen,
+    wenn TCGplayer keine eigene Parallel-Zeile hat (ST18 Luffy-Tarou).
+    SP bleibt tabu.
+    """
+    if want is None and have is None:
+        return True
+    if want is None:
+        return have is None
+    if have is None:
+        return bool(allow_base_fallback and want in ("parallel", "alt"))
+    if want == have:
+        return True
+    # Parallel und Alternate Art sind dieselbe Druckfamilie (OP/PC-Benennung)
+    return {want, have} <= {"parallel", "alt"}
+
+
+def normalize_card_edition(card_info: dict, *extra: str | None) -> dict:
+    """edition kanonisieren; aus Titel nachziehen wenn das LLM sie wegließ."""
+    if not isinstance(card_info, dict):
+        return card_info
+    blob = " ".join(str(x) for x in (
+        card_info.get("edition"), card_info.get("name"), card_info.get("set_hint"),
+        *extra,
+    ) if x)
+    ed = card_info.get("edition")
+    if isinstance(ed, str) and ed.strip():
+        low = ed.strip().lower()
+        if "manga" in low:
+            card_info["edition"] = "Manga"
+        elif "alt" in low or "alternate" in low:
+            card_info["edition"] = "Alternate Art"
+        elif "parallel" in low:
+            card_info["edition"] = "Parallel"
+        else:
+            # Seltenheitscode wie „R" / „SR" ist keine Druckvariante
+            if re.fullmatch(r"[A-Za-z]{1,4}\d?", ed.strip()):
+                card_info.pop("edition", None)
+    elif wants_card_variant(blob):
+        if re.search(r"manga", blob, re.I):
+            card_info["edition"] = "Manga"
+        elif re.search(r"alt[ -]?art|alternate", blob, re.I):
+            card_info["edition"] = "Alternate Art"
+        else:
+            card_info["edition"] = "Parallel"
+    return card_info
 
 
 # ---------------------------------------------------------------- Quellen

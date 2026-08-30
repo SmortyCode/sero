@@ -15,3 +15,7 @@ staging/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Laufzeit-Logs
+bot.log
+*.log

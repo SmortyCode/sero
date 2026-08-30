@@ -1,6 +1,6 @@
-"""Listo Web-Backend: Login, eBay-/Telegram-Verifizierung, Abo (Stripe-ready).
+"""SERO Web-Backend: Login, eBay-/Telegram-Verifizierung, Abo (Stripe-ready).
 
-Lokaler Start:  ./.venv/bin/python -m uvicorn web.server:app --port 8484
+Lokaler Start:  ./.venv/bin/python -m uvicorn web.server:app --port 3000
 
 Modi:
 - DEV (Default, kein SMTP/Stripe konfiguriert): Magic-Links werden direkt in der
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 import time
 import urllib.parse
@@ -33,6 +34,7 @@ from bot.config import load_config
 from bot.drafts import Store
 from bot.ebay.account import AccountSetupError, create_location, get_or_create_policies
 from bot.ebay.auth import EbayAuthError, EbayClient, _token_key
+from web.social_auth import is_admin_login_email
 
 log = logging.getLogger("web")
 
@@ -83,12 +85,37 @@ if not _secret:
     store.kv_set("web_secret", _secret)
 signer = URLSafeTimedSerializer(_secret, salt="listo-session")
 
-app = FastAPI(title="Listo")
+app = FastAPI(title="SERO")
 
 # Antworten komprimieren: die Sammlungs-Antwort schrumpft damit um ~80 %.
 # SSE (text/event-stream) schließt Starlette selbst von der Kompression aus.
 from starlette.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+def safe_post_auth_path(raw: str | None, fallback: str = "/app/") -> str:
+    """Nur relative SERO-Ziele — kein Open-Redirect auf fremde Domains."""
+    if not raw:
+        return fallback
+    path = str(raw).strip()
+    if (not path.startswith("/") or path.startswith("//")
+            or "://" in path or "\\" in path
+            or any(c in path for c in "\n\r\t ")
+            or ".." in path):
+        return fallback
+    if path.startswith("/app") or path.startswith("/onboarding.html"):
+        return path
+    return fallback
+
+
+def with_query_flag(path: str, key: str, value: str) -> str:
+    """Setzt/überschreibt einen Query-Parameter auf einem relativen Pfad."""
+    parsed = urllib.parse.urlparse(path)
+    q = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=True))
+    q[key] = value
+    return urllib.parse.urlunparse(
+        ("", "", parsed.path or "/app/", "", urllib.parse.urlencode(q), ""))
+
 
 
 # ---------------------------------------------------------------- Sicherheit
@@ -120,11 +147,13 @@ def _origin_erlaubt(request: Request) -> bool:
         return True                 # native App-Hülle
     o = urllib.parse.urlparse(origin)
     host = _netloc_norm(o.netloc, o.scheme)
-    # Hinter einem Proxy steht der echte Außen-Host in X-Forwarded-Host —
-    # ohne diesen Fallback wäre JEDER POST 403, sobald der Proxy den
-    # Host-Header nicht durchreicht (Review-Fund).
-    kandidaten = {_netloc_norm(request.headers.get("host", "")),
-                  _netloc_norm(request.headers.get("x-forwarded-host", ""))}
+    # Host der Anfrage (direkt). X-Forwarded-Host nur, wenn der Prozess
+    # ausdrücklich hinter einem vertrauenswürdigen Proxy steht
+    # (SERO_TRUST_PROXY=1) — sonst kann jeder Client den Header fälschen.
+    kandidaten = {_netloc_norm(request.headers.get("host", ""))}
+    trust_proxy = os.environ.get("SERO_TRUST_PROXY", "0").strip() == "1"
+    if trust_proxy:
+        kandidaten.add(_netloc_norm(request.headers.get("x-forwarded-host", "")))
     if PUBLIC_BASE_URL:
         p = urllib.parse.urlparse(PUBLIC_BASE_URL)
         kandidaten.add(_netloc_norm(p.netloc, p.scheme))
@@ -246,35 +275,161 @@ class EmailBody(BaseModel):
     email: str
 
 
+class SignupBody(BaseModel):
+    email: str
+    username: str | None = None
+
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9._]{3,24}$")
+
+
+def admin_telegram_chat_id() -> int | None:
+    raw = (os.environ.get("ALLOWED_USER_ID") or "").strip()
+    try:
+        n = int(raw)
+        return n if n > 0 else None
+    except ValueError:
+        return None
+
+
+async def send_telegram_message(chat_id: int, text: str) -> bool:
+    tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not tok:
+        return False
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"https://api.telegram.org/bot{tok}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            )
+        return r.status_code == 200
+    except Exception:  # noqa: BLE001
+        log.exception("Telegram-Nachricht an %s fehlgeschlagen", chat_id)
+        return False
+
+
+def _admin_direct_session(identifier: str | None) -> JSONResponse | None:
+    """Admin-Mail: Konto wie Signup anlegen, Session setzen, kein OTP/PIN/Code."""
+    if not is_admin_login_email(identifier):
+        return None
+    account = store.create_account(identifier.strip())
+    log.info("Admin-Login ohne Code für %s (account=%s)",
+             account.get("email"), account["id"])
+    response = JSONResponse({"ok": True})
+    set_session(response, account["id"])
+    return response
+
+
+async def notify_admin_login_code(account: dict, code: str, *, context: str) -> bool:
+    """Code an Svens Telegram (ALLOWED_USER_ID) — für Freundes-/Kollegen-Test."""
+    admin = admin_telegram_chat_id()
+    if not admin:
+        return False
+    email = account.get("email") or "?"
+    user = account.get("username") or "—"
+    text = (
+        f"SERO-Code ({context})\n"
+        f"Konto: {email}\n"
+        f"Username: {user}\n"
+        f"Code: {code}\n"
+        f"Gültig 15 Minuten."
+    )
+    ok = await send_telegram_message(admin, text)
+    if ok:
+        log.info("Login-Code an Admin-Telegram für %s (%s)", email, context)
+    return ok
+
+
 @app.post("/api/signup")
+async def signup(request: Request, body: SignupBody):
+    """Konto anlegen. Mit Username (App) oder nur E-Mail (Website-Onboarding).
+
+    Code geht immer an Admin-Telegram (ALLOWED_USER_ID), zusätzlich optional Mail.
+    """
+    email = body.email.strip().lower()
+    username = (body.username or "").strip() or None
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return JSONResponse({"error": "Bitte eine gültige E-Mail angeben."}, status_code=400)
+    if username is not None and not _USERNAME_RE.match(username):
+        return JSONResponse({
+            "error": "Benutzername: 3–24 Zeichen, nur Buchstaben, Zahlen, Punkt oder Unterstrich.",
+        }, status_code=400)
+    if is_admin_login_email(email):
+        account = store.create_account(email)
+        if username and not account.get("username"):
+            taken = store.get_account_by_username(username)
+            if not taken or taken["id"] == account["id"]:
+                store.update_account(account["id"], username=username)
+                account = store.get_account(account["id"]) or account
+        log.info("Admin-Signup ohne Code für %s (account=%s)",
+                 account.get("email"), account["id"])
+        response = JSONResponse({"ok": True})
+        set_session(response, account["id"])
+        return response
+    ip = request.client.host if request.client else "?"
+    if rate_limited(f"signup:{ip}", 5) or rate_limited(f"signup:{email}", 3):
+        return JSONResponse({"error": "Zu viele Anfragen — bitte später erneut."}, status_code=429)
+    existing = store.get_account_by_email(email)
+    if existing and username is not None:
+        # App-Registrierung: bestehendes Konto nicht still überschreiben
+        return JSONResponse({"error": "Diese E-Mail hat schon ein Konto — bitte anmelden."},
+                            status_code=409)
+    if username and store.get_account_by_username(username):
+        return JSONResponse({"error": "Benutzername ist schon vergeben."}, status_code=409)
+    account = existing or store.create_account(email)
+    if username and not account.get("username"):
+        store.update_account(account["id"], username=username)
+        account = store.get_account(account["id"]) or account
+    code = store.create_link_code(account["id"], "login", ttl_s=900)
+    admin_ok = await notify_admin_login_code(
+        account, code, context="Registrierung" if username else "Website-Signup")
+    await send_email(
+        email, "Dein SERO-Anmeldecode",
+        f"""<h2 style="color:#111;">Willkommen bei SERO</h2>
+        <p style="color:#444;">Dein Anmeldecode (15 Minuten gültig):</p>
+        <div style="font-family:ui-monospace,monospace;font-size:28px;letter-spacing:4px;
+                    background:#f2f5f9;border-radius:10px;padding:16px;text-align:center;
+                    color:#111;font-weight:700;">{code}</div>
+        <p style="color:#888;font-size:13px;">Wenn du den Code nicht siehst: Sven schickt ihn dir.</p>""",
+    )
+    if is_local_request(request):
+        return {"sent": True, "via": "admin_telegram" if admin_ok else "dev",
+                "dev_code": code}
+    if not admin_ok:
+        log.warning("Registrierung %s: Code nicht an Admin-Telegram zugestellt", email)
+    return {"sent": True, "via": "admin_telegram" if admin_ok else "pending"}
+
+
 @app.post("/api/login")
-async def signup(request: Request, body: EmailBody):
+async def login_alias(request: Request, body: EmailBody):
+    """Alias: alter Website-Login → Code anfordern (ohne Username-Pflicht)."""
     email = body.email.strip().lower()
     if "@" not in email or "." not in email:
         return JSONResponse({"error": "Bitte eine gültige E-Mail angeben."}, status_code=400)
-    # Der EINZIGE Auth-Endpunkt ohne Bremse: ohne die hier kann jeder beliebige
-    # Fremdadressen zumüllen (jede Anfrage = eine echte Mail über unsere Domain)
-    # und die Konten-Tabelle unbegrenzt aufblähen.
+    admin_resp = _admin_direct_session(email)
+    if admin_resp is not None:
+        return admin_resp
     ip = request.client.host if request.client else "?"
     if rate_limited(f"signup:{ip}", 5) or rate_limited(f"signup:{email}", 3):
         return JSONResponse({"error": "Zu viele Anfragen — bitte später erneut."}, status_code=429)
     account = store.create_account(email)
     code = store.create_link_code(account["id"], "login", ttl_s=900)
-    login_url = f"/auth/{code}"
+    admin_ok = await notify_admin_login_code(account, code, context="Login-Link")
     sent = await send_email(
         email, "Dein SERO-Anmeldelink",
         f"""<h2 style="color:#111;">Willkommen bei SERO!</h2>
         <p style="color:#444;">Klick auf den Button, um dich anzumelden — der Link ist 15 Minuten gültig.</p>
-        <a href="{public_base_url(request)}{login_url}"
+        <a href="{public_base_url(request)}/auth/{code}"
            style="display:inline-block;background:#102e5a;color:#fff;font-weight:600;
                   padding:13px 28px;border-radius:10px;text-decoration:none;">Jetzt anmelden</a>""",
     )
     if sent:
         return {"sent": True}
     if is_local_request(request):
-        log.info("DEV-Login-Link für %s ausgegeben (nur lokal)", email)
-        return {"sent": True, "dev_login_url": login_url}
-    log.warning("Kein Mail-Versand möglich für %s — Login-Link NICHT zugestellt", email)
+        return {"sent": True, "dev_login_url": f"/auth/{code}"}
+    if admin_ok:
+        return {"sent": True, "via": "admin_telegram"}
     return {"sent": True}
 
 
@@ -284,7 +439,14 @@ class LoginBody(BaseModel):
 
 @app.post("/api/login-code")
 async def login_code(request: Request, body: LoginBody):
-    """Login-Schritt 1: E-Mail ODER Username -> Code wird verschickt (DEV: zurückgegeben)."""
+    """Login-Schritt 1: E-Mail ODER Username -> Code (Admin-Telegram + ggf. Mail).
+
+    Die Admin-Mail (SERO_ADMIN_EMAIL) überspringt Code/PIN und setzt direkt
+    die Session — Konto wird angelegt, falls es noch fehlt.
+    """
+    admin_resp = _admin_direct_session(body.identifier)
+    if admin_resp is not None:
+        return admin_resp
     ip = request.client.host if request.client else "?"
     if rate_limited(f"code:{ip}", 6) or rate_limited(f"code:{body.identifier.lower()}", 6):
         return JSONResponse({"error": "Zu viele Versuche — bitte in 15 Minuten erneut."},
@@ -294,7 +456,7 @@ async def login_code(request: Request, body: LoginBody):
         return JSONResponse({"error": "Kein Konto mit dieser E-Mail / diesem Usernamen gefunden."},
                             status_code=404)
     code = store.create_link_code(account["id"], "login", ttl_s=900)
-    sent = await send_email(
+    sent_mail = await send_email(
         account["email"], f"{code} ist dein SERO-Anmeldecode",
         f"""<h2 style="color:#111;">Dein Anmeldecode</h2>
         <p style="color:#444;">Gib diesen Code auf der Anmeldeseite ein — er ist 15 Minuten gültig:</p>
@@ -302,36 +464,25 @@ async def login_code(request: Request, body: LoginBody):
                     background:#f2f5f9;border-radius:10px;padding:16px;text-align:center;
                     color:#111;font-weight:700;">{code}</div>""",
     )
-    if sent:
-        return {"sent": True}
-    # Lokal (Dev): Code direkt zurückgeben — NICHT erst Telegram anstoßen
+    # Immer an Admin (Sven), solange ALLOWED_USER_ID gesetzt ist — Kollegen-Test.
+    admin_ok = await notify_admin_login_code(account, code, context="Anmeldung")
+    user_tg_ok = False
+    if account.get("telegram_id") and not sent_mail:
+        user_tg_ok = await send_telegram_message(
+            int(account["telegram_id"]),
+            f"Dein SERO-Anmeldecode: {code}\n\nGültig für 15 Minuten.",
+        )
     if is_local_request(request):
         log.info("DEV-Login-Code für %s ausgegeben (nur lokal)", account["email"])
-        return {"sent": True, "dev_code": code}
-    # Kein E-Mail-Dienst konfiguriert? Konten mit verknüpftem Telegram bekommen
-    # den Code über den SERO-Bot — funktioniert überall, auch auf dem iPhone.
-    if account.get("telegram_id"):
-        try:
-            import os as _os
-            import httpx as _httpx
-            _tok = _os.environ.get("TELEGRAM_BOT_TOKEN")
-            if _tok:
-                async with _httpx.AsyncClient(timeout=10) as _c:
-                    _r = await _c.post(
-                        f"https://api.telegram.org/bot{_tok}/sendMessage",
-                        json={"chat_id": account["telegram_id"],
-                              "text": (f"🔐 Dein SERO-Anmeldecode: {code}"
-                                       "\n\nGültig für 15 Minuten.")})
-                if _r.status_code == 200:
-                    log.info("Login-Code an Telegram %s gesendet", account["telegram_id"])
-                    return {"sent": True, "via": "telegram"}
-        except Exception:  # noqa: BLE001
-            log.exception("Telegram-Code-Versand fehlgeschlagen")
-    if is_local_request(request):
-        log.info("DEV-Login-Code für %s ausgegeben (nur lokal)", account["email"])
-        return {"sent": True, "dev_code": code}
-    log.warning("Kein Zustellweg für Login-Code von Konto %s — weder Mail noch Telegram",
-                account["id"])
+        return {"sent": True, "dev_code": code,
+                "via": "admin_telegram" if admin_ok else "dev"}
+    if admin_ok:
+        return {"sent": True, "via": "admin_telegram"}
+    if sent_mail:
+        return {"sent": True, "via": "email"}
+    if user_tg_ok:
+        return {"sent": True, "via": "telegram"}
+    log.warning("Kein Zustellweg für Login-Code von Konto %s", account["id"])
     return {"sent": True}
 
 
@@ -471,7 +622,11 @@ async def auth(code: str, request: Request):
     account_id = store.redeem_link_code(code, "login")
     if not account_id:
         return RedirectResponse("/login.html?expired=1")
-    response = RedirectResponse("/onboarding.html?logged_in=1")
+    # SERO-App ist das Ziel nach Magic-Link (kein Listo-Onboarding-Zwang).
+    nxt = safe_post_auth_path(request.query_params.get("next"), "/app/")
+    target = with_query_flag(nxt if nxt.startswith("/app") else "/app/",
+                             "logged_in", "1")
+    response = RedirectResponse(target)
     set_session(response, account_id)
     return response
 
@@ -503,6 +658,18 @@ async def me(request: Request):
             and store.kv_get(f"ebay_fulfillment_fehlt_{account['telegram_id']}"))
         or store.kv_get(f"ebay_fulfillment_fehlt_{ACCOUNT_UID_OFFSET + account['id']}")
     )
+    # Zeitpunkt der letzten Token-Speicherung (OAuth/Paste) — für App-Poll
+    # bei Reconnect, wo ebay_connected schon vorher true war.
+    token_at_raw = (
+        store.kv_get(f"ebay_token_at_{uid}")
+        or store.kv_get(f"ebay_token_at_{account_token_uid(account['id'])}")
+        or (account.get("telegram_id")
+            and store.kv_get(f"ebay_token_at_{account['telegram_id']}"))
+    )
+    try:
+        ebay_token_at = float(token_at_raw) if token_at_raw is not None else 0.0
+    except (TypeError, ValueError):
+        ebay_token_at = 0.0
     return {
         "email": account["email"],
         "username": account.get("username"),
@@ -519,6 +686,7 @@ async def me(request: Request):
         "active": store.account_active(account),
         "ebay_connected": has_token,
         "ebay_needs_reconnect": has_token and fulfillment_fehlt,
+        "ebay_token_at": ebay_token_at,
         "telegram_linked": bool(account.get("telegram_id")),
         "setup_ready": bool(user and user.get("status") == "ready"),
         "bot_username": BOT_USERNAME,
@@ -533,7 +701,9 @@ async def connect_ebay(request: Request):
     account = require_account(request)
     if isinstance(account, JSONResponse):
         return account
-    state = signer.dumps({"a": account["id"], "t": time.time()})
+    # Default: zurück in die App. Website-Onboarding kann ?next=/onboarding.html setzen.
+    nxt = safe_post_auth_path(request.query_params.get("next"), "/app/")
+    state = signer.dumps({"a": account["id"], "t": time.time(), "n": nxt})
     url = ebay.build_consent_url() + "&state=" + urllib.parse.quote(state)
     return RedirectResponse(url)
 
@@ -541,31 +711,42 @@ async def connect_ebay(request: Request):
 async def _store_ebay_token(account: dict, code: str) -> None:
     uid = account_token_uid(account["id"])
     await ebay.exchange_code(code, uid)
+    # Markiert den Moment der Token-Speicherung — die App pollen darauf,
+    # statt nur „ebay_connected" (das bei Reconnect schon true war).
+    store.kv_set(f"ebay_token_at_{uid}", time.time())
     # Telegram schon verknüpft? Token direkt dem Telegram-Nutzer zuordnen.
     if account.get("telegram_id"):
         store.kv_set(_token_key(account["telegram_id"]), store.kv_get(_token_key(uid)))
-        # Alte 403-Marke vom Sales-Sync löschen — neuer Consent hat
-        # sell.fulfillment (USER_SCOPES).
-        store.kv_set(f"ebay_fulfillment_fehlt_{account['telegram_id']}", None)
-    store.kv_set(f"ebay_fulfillment_fehlt_{uid}", None)
+        store.kv_set(f"ebay_token_at_{account['telegram_id']}", time.time())
+    # WICHTIG: ebay_fulfillment_fehlt_* hier NICHT löschen — nur nach
+    # erfolgreichem Orders-Aufruf (sync_sales_status). Sonst verschwindet der
+    # Reconnect-Hinweis, obwohl Live noch 403 liefert.
 
 
 @app.get("/callback/ebay")
 async def callback_ebay(request: Request, code: str = "", state: str = ""):
     """Automatischer Rückweg — funktioniert erst, wenn die RuName 'Auth Accepted URL'
-    auf die deployte HTTPS-Domain zeigt. Lokal: Paste-Flow unten."""
+    auf die deployte HTTPS-Domain zeigt. Lokal: Paste-Flow unten.
+
+    Session wird immer gesetzt (Account aus state): OAuth läuft oft in Safari/
+    einem neuen Tab — ohne Cookie landet /app/?ebay=ok auf dem Login und
+    „oben links" wirkt tot."""
     try:
         payload = signer.loads(state)
     except BadSignature:
-        return RedirectResponse("/onboarding.html?ebay=invalid")
+        return RedirectResponse("/app/?ebay=invalid")
     account = store.get_account(payload["a"])
     if not account or not code:
-        return RedirectResponse("/onboarding.html?ebay=invalid")
+        return RedirectResponse("/app/?ebay=invalid")
+    nxt = safe_post_auth_path(payload.get("n"), "/app/")
     try:
         await _store_ebay_token(account, code)
+        flag = "ok"
     except EbayAuthError:
-        return RedirectResponse("/onboarding.html?ebay=failed")
-    return RedirectResponse("/onboarding.html?ebay=ok")
+        flag = "failed"
+    resp = RedirectResponse(with_query_flag(nxt, "ebay", flag))
+    set_session(resp, account["id"])
+    return resp
 
 
 class RedirectBody(BaseModel):
@@ -761,9 +942,10 @@ async def billing_portal(request: Request):
                             status_code=400)
     import stripe
     stripe.api_key = stripe_key
+    # Rückkehr in die PWA unter /app/ — nie Host-Header-basiert offen redirecten.
     session = stripe.billing_portal.Session.create(
         customer=account["stripe_customer_id"],
-        return_url=public_base_url(request) + "/app.html",
+        return_url=public_base_url(request) + "/app/",
     )
     return {"portal_url": session.url}
 
@@ -957,12 +1139,29 @@ async def i18n_set(request: Request, body: I18nBody):
     return {"ok": True, "translations": translations}
 
 
-# ---------------------------------------------------------------- Social Login (OAuth)
+# ---------------------------------------------------------------- Social Login (OAuth + Telegram + Telefon)
 # Aktiviert sich selbst, sobald die Keys in .env liegen:
-#   Google: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET  (console.cloud.google.com -> OAuth-Client "Web",
-#           Redirect-URI: https://DOMAIN/auth/google/callback — lokal geht http://localhost:8484/...)
-#   Apple:  APPLE_CLIENT_ID + APPLE_CLIENT_SECRET    (Apple-Developer-Konto nötig; Secret = signiertes JWT)
-#   X:      X_CLIENT_ID + X_CLIENT_SECRET            (developer.x.com, OAuth 2.0 mit PKCE)
+#   Google: GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET
+#           Redirect: https://app.seromunich.com/auth/google/callback
+#           (lokal z.B. http://127.0.0.1:<port>/auth/google/callback)
+#   Telegram Login Widget: TELEGRAM_BOT_TOKEN + LISTO_BOT_USERNAME;
+#           BotFather → /setdomain → app.seromunich.com
+#   Telefon/SMS: TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_FROM
+#           oder lokal SERO_PHONE_AUTH=stub (Code nur lokal in der Antwort)
+#   Apple/X: vorbereitet, brauchen Entwickler-Konten
+# Details: docs/AUTH_SETUP.md
+
+from web.social_auth import (  # noqa: E402
+    google_configured,
+    normalize_phone,
+    phone_auth_enabled,
+    phone_auth_mode,
+    phone_sms_configured,
+    telegram_bot_token,
+    telegram_bot_username,
+    telegram_login_enabled,
+    verify_telegram_login,
+)
 
 OAUTH_PROVIDERS = {
     "google": (os.environ.get("GOOGLE_CLIENT_ID"), os.environ.get("GOOGLE_CLIENT_SECRET")),
@@ -973,8 +1172,21 @@ OAUTH_PROVIDERS = {
 
 @app.get("/api/auth-providers")
 async def auth_providers():
-    """Welche Social-Logins sind konfiguriert? (Login-Seite blendet Buttons entsprechend ein.)"""
-    return {"providers": [k for k, (cid, sec) in OAUTH_PROVIDERS.items() if cid and sec]}
+    """Welche Logins sind konfiguriert? Login-Screen zeigt parallele Optionen."""
+    providers = [k for k, (cid, sec) in OAUTH_PROVIDERS.items() if cid and sec]
+    return {
+        "providers": providers,
+        "google": google_configured(),
+        "telegram": {
+            "enabled": telegram_login_enabled(),
+            "bot": telegram_bot_username() or None,
+        },
+        "phone": {
+            "enabled": phone_auth_enabled(),
+            "mode": phone_auth_mode(),
+            "sms_ready": phone_sms_configured(),
+        },
+    }
 
 
 @app.get("/auth/google/start")
@@ -1021,6 +1233,119 @@ async def google_callback(request: Request, code: str = "", state: str = ""):
     response = RedirectResponse("/app/")
     set_session(response, account["id"])
     log.info("Google-Login: %s", data["email"])
+    return response
+
+
+class TelegramLoginBody(BaseModel):
+    id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    auth_date: int
+    hash: str
+
+
+@app.post("/api/auth/telegram")
+async def auth_telegram(request: Request, body: TelegramLoginBody):
+    """Telegram Login Widget → Session (für jedermann, nicht nur Workspace)."""
+    if not telegram_login_enabled():
+        return JSONResponse({"error": "Telegram-Login ist noch nicht eingerichtet."}, status_code=501)
+    ip = request.client.host if request.client else "?"
+    if rate_limited(f"tglogin:{ip}", 20, window_s=600):
+        return JSONResponse({"error": "Zu viele Versuche — bitte später erneut."}, status_code=429)
+    payload = body.model_dump(exclude_none=True)
+    if not verify_telegram_login(payload, telegram_bot_token()):
+        return JSONResponse({"error": "Telegram-Anmeldung ungültig oder abgelaufen."}, status_code=400)
+    display = " ".join(x for x in [body.first_name, body.last_name] if x).strip() or None
+    account = store.create_account_telegram(
+        body.id, username=body.username, display_name=display)
+    response = JSONResponse({"ok": True})
+    set_session(response, account["id"])
+    log.info("Telegram-Login: tg=%s account=%s", body.id, account["id"])
+    return response
+
+
+class PhoneStartBody(BaseModel):
+    phone: str
+
+
+class PhoneVerifyBody(BaseModel):
+    phone: str
+    code: str
+
+
+async def _send_phone_sms(to_e164: str, code: str) -> bool:
+    """Twilio REST — ohne Keys False. Stub-Modus liefert keinen SMS-Versand."""
+    if not phone_sms_configured():
+        return False
+    sid = os.environ["TWILIO_ACCOUNT_SID"]
+    token = os.environ["TWILIO_AUTH_TOKEN"]
+    from_nr = os.environ["TWILIO_FROM"]
+    body = f"Dein SERO-Code: {code} (15 Minuten gültig)"
+    import httpx
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(url, auth=(sid, token), data={"To": to_e164, "From": from_nr, "Body": body})
+    if r.status_code >= 300:
+        log.error("Twilio-SMS fehlgeschlagen: %s %s", r.status_code, r.text[:300])
+        return False
+    return True
+
+
+@app.post("/api/auth/phone/start")
+async def auth_phone_start(request: Request, body: PhoneStartBody):
+    """SMS-Code anfordern. Ohne Twilio: nur lokal/Stub (SERO_PHONE_AUTH=stub)."""
+    if not phone_auth_enabled():
+        return JSONResponse({
+            "error": "Telefon-Login braucht noch SMS-Zugang (Twilio) — siehe docs/AUTH_SETUP.md.",
+            "configured": False,
+        }, status_code=501)
+    phone = normalize_phone(body.phone)
+    if not phone:
+        return JSONResponse({"error": "Bitte eine gültige Handynummer angeben (z. B. +49…)."},
+                            status_code=400)
+    ip = request.client.host if request.client else "?"
+    if rate_limited(f"phone:{ip}", 5) or rate_limited(f"phone:{phone}", 3):
+        return JSONResponse({"error": "Zu viele Anfragen — bitte später erneut."}, status_code=429)
+    account = store.create_account_phone(phone)
+    code = store.create_link_code(account["id"], "login", ttl_s=900)
+    mode = phone_auth_mode()
+    if mode == "twilio":
+        ok = await _send_phone_sms(phone, code)
+        if not ok:
+            return JSONResponse({"error": "SMS konnte nicht gesendet werden. Bitte später erneut."},
+                                status_code=502)
+        return {"sent": True, "via": "sms"}
+    # Stub: Code nur lokal / Dev sichtbar — nie in Produktion ohne SMS-Keys
+    if is_local_request(request) or mode == "stub":
+        if IS_PROD and mode == "stub" and not is_local_request(request):
+            log.warning("Phone-Stub in Produktion ohne SMS — Code nicht ausgeliefert")
+            return {"sent": True, "via": "pending"}
+        log.info("DEV/Stub Phone-Code für %s", phone)
+        return {"sent": True, "via": "stub", "dev_code": code}
+    return {"sent": True, "via": "pending"}
+
+
+@app.post("/api/auth/phone/verify")
+async def auth_phone_verify(request: Request, body: PhoneVerifyBody):
+    if not phone_auth_enabled():
+        return JSONResponse({"error": "Telefon-Login ist nicht aktiv."}, status_code=501)
+    phone = normalize_phone(body.phone)
+    if not phone:
+        return JSONResponse({"error": "Ungültige Nummer."}, status_code=400)
+    ip = request.client.host if request.client else "?"
+    if rate_limited(f"phoneverify:{ip}", 10):
+        return JSONResponse({"error": "Zu viele Versuche — bitte später erneut."}, status_code=429)
+    account = store.get_account_by_phone(phone)
+    if not account:
+        return JSONResponse({"error": "Kein Konto zu dieser Nummer."}, status_code=404)
+    redeemed = store.redeem_link_code(body.code.strip().upper(), "login")
+    if redeemed != account["id"]:
+        return JSONResponse({"error": "Code ungültig oder abgelaufen."}, status_code=400)
+    response = JSONResponse({"ok": True})
+    set_session(response, account["id"])
+    log.info("Phone-Login: account=%s", account["id"])
     return response
 
 

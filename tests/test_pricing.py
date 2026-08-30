@@ -19,37 +19,86 @@ def test_zu_wenige_comps_geben_keinen_preis():
     assert comps_verwertbar(research) is None
 
 
+def test_eine_comp_reicht_fuer_alltag():
+    """Alltagsprodukte (Yeezy, Deko …): min_count=1 — Karten bleiben bei Default 3."""
+    research = {"count": 1, "min": 80.0, "max": 80.0, "median": 80.0, "query": "yeezy"}
+    assert comps_verwertbar(research, min_count=1) is research
+    assert comps_verwertbar(research) is None
+
+
 def test_keine_comps_geben_keinen_preis():
     assert comps_verwertbar(None) is None
 
 
+def test_erlaubt_ki_richtwert_nur_alltag():
+    from web.pricecharting import erlaubt_ki_richtwert
+    assert erlaubt_ki_richtwert({"name": "Yeezy Slide", "category": "Mode"})
+    assert erlaubt_ki_richtwert({"name": "Swarovski Figur"})
+    assert erlaubt_ki_richtwert({"name": "Zelda Ocarina of Time N64"})
+    assert erlaubt_ki_richtwert({"graded": {"grader": "WATA", "grade": "9.6"},
+                                  "name": "Super Mario 64"})
+    assert not erlaubt_ki_richtwert({"name": "Pokemon Charizard EX #4"})
+    assert not erlaubt_ki_richtwert({
+        "name": "One Piece Band 1",
+        "analysis": {"title": "One Piece Manga Band 1"},
+    })
+
+
 def test_prompt_verlangt_keine_preisschaetzung():
-    """Quelltext-Wache: Wer estimated_price_range_eur (oder ein anderes
-    Preis-Schätzfeld) wieder in den Analyse-Prompt einbaut, verletzt ADR-002."""
+    """Quelltext-Wache: Sammelkarten ohne KI-Preis; Alltag + Spiele dürfen
+    suggested_list_price_eur (ADR-002 Ausnahme)."""
     from bot.claude_client import SYSTEM_PROMPT
     assert "estimated_price_range_eur" not in SYSTEM_PROMPT
-    assert "NIEMALS selbst einen Preis" in SYSTEM_PROMPT
+    assert "suggested_list_price_eur" in SYSTEM_PROMPT
+    assert "IMMER null" in SYSTEM_PROMPT
+    assert "Sammelkarte" in SYSTEM_PROMPT or "Sammelkarten" in SYSTEM_PROMPT
+    assert "Videospiel" in SYSTEM_PROMPT or "Retro-/Videospiel" in SYSTEM_PROMPT
+    assert "Parallel" in SYSTEM_PROMPT  # OP Full-Art/Stern neben Seltenheit
+    # Phase A: keine geratene „wahrscheinlichste" Variante, keine freie Pricing-Query
+    assert "WAHRSCHEINLICHSTE" not in SYSTEM_PROMPT
+    assert 'Wähle das WAHRSCHEINLICHSTE' not in SYSTEM_PROMPT
+    # Schema fordert search_query_for_pricing nicht mehr als Wahrheit
+    assert '"search_query_for_pricing"' not in SYSTEM_PROMPT
+    # Alltag/Elektronik: Solana-Logo + Seed Vault nicht als generisches 5G-Handy
+    assert "SEED VAULT" in SYSTEM_PROMPT
+    assert "Solana Seeker" in SYSTEM_PROMPT
+    assert "Sammlerflasche" in SYSTEM_PROMPT
+    assert "1,50" in SYSTEM_PROMPT
+
+
+def test_needs_review_alltag_bekommt_ki_richtwert():
+    """Rückfrage (needs_review) darf den Alltags-KI-Richtwert nicht verschlucken."""
+    quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
+    assert "def apply_alltag_schaetzung" in quelle
+    start = quelle.index('item["status"] = "needs_review"')
+    block = quelle[start:start + 2500]
+    assert "apply_alltag_schaetzung" in block
+    assert "Alltags-Cutout ohne Warp" in block
 
 
 def test_analyse_erzeugt_keine_ki_preisfelder():
     """Quelltext-Wache: app_api darf est_low/est_high nicht mehr aus der
-    KI-Antwort erzeugen und keinen est_value aus einer Schätzung ableiten."""
+    KI-Antwort erzeugen. Alltags-KI-Richtwert heißt „KI-Richtwert", nicht
+    die alte „KI-Schätzung"-Spanne."""
     quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
     # Erlaubt ist nur die eine Abwehr-Zeile (preset.pop), die Alt-Daten filtert.
     assert quelle.count("estimated_price_range_eur") == 1
     assert 'preset.pop("estimated_price_range_eur"' in quelle
     assert 'item["est_low"] = float' not in quelle
     assert '"price_label"] = "KI-Schätzung"' not in quelle
+    assert '"price_label"] = "KI-Richtwert"' in quelle
+    assert "erlaubt_ki_richtwert" in quelle
 
 
 def test_altdaten_estimate_wird_beim_refresh_verworfen():
-    """Alt-Werte aus der abgeschafften KI-Spanne (source=estimate) müssen beim
-    nächsten Refresh neu bewertet werden, nicht ewig stehen bleiben."""
+    """Karten-Altwerte mit source=estimate werden verworfen; Alltagsprodukte
+    behalten den Richtwert (erlaubt_ki_richtwert)."""
     quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
     start = quelle.index("async def refresh_item_price")
-    block = quelle[start:start + 2500]
+    block = quelle[start:start + 3500]
     assert 'price_source") == "estimate"' in block
     assert "ki_schaetzung_verworfen" in block
+    assert "erlaubt_ki_richtwert" in block
 
 
 def test_fehlmatch_card_wird_beim_refresh_entsorgt():
@@ -58,7 +107,7 @@ def test_fehlmatch_card_wird_beim_refresh_entsorgt():
     quelle = (Path(__file__).parent.parent / "web" / "app_api.py").read_text()
     assert "card_passt_zu_info" in quelle
     start = quelle.index("async def refresh_item_price")
-    block = quelle[start:start + 3500]
+    block = quelle[start:start + 6000]
     assert "card_passt_zu_info" in block
     assert "Alte Karten-Zuordnung verworfen" in block
 
@@ -141,3 +190,39 @@ def test_pricecharting_default_aus(monkeypatch):
     monkeypatch.delenv("SERO_QUELLE_PRICECHARTING", raising=False)
     from web.pricecharting import lookup_pc
     assert asyncio.run(lookup_pc(None, "Zelda NES", None, 1.1)) is None
+
+
+def test_angebote_kein_auto_listingpreis():
+    """A8.10 — aktive Angebote / price_research setzen keinen Festpreis."""
+    from bot.main import apply_price_rule
+    draft = {
+        "format": "FIXED_PRICE",
+        "price_research": {"count": 8, "median": 42.0},
+        "listing": {},
+    }
+    apply_price_rule(draft)
+    assert draft["price"] is None
+
+
+def test_belegter_marktwert_darf_vorschlag():
+    """A8.11 — belegter Marktwert darf Listenpreis vorschlagen."""
+    from bot.main import apply_price_rule
+    draft = {
+        "format": "FIXED_PRICE",
+        "listing": {"market_value": "100.00", "price_state": "belegt",
+                    "market_source": "Katalog"},
+    }
+    apply_price_rule(draft)
+    assert draft["price"] is not None
+    assert float(draft["price"]) <= 100.0
+
+
+def test_spanne_kein_auto_listingpreis():
+    from bot.main import apply_price_rule
+    draft = {
+        "format": "FIXED_PRICE",
+        "listing": {"market_value": "50.00", "price_state": "spanne",
+                    "market_source": "eBay-Median (aktive Angebote)"},
+    }
+    apply_price_rule(draft)
+    assert draft["price"] is None

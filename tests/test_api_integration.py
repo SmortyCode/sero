@@ -64,6 +64,18 @@ client.cookies.set("listo_session", signer.dumps(fremd["id"]))
 r = client.get(f"/api/app/collection/item/{item_id}")
 assert r.status_code == 404, "Fremdes Konto konnte das Item lesen!"
 
+# 7) Dashboard liefert SERO-Effekt-Blöcke (nur lokale Daten)
+client.cookies.set("listo_session", signer.dumps(account["id"]))
+r = client.get("/api/app/dashboard")
+assert r.status_code == 200, r.text[:300]
+dash = r.json()
+assert "impact" in dash and "activity_7d" in dash
+assert "attention" not in dash
+assert set(dash["impact"]) >= {
+    "successful_scans", "manual_seconds", "sero_seconds",
+    "saved_seconds", "avg_analysis_seconds"}
+assert set(dash["activity_7d"]) >= {"scanned", "published", "sold", "active_listings"}
+
 print("INTEGRATION-OK")
 """
 
@@ -297,7 +309,24 @@ iid = uuid.uuid4().hex[:12]
 store._conn.execute(
     "INSERT INTO collection_items (id, account_id, created_at, updated_at, data) VALUES (?,?,?,?,?)",
     (iid, acc["id"], time.time(), time.time(),
-     json.dumps({"status": "ready", "name": "Glurak 199/165", "photos": []})))
+     json.dumps({
+         "status": "ready", "name": "Glurak 199/165", "photos": [],
+         "card_info": {"name": "Glurak", "number": "199/165", "set": "151",
+                       "language": "de", "game": "pokemon", "single": True},
+         "analysis": {
+             "product_kind": "trading_card",
+             "card_info": {"name": "Glurak", "number": "199/165", "set": "151",
+                           "language": "de", "game": "pokemon"},
+             "fields": {
+                 "kind": {"value": "trading_card", "source": "visible_on_photo"},
+                 "name": {"value": "Glurak", "source": "visible_on_photo"},
+                 "number": {"value": "199/165", "source": "visible_on_photo"},
+                 "set": {"value": "151", "source": "visible_on_photo"},
+                 "language": {"value": "de", "source": "visible_on_photo"},
+                 "game": {"value": "pokemon", "source": "visible_on_photo"},
+             },
+         },
+     })))
 store._conn.commit()
 
 # Externe Abrufe kappen: Browse und Wechselkurs werden gezählt statt gerufen
@@ -379,9 +408,23 @@ def stueck(name):
     store._conn.execute(
         "INSERT INTO collection_items (id, account_id, created_at, updated_at, data) VALUES (?,?,?,?,?)",
         (iid, acc["id"], time.time(), time.time(),
-         json.dumps({"status": "ready", "name": name, "photos": [],
-                     "card_info": {"single": False, "game": "other", "name": None},
-                     "analysis": {"search_query_for_pricing": name}})))
+         json.dumps({
+             "status": "ready", "name": name, "photos": [],
+             "card_info": {"single": False, "game": "other", "name": name,
+                           "platform": "PS2", "region": "USA",
+                           "completeness": "cib"},
+             "analysis": {
+                 "product_kind": "video_game",
+                 "search_query_for_pricing": name,
+                 "fields": {
+                     "kind": {"value": "video_game", "source": "visible_on_photo"},
+                     "name": {"value": name, "source": "visible_on_photo"},
+                     "platform": {"value": "PS2", "source": "visible_on_photo"},
+                     "region": {"value": "USA", "source": "visible_on_photo"},
+                     "completeness": {"value": "cib", "source": "visible_on_photo"},
+                 },
+             },
+         })))
     store._conn.commit()
     return iid
 
@@ -444,7 +487,7 @@ store._conn.commit()
 n = A.drafts_retten_einmal()
 assert n == 1, f"erwartet 1 Rettung, war {n}"
 assert store.get_draft(alt)["status"] == "error"
-assert "unterbrochen" in (store.get_draft(alt).get("error") or "")
+assert "unterbrochen" in (store.get_draft(alt).get("error_text") or store.get_draft(alt).get("error") or "")
 assert store.get_draft(frisch)["status"] == "analyzing", "Frischer Lauf wurde angefasst"
 print("RETTUNG-OK")
 """
@@ -595,3 +638,41 @@ def test_foto_aenderungen_waehrend_analyse_geben_409():
         r = subprocess.run([sys.executable, "-c", PHOTO_ANALYZING_TEST], env=env,
                            cwd=WURZEL, capture_output=True, text=True, timeout=120)
         assert "PHOTO409-OK" in r.stdout, f"\nSTDOUT: {r.stdout}\nSTDERR: {r.stderr[-3000:]}"
+
+
+SCAN_RETTUNG_TEST = r"""
+import json, time, uuid
+from web.server import store
+import web.app_api as A
+
+acc = store.create_account("scanrettung@example.org")
+iid = uuid.uuid4().hex[:12]
+d = {"status": "analyzing", "name": None, "photos": ["/tmp/a.jpg"],
+     "status_text": "Stelle Karte frei …"}
+now = time.time()
+store._conn.execute(
+    "INSERT INTO collection_items (id, account_id, created_at, updated_at, data) VALUES (?,?,?,?,?)",
+    (iid, acc["id"], now, now, json.dumps(d)))
+store._conn.commit()
+
+n = A.scans_retten_einmal(erster_lauf=False)
+assert n == 0, f"frischer Scan ohne Schonfrist geweckt: {n}"
+
+n = A.scans_retten_einmal(erster_lauf=True)
+assert n == 1, f"erster_lauf sollte den toten Scan wecken, war {n}"
+row = json.loads(store._conn.execute(
+    "SELECT data FROM collection_items WHERE id=?", (iid,)).fetchone()[0])
+assert row["status"] == "analyzing"
+assert row.get("status_text"), "enqueue_scan muss status_text setzen"
+print("SCAN-RETTUNG-OK")
+"""
+
+
+def test_scan_rettung_weckt_nach_neustart_sofort():
+    """Nach OOM/Restart ist die RAM-Queue leer — analyzing sofort wecken."""
+    with tempfile.TemporaryDirectory() as td:
+        env = {**os.environ, "SERO_DB": str(Path(td) / "srett.db"),
+               "SERO_COL_DIR": str(Path(td) / "fotos")}
+        r = subprocess.run([sys.executable, "-c", SCAN_RETTUNG_TEST], env=env,
+                           cwd=WURZEL, capture_output=True, text=True, timeout=120)
+        assert "SCAN-RETTUNG-OK" in r.stdout, f"\nSTDOUT: {r.stdout}\nSTDERR: {r.stderr[-3000:]}"

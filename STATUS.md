@@ -1,8 +1,24 @@
 # Listo — Projektstand (12.06.2026)
 
 > **VERALTET — Stand Juni 2026.** Die aktuelle und einzig gepflegte
-> Übergabe-Doku ist **`docs/IMPLEMENTATION_STATUS.md`** (Stand 07.08.2026,
-> nach externem Audit). Diese Datei bleibt nur als historischer Kontext.
+> Übergabe-Doku ist **`docs/IMPLEMENTATION_STATUS.md`**.
+>
+> **27.08.2026:** Admin-Mail (`SERO_ADMIN_EMAIL`) loggt ohne OTP ein — normale Session, Konto wie Signup.
+>
+> **18.08.2026 (Abend):** Inventar Search/Filter/Sort auf Sammlung und
+> Verkaufen — **nur lokal**, Pins `sero.js?v=227`, `sero.css?v=146`,
+> `sero-clean.css?v=25`. Kein Contabo. Tabbar unverändert
+> Sammlung | Scannen | Verkaufen.
+>
+> **18.08.2026 (aktuell):** Testmodus aus der App entfernt (kein Banner,
+> kein Settings-Toggle). `kv['dry_run']=false` Mac **und** Contabo.
+> Live = echte eBay-Gebühren. Telegram `/dryrun` bleibt als Notfall im Bot.
+>
+> Davor am selben Abend: Scan-Hang auf Contabo (OOM-Killer während rembg).
+> Fix: rembg im Kindprozess, Swap 2 GB, ein Worker, Rescue nach Restart.
+>
+> Historie darunter: Stand Juni 2026. Pins damals andere; nicht als
+> Arbeitsgrundlage nutzen.
 
 Vollständige Übergabe-Doku. Bei neuem Chat-Kontext: diese Datei zuerst lesen.
 

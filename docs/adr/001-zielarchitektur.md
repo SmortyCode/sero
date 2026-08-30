@@ -26,6 +26,15 @@ Kein Microservice-Zoo. Zielbild ist ein **modularer Monolith** plus
 - **Dauerhafte Queue** (z.B. Postgres-basiert: SKIP LOCKED) statt
   `asyncio.create_task` — Jobs überleben Neustarts.
 
+## Fortschritt (08.08.2026) — ADR-konform, kein Big-Bang
+
+| Schritt | Stand |
+|---|---|
+| F1 Ports | `web/ports.py` — StorePort / PhotoPort / QueuePort (+ EbayPublishPort). Verhalten unverändert. |
+| F2–F5 Postgres/Redis/S3/Worker | **zurückgestellt** bis Lastschwelle (~20 Nutzer). Nur Stub-Flags in `.env.production.example`. |
+| F6 Modularisierung app_api/sero.js | **zurückgestellt** per ADR-001 (Risiko > Nutzen vor Schwelle). |
+| F7 Last | `scripts/micro_load_kv.py` — isolierte KV-Messung, **kein** Kapazitätsclaim. |
+
 ## Konsequenzen
 
 - Erst nötig vor echtem Mehrnutzer-Betrieb. Bis dahin: keine neue Funktion

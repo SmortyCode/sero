@@ -16,6 +16,7 @@ from typing import Optional
 
 from bot.config import EBAY_API
 from bot.ebay.auth import EbayClient, EbayTimeout
+from bot.ebay.payload import MAX_LISTING_PHOTOS as MAX_IMAGES
 
 # Policies-Dict pro Nutzer (Multi-Tenant): merchant_location_key,
 # fulfillment_policy_id, payment_policy_id, return_policy_id
@@ -109,10 +110,12 @@ def kurz_titel(title: str, max_len: int = 80) -> str:
 
 
 def generate_sku() -> str:
-    """Interner Inventar-Schlüssel. eBay zeigt ihn dem Verkäufer als
-    „Bestandseinheit" an — deshalb bewusst NEUTRAL: vorher stand dort
-    „SERO-20260803-MQ56" und verriet Werkzeug und Einstelldatum.
-    Ganz weglassen geht nicht, die Inventar-Schnittstelle verlangt ihn."""
+    """Interner Inventar-Schlüssel — nur in der Datenbank.
+
+    Neue Listings (Trading API) senden keine SKU / kein Custom Label, damit
+    eBay keine „Bestandseinheit" anzeigt. Die Inventory API braucht den Wert
+    in der URL; dort bleibt er intern und kommt nicht in die Item Specifics.
+    """
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
 
@@ -120,7 +123,6 @@ def generate_sku() -> str:
 # konservativ zusätzlich max. 10 Werte pro Aspect, leere Werte raus.
 MAX_ASPECT_VALUE_LEN = 65
 MAX_ASPECT_VALUES = 10
-MAX_IMAGES = 24
 
 
 # Jedes Merkmal, das nach Altersangabe aussieht — die Analyse erfindet hier
@@ -166,8 +168,10 @@ def bereinige_altersfreigabe(aspects: dict) -> dict:
 
 
 def sanitize_aspects(aspects: dict) -> dict:
+    from bot.ebay.payload import strip_internal_ids_from_aspects
     clean: dict = {}
-    for name, values in bereinige_altersfreigabe(aspects).items():
+    for name, values in bereinige_altersfreigabe(
+            strip_internal_ids_from_aspects(aspects)).items():
         if not name:
             continue
         if not isinstance(values, list):
@@ -378,7 +382,136 @@ async def get_offer(client: EbayClient, offer_id: str, user_id: int) -> Optional
 def live_price_from_offer(data: dict) -> Optional[str]:
     """Listenpreis aus einer getOffer-Antwort — nur echte eBay-Zahlen, nie geraten."""
     ps = data.get("pricingSummary") or {}
-    obj = ps.get("price") or ps.get("auctionStartPrice") or {}
+    # Bei Auktionen: aktuelles Gebot (falls vorhanden) vor Startpreis
+    for key in ("auctionSoldPrice", "auctionReservePrice", "price", "auctionStartPrice"):
+        obj = ps.get(key) or {}
+        if not isinstance(obj, dict):
+            continue
+        val = obj.get("value")
+        if val is None or val == "":
+            continue
+        try:
+            f = float(str(val).replace(",", "."))
+        except (TypeError, ValueError):
+            continue
+        if f > 0:
+            return f"{f:.2f}"
+    return None
+
+
+async def live_auction_state(client: EbayClient, listing_id: str, user_id: int) -> Optional[dict]:
+    """Listing-Stand via Trading GetItem (Preis, Gebote, Ende, Merkliste, Aufrufe).
+
+    Rückgabe nur echte eBay-Zahlen — für Auktion und Festpreis.
+    """
+    import xml.etree.ElementTree as ET
+
+    if not listing_id:
+        return None
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">'
+        "<DetailLevel>ReturnAll</DetailLevel>"
+        f"<ItemID>{listing_id}</ItemID>"
+        "<IncludeItemSpecifics>false</IncludeItemSpecifics>"
+        "</GetItemRequest>"
+    )
+    try:
+        token = await client.get_user_token(user_id)
+        resp = await client.request(
+            "POST", "https://api.ebay.com/ws/api.dll",
+            auth="user", user_id=user_id,
+            headers={
+                "X-EBAY-API-COMPATIBILITY-LEVEL": "1155",
+                "X-EBAY-API-CALL-NAME": "GetItem",
+                "X-EBAY-API-SITEID": "77",
+                "X-EBAY-API-IAF-TOKEN": token,
+                "Content-Type": "text/xml",
+            },
+            content=body,
+        )
+        if resp.status_code != 200:
+            return None
+        root = ET.fromstring(resp.text)
+        ns = {"e": "urn:ebay:apis:eBLBaseComponents"}
+        ack = (root.findtext("e:Ack", default="", namespaces=ns) or "").lower()
+        if ack not in ("success", "warning"):
+            return None
+        # CurrentPrice = aktuelles Höchstgebot bzw. Listen-/Startpreis
+        price = root.findtext(".//e:Item/e:SellingStatus/e:CurrentPrice",
+                              default="", namespaces=ns)
+        if not price:
+            price = root.findtext(".//e:SellingStatus/e:CurrentPrice",
+                                  default="", namespaces=ns)
+        if not price:
+            return None
+        f = float(str(price).replace(",", "."))
+        if f <= 0:
+            return None
+        start = (root.findtext(".//e:Item/e:StartPrice", default="", namespaces=ns)
+                 or root.findtext(".//e:StartPrice", default="", namespaces=ns) or "")
+        bids_raw = (root.findtext(".//e:Item/e:SellingStatus/e:BidCount",
+                                  default="", namespaces=ns)
+                    or root.findtext(".//e:SellingStatus/e:BidCount",
+                                     default="", namespaces=ns) or "0")
+        try:
+            bid_count = int(float(str(bids_raw).replace(",", ".")))
+        except (TypeError, ValueError):
+            bid_count = 0
+        start_price = None
+        if start:
+            try:
+                sf = float(str(start).replace(",", "."))
+                if sf > 0:
+                    start_price = f"{sf:.2f}"
+            except (TypeError, ValueError):
+                start_price = None
+        end_raw = (root.findtext(".//e:Item/e:ListingDetails/e:EndTime",
+                                 default="", namespaces=ns)
+                   or root.findtext(".//e:ListingDetails/e:EndTime",
+                                    default="", namespaces=ns) or "")
+        ends_at = None
+        if end_raw:
+            try:
+                # eBay: 2026-08-09T18:30:00.000Z
+                ends_at = datetime.fromisoformat(
+                    end_raw.replace("Z", "+00:00")).timestamp()
+            except (TypeError, ValueError):
+                ends_at = None
+
+        def _int_field(*paths: str) -> int | None:
+            for path in paths:
+                raw = root.findtext(path, default="", namespaces=ns) or ""
+                if not raw:
+                    continue
+                try:
+                    return int(float(str(raw).replace(",", ".")))
+                except (TypeError, ValueError):
+                    continue
+            return None
+
+        watch_count = _int_field(
+            ".//e:Item/e:WatchCount", ".//e:WatchCount")
+        hit_count = _int_field(
+            ".//e:Item/e:HitCount", ".//e:HitCount",
+            ".//e:Item/e:ListingDetails/e:HitCount")
+        out = {"price": f"{f:.2f}", "bid_count": bid_count, "start_price": start_price}
+        if ends_at is not None:
+            out["ends_at"] = ends_at
+        if watch_count is not None:
+            out["watch_count"] = watch_count
+        if hit_count is not None:
+            out["hit_count"] = hit_count
+        return out
+    except Exception:  # noqa: BLE001
+        log.exception("GetItem CurrentPrice fehlgeschlagen für %s", listing_id)
+        return None
+
+
+def _ebay_amount(obj) -> Optional[str]:
+    """Amount-Objekt {value, currency} → '12.50' oder None."""
+    if not isinstance(obj, dict):
+        return None
     val = obj.get("value")
     if val is None or val == "":
         return None
@@ -389,6 +522,67 @@ def live_price_from_offer(data: dict) -> Optional[str]:
     if f <= 0:
         return None
     return f"{f:.2f}"
+
+
+def sold_price_from_line_item(li: dict) -> Optional[str]:
+    """Echter Verkaufspreis einer Order-Zeile (Fulfillment API) — nie Startgebot."""
+    if not isinstance(li, dict):
+        return None
+    # total = Zeilensumme inkl. Menge; lineItemCost = Stückpreis
+    for key in ("total", "lineItemCost", "discountedLineItemCost"):
+        got = _ebay_amount(li.get(key))
+        if got:
+            if key == "lineItemCost":
+                try:
+                    qty = int(li.get("quantity") or 1)
+                except (TypeError, ValueError):
+                    qty = 1
+                if qty > 1:
+                    try:
+                        return f"{float(got) * qty:.2f}"
+                    except (TypeError, ValueError):
+                        pass
+            return got
+    return None
+
+
+def parse_order_sold_map(orders: list) -> dict:
+    """sku / legacyItemId → {price, sold_at} aus getOrders-Antwort."""
+    out: dict = {}
+    for o in orders or []:
+        if not isinstance(o, dict):
+            continue
+        sold_at = None
+        raw_ts = o.get("creationDate") or o.get("lastModifiedDate") or ""
+        if raw_ts:
+            try:
+                sold_at = datetime.fromisoformat(
+                    str(raw_ts).replace("Z", "+00:00")).timestamp()
+            except (TypeError, ValueError):
+                sold_at = None
+        for li in o.get("lineItems") or []:
+            if not isinstance(li, dict):
+                continue
+            price = sold_price_from_line_item(li)
+            if not price:
+                continue
+            info = {"price": price, "sold_at": sold_at}
+            for key in (li.get("sku"), str(li.get("legacyItemId") or "")):
+                if key:
+                    # Mehrere Treffer: neueren Order-Zeitstempel behalten
+                    prev = out.get(key)
+                    if (not prev
+                            or (sold_at and (prev.get("sold_at") or 0) < sold_at)
+                            or (sold_at is None and not prev)):
+                        out[key] = info
+    return out
+
+
+
+async def live_auction_bid(client: EbayClient, listing_id: str, user_id: int) -> Optional[str]:
+    """Aktuelles Auktionsgebot — Kurzform von live_auction_state()['price']."""
+    state = await live_auction_state(client, listing_id, user_id)
+    return state["price"] if state else None
 
 
 def best_offer_enabled_from_offer(data: dict) -> bool:

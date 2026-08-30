@@ -157,7 +157,7 @@ a { color: var(--blue-soft); }
   will-change: transform;
 }
 
-/* SR-Signet als Lichtprägung in der Wand: das Monogramm-PNG dient als
+/* Chrome-Wordmark als Lichtprägung in der Wand — nie SR-Monogramm.
    Alpha-Maske, gefüllt mit tiefem Blau. Alle paar Sekunden wandert ein
    schmaler Lichtschein durch die Konturen — wie Studiolicht auf Prägung.
    Zentrierung über margin, nicht transform: transform gehört dem Parallax. */
@@ -166,8 +166,8 @@ a { color: var(--blue-soft); }
   width: 150vmin; height: 150vmin;
   top: 50%; right: -52vmin;
   margin-top: -78vmin;
-  -webkit-mask: url("assets/monogram-white.png") center / contain no-repeat;
-  mask: url("assets/monogram-white.png") center / contain no-repeat;
+  -webkit-mask: url("assets/wordmark-white.png") center / contain no-repeat;
+  mask: url("assets/wordmark-white.png") center / contain no-repeat;
   background:
     linear-gradient(115deg,
       transparent 32%,
@@ -541,7 +541,7 @@ a { color: var(--blue-soft); }
   pointer-events: none;
 }
 .final-mark {
-  width: 60px; height: 60px;
+  width: 140px; height: auto;
   margin-bottom: 26px;
   opacity: .9;
 }

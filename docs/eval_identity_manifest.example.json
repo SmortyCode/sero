@@ -1,0 +1,11 @@
+[
+  {
+    "id": "card-missing-number",
+    "expect_pricing_ready": false,
+    "analysis": {
+      "product_kind": "trading_card",
+      "card_info": {"name": "Pikachu", "set": "Base", "language": "de"}
+    },
+    "notes": "Foto lokal halten — nicht committen"
+  }
+]

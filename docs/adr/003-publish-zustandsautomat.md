@@ -1,6 +1,6 @@
 # ADR-003: Publish als Zustandsautomat mit atomarem Claim
 
-Status: Stufe 1 umgesetzt 07.08.2026; Stufe 2 offen
+Status: Stufe 1 umgesetzt 07.08.2026; Stufe 2 umgesetzt 08.08.2026
 
 ## Kontext
 
@@ -11,27 +11,31 @@ zwei parallele Läufe, deren `published`-Check nicht atomar war.
 
 ## Entscheidung
 
-**Stufe 1 (umgesetzt):** Ein atomarer Status-Claim in SQLite entscheidet,
-wer laufen darf. `Store.claim_draft(id, "publishing", verboten=(…))` ist ein
-einzelnes UPDATE mit Status-Prüfung im WHERE — genau ein Gewinner, egal wie
-viele Tasks starten. Der Lauf hält den Claim über alle Zwischenspeicherungen
-(lokaler Status wird mitgezogen) und gibt ihn im `finally` frei, außer ein
-Endzustand (`published`, `dry_run_done`) wurde erreicht.
-eBay-seitig sichern SKU-Suche (`create_offer` bei Timeout) und
-Offer-Nachfrage (`publish_offer` bei Timeout) gegen Doppel-Anlage.
+**Stufe 1:** Atomarer Status-Claim in SQLite
+(`Store.claim_draft(..., "publishing", verboten=(…))`). Genau ein Gewinner.
 
-**Stufe 2 (offen):** Vollständiger Zustandsautomat
-`draft → ready_for_review → publishing → published | failed | publish_uncertain`
-mit `publish_uncertain` für den Fall „Timeout UND Nachfrage bei eBay
-gescheitert" — heute endet das als `failed` mit Retry-Hinweis, was im
-äußersten Randfall (eBay hat publiziert, antwortet aber zweimal nicht) zu
-einem Doppel führen könnte. Außerdem: Idempotency-Key pro Publish-Absicht,
-damit auch ein App-Neustart mitten im Lauf kein zweites Listing erzeugen kann.
+**Stufe 2 (08.08.2026):** Gemeinsamer Publish-Kern in `web/publish.py`:
+
+- Tabelle `publish_intents` mit Intent-ID, Draft, Account, SKU, Zustand,
+  Offer-/Listing-ID, Versuchen, Fehler, Fingerprint, Zeitstempeln.
+- Zustände: `ready_for_review → publishing → published | failed |
+  publish_uncertain | dry_run_done` (danach `ended`).
+- `claim_or_create_intent` + Draft-Claim: höchstens eine aktive Absicht
+  pro Draft; App und Telegram nutzen denselben Einstieg.
+- `execute_publish` + `LiveEbayAdapter` / `FakeEbay`: bei Timeout zuerst
+  eBay-Abgleich; scheitert der, wird `publish_uncertain` gesetzt — **kein**
+  automatischer Zweit-Publish.
+- `published`, `ended`, `dry_run_done`, `publish_uncertain` sind geschützt.
+- Ausnahme: `dry_run_done` → `ready` nur wenn Dry-Run **aus** ist
+  (`unlock_dry_run_for_live`), damit der bestehende Offer live published
+  werden kann — kein Auto-Publish, kein zweiter Claim bei Dry-Run an.
+- Fremde Drafts (Telegram-ID ≠ Aufrufer) werden nicht geclaimt.
+
+UI-/Telegram-Texte bleiben Adapter; Inventory/Offer-Anlage bleibt in den
+Pfad-Funktionen, der geldrelevante `publishOffer`-Schritt läuft über den Kern.
 
 ## Konsequenzen
 
-- `tests/test_publish_claim.py` schreibt den Claim fest (inkl. Quelltext-
-  Wache: Claim vor der ersten eBay-Arbeit, Release im finally).
-- Der Telegram-Pfad (`bot/main.py: run_upload`) nutzt den Claim noch NICHT —
-  dort ist Doppeltipp unwahrscheinlicher (Button verschwindet), aber bei der
-  Modularisierung denselben Claim einbauen.
+- Tests: `tests/test_publish_claim.py`, `tests/test_publish_intent.py`.
+- Quelltext-Wachen: App und Telegram rufen `claim_or_create_intent` und
+  `execute_publish` auf.

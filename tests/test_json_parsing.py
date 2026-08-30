@@ -46,6 +46,22 @@ def test_missing_required_field_raises():
         parse_listing_json(json.dumps(broken))
 
 
+def test_ohne_search_query_for_pricing_ok():
+    """Phase A: freie Pricing-Query ist kein Pflichtfeld mehr."""
+    data = {k: v for k, v in VALID.items() if k != "search_query_for_pricing"}
+    out = parse_listing_json(json.dumps(data))
+    assert out["title"] == VALID["title"]
+
+
+def test_identity_candidates_werden_gekuerzt():
+    data = dict(VALID)
+    data["identity_candidates"] = ["A" * 100, "B", ""] + [f"x{i}" for i in range(10)]
+    out = parse_listing_json(json.dumps(data))
+    assert out["identity_candidates"] is not None
+    assert len(out["identity_candidates"]) <= 8
+    assert len(out["identity_candidates"][0]) <= 80
+
+
 def test_non_object_raises():
     with pytest.raises(json.JSONDecodeError):
         parse_listing_json('["liste", "statt", "objekt"]')

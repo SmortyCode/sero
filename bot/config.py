@@ -120,5 +120,5 @@ def load_config(*, require_policies: bool = True) -> Config:
         fulfillment_policy_id=fulfillment,
         payment_policy_id=payment,
         return_policy_id=returns,
-        dry_run=os.environ.get("DRY_RUN", "true").strip().lower() != "false",
+        dry_run=os.environ.get("DRY_RUN", "false").strip().lower() != "false",
     )

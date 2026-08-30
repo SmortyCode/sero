@@ -1,0 +1,62 @@
+{
+  "note": "Feste Referenzfaelle fuer Scanner-Freistellen (Sven 08.08.2026). Dateien nicht ueberschreiben.",
+  "pad_frac_target": 0.015,
+  "pad_frac_tolerance": 0.04,
+  "refs": [
+    {
+      "id": "35a64a879d80",
+      "label": "Prismatische Entwicklungen Boosterbundle",
+      "photo": "collection_photos/35a64a879d80/00_cut.png",
+      "has_alpha": true
+    },
+    {
+      "id": "9c030ec7f846",
+      "label": "GTA III WATA 9.8",
+      "photo": "collection_photos/9c030ec7f846/edit1786197703_00.jpg",
+      "raw": "collection_photos/9c030ec7f846/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "c9ae19782791",
+      "label": "Exeggutor CGC Pristine 10",
+      "photo": "collection_photos/c9ae19782791/edit1786197715_00.jpg",
+      "raw": "collection_photos/c9ae19782791/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "fb726042ce4b",
+      "label": "Gyarados CGC Pristine 10",
+      "photo": "collection_photos/fb726042ce4b/edit1786198116_00.jpg",
+      "raw": "collection_photos/fb726042ce4b/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "850420d25072",
+      "label": "Mega Charizard X CGC 10",
+      "photo": "collection_photos/850420d25072/edit1786198103_00.jpg",
+      "raw": "collection_photos/850420d25072/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "18f01dca776b",
+      "label": "Glurak CGC 10",
+      "photo": "collection_photos/18f01dca776b/edit1786197651_00.jpg",
+      "raw": "collection_photos/18f01dca776b/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "a4c192e0a6a5",
+      "label": "Umbreon CGC Pristine 10",
+      "photo": "collection_photos/a4c192e0a6a5/edit1786197666_00.jpg",
+      "raw": "collection_photos/a4c192e0a6a5/00.jpg",
+      "has_alpha": false
+    },
+    {
+      "id": "17b27e96af84",
+      "label": "GTA Vice City WATA 9.8",
+      "photo": "collection_photos/17b27e96af84/edit1786197689_00.jpg",
+      "raw": "collection_photos/17b27e96af84/00.jpg",
+      "has_alpha": false
+    }
+  ]
+}

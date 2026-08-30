@@ -43,9 +43,22 @@ from bot.ebay.inventory import (
     withdraw_offer,
 )
 from bot.ebay.media import MediaError, upload_image
+from bot.ebay.payload import (
+    MAX_LISTING_PHOTOS,
+    policies_for_listing,
+    strip_internal_ids_from_aspects,
+    uses_inventory_api,
+)
+from bot.ebay.trading import (
+    TradingError,
+    build_add_item_xml,
+    resolve_item_location,
+)
 from bot.ebay.metadata import (
     build_condition_descriptors,
+    ensure_card_condition,
     get_condition_policy,
+    has_real_graded_info,
     resolve_condition,
 )
 from bot.ebay.taxonomy import (TaxonomyError, get_required_aspects,
@@ -198,12 +211,14 @@ def suggest_fixed_price(median: float) -> str:
 
 
 def apply_price_rule(draft: dict) -> None:
-    """Rangfolge: Nutzerpreis > Verkaufs-Vorlage > BELEGTER Marktwert >
-    eBay-Vergleichsangebote. Der Marktwert des Stücks (aus dem Preis-Katalog)
-    schlägt die Blind-Recherche der Pipeline — sonst entstehen Vorschläge weit
-    unter Wert (Svens Glurak 307,90 statt 653,02 €). Gibt es KEINE dieser
-    Quellen, bleibt der Preis leer und der Nutzer trägt ihn selbst ein
-    (ehrlich statt geraten, ADR-002)."""
+    """Rangfolge Festpreis (Phase A / ADR-002):
+    1. ausdrücklicher Nutzerpreis
+    2. bestätigter Vorlagenpreis
+    3. BELEGTER Marktwert (price_state=belegt)
+    4. sonst kein automatischer Preis
+
+    Aktive eBay-Angebote (price_research) bleiben informativ auf dem Draft,
+    werden aber NICHT mehr zum Listenpreis. Auktionsregel unverändert."""
     listing = draft.get("listing") or {}
 
     def _num(v):
@@ -215,38 +230,58 @@ def apply_price_rule(draft: dict) -> None:
     user_price = _num(listing.get("user_price"))
     tpl_price = _num(listing.get("tpl_price"))
     market = _num(listing.get("market_value"))
+    # Nur belegte Marktwerte dürfen den Listenpreis setzen (nicht spanne/Angebote).
+    state = listing.get("price_state") or listing.get("market_state")
+    if state is None:
+        src_l = (listing.get("market_source") or "").lower()
+        market_belegt = (
+            market is not None
+            and "angebot" not in src_l
+            and "spanne" not in src_l
+            and "median" not in src_l
+        )
+    else:
+        market_belegt = market is not None and state == "belegt"
 
     if draft.get("format") == "AUCTION":
-        draft["price"] = user_price or tpl_price or AUCTION_START_PRICE
-        draft["price_basis"] = ("Dein Preis" if user_price
-                                else "Verkaufs-Vorlage" if tpl_price else "Auktionsstart 1 €")
+        # 1 € nur bei ausdrücklicher Vorlage (tpl_price), nie als stiller Default
+        if user_price:
+            draft["price"], draft["price_basis"] = user_price, "Dein Preis"
+        elif tpl_price:
+            draft["price"], draft["price_basis"] = tpl_price, "Verkaufs-Vorlage"
+        elif market_belegt:
+            draft["price"] = suggest_fixed_price(float(market))
+            draft["price_basis"] = listing.get("market_source") or "Marktwert"
+        else:
+            draft["price"], draft["price_basis"] = None, None
         return
-    research = draft.get("price_research")
     if user_price:
         draft["price"], draft["price_basis"] = user_price, "Dein Preis"
     elif tpl_price:
         draft["price"], draft["price_basis"] = tpl_price, "Verkaufs-Vorlage"
-    elif market:
-        draft["price"] = suggest_fixed_price(float(market))   # parse_price liefert einen String
+    elif market_belegt:
+        draft["price"] = suggest_fixed_price(float(market))
         draft["price_basis"] = listing.get("market_source") or "Marktwert"
-    elif research:
-        draft["price"] = suggest_fixed_price(research["median"])
-        draft["price_basis"] = f"eBay-Median aus {research['count']} Angeboten"
     else:
         draft["price"], draft["price_basis"] = None, None
 
 
-def comps_verwertbar(research: dict | None) -> dict | None:
-    """Mindestbeleg-Regel: Unter 3 Vergleichsangeboten wird NICHT gerechnet —
-    lieber ehrlich kein Preisvorschlag als einer aus 1-2 Zufallstreffern.
-    (Audit P0.2: Vorher ersetzte hier eine KI-Preisspanne die dünnen Comps.
-    Preise aus dem Sprachmodell sind seit 07.08. produktweit verboten, ADR-002 —
-    ohne Belege trägt der Nutzer den Preis selbst ein.)"""
-    if not research or research.get("count", 0) < 3:
+def comps_verwertbar(research: dict | None, *, min_count: int = 3) -> dict | None:
+    """Mindestbeleg-Regel: Unter min_count Vergleichsangeboten wird NICHT gerechnet.
+    Default 3 für Sammelkarten/Katalogware (ADR-002). Alltagsprodukte dürfen
+    mit min_count=1 einen Richtwert aus dünnen Angeboten zeigen."""
+    if not research or research.get("count", 0) < min_count:
         if research:
-            log.info("Preis: zu wenige Comps (%s) -> kein Vorschlag", research.get("count"))
+            log.info("Preis: zu wenige Comps (%s, min %s) -> kein Vorschlag",
+                     research.get("count"), min_count)
         return None
     return research
+
+
+def erlaubt_ki_richtwert(item: dict | None) -> bool:
+    """Alltagsprodukte: KI-Richtwert erlaubt — siehe web.pricecharting."""
+    from web.pricecharting import erlaubt_ki_richtwert as _ok
+    return _ok(item)
 
 
 def reorder_photos(photos: list[str], main_index) -> list[str]:
@@ -546,8 +581,22 @@ async def run_pipeline(app: Application, draft_id: str) -> None:
             draft["category_name"] = None
 
         await status_msg.edit_text("⏳ Recherchiere Preise…")
-        price_research = await research_price(ebay, listing["search_query_for_pricing"])
-        draft["price_research"] = comps_verwertbar(price_research)
+        # Phase A: Query nur aus freigegebener Identity — LLM-search_query ignorieren.
+        from web.identity import resolve_pricing_query
+        _pq, _ready, _ident, _ev = resolve_pricing_query(listing, is_listing=True)
+        listing["identity_eval"] = {
+            "recognition_state": _ev.recognition_state.value,
+            "pricing_ready": _ready,
+            "blocking_reasons": [r.value for r in _ev.blocking_reasons],
+            "pricing_query": _pq,
+        }
+        if _pq:
+            price_research = await research_price(ebay, _pq)
+            draft["price_research"] = comps_verwertbar(price_research)
+        else:
+            draft["price_research"] = None
+            log.info("Preis: Identity nicht freigegeben — keine Browse-Abfrage (%s)",
+                     [r.value for r in _ev.blocking_reasons])
         draft["format"] = listing.get("format") if listing.get("format") in ("FIXED_PRICE", "AUCTION") else "FIXED_PRICE"
         try:
             draft["quantity"] = max(1, min(int(listing.get("quantity") or 1), 1000))
@@ -597,13 +646,45 @@ async def run_upload(app: Application, draft_id: str, chat_id: int) -> None:
     if not draft:
         await app.bot.send_message(chat_id, "Draft nicht mehr vorhanden.")
         return
+    # Phase B / ADR-003: gemeinsame Publish-Absicht + Claim (wie App).
+    from web.publish import (
+        LiveEbayAdapter, apply_intent_to_draft, claim_or_create_intent,
+        execute_publish, unlock_dry_run_for_live, _set_intent,
+    )
+    sperre = unlock_dry_run_for_live(store, draft_id, dry_run=dry_run)
+    if sperre == "dry_run_locked":
+        await app.bot.send_message(
+            chat_id,
+            "Dieser Entwurf ist nur im Testmodus angelegt. "
+            "Schalte den Testmodus aus (/dryrun) und tippe erneut.")
+        return
+    if sperre == "terminal":
+        await app.bot.send_message(
+            chat_id, "Dieser Entwurf ist schon live oder beendet.")
+        return
+    if sperre == "missing":
+        await app.bot.send_message(chat_id, "Draft nicht mehr vorhanden.")
+        return
+    draft = store.get_draft(draft_id) or draft
     user_id = chat_id  # privater Chat: Chat-ID == Telegram-User-ID
+    intent = claim_or_create_intent(
+        store, draft_id=draft_id, account_id=user_id,
+        sku=draft.get("sku") or "")
+    if not intent:
+        await app.bot.send_message(
+            chat_id, "Dieser Entwurf wird gerade veröffentlicht oder ist schon live.")
+        return
+    draft["status"] = "publishing"
+    store.update_draft(draft_id, draft)
     policies = store.user_policies(user_id)
     if not policies:
+        _set_intent(store, intent["id"], state="failed", last_error="no_policies")
+        store.release_draft_claim(draft_id, "ready")
         await app.bot.send_message(chat_id, "Dein eBay-Setup ist unvollständig — bitte /verbinden ausführen.")
         return
 
     listing = draft["listing"]
+    status_vorher = "ready"
     status_msg = await app.bot.send_message(chat_id, "⏳ Lade Bilder zu eBay hoch…")
     try:
         # Bereits hochgeladene EPS-URLs wiederverwenden (z.B. Retry nach Dry-Run)
@@ -635,12 +716,16 @@ async def run_upload(app: Application, draft_id: str, chat_id: int) -> None:
         allowed = [str(c["conditionId"]) for c in policy]
         item_text = " ".join([listing.get("title", ""), draft.get("caption") or "",
                               str(listing.get("aspects") or "")])
-        condition, adjusted = resolve_condition(
-            listing["condition"], allowed, item_text,
-            is_graded=bool(listing.get("graded_info")),  # Claude hat einen Slab auf den Fotos erkannt
-        )
-        if adjusted:
+        before = listing.get("condition")
+        if "2750" in allowed and "4000" in allowed:
+            condition = ensure_card_condition(listing, allowed, item_text)
+        else:
+            condition, _ = resolve_condition(
+                listing.get("condition") or "USED_VERY_GOOD", allowed, item_text,
+                is_graded=has_real_graded_info(listing.get("graded_info")),
+            )
             listing["condition"] = condition
+        if condition != before:
             draft["listing"] = listing
             store.update_draft(draft_id, draft)
             await app.bot.send_message(
@@ -657,24 +742,29 @@ async def run_upload(app: Application, draft_id: str, chat_id: int) -> None:
             return
 
         quantity = 1 if draft.get("format") == "AUCTION" else int(draft.get("quantity") or 1)
+        image_urls = (image_urls or [])[:MAX_LISTING_PHOTOS]
+        listing["aspects"] = strip_internal_ids_from_aspects(listing.get("aspects") or {})
+        draft["listing"] = listing
+        from bot.ebay.inventory import policies_fuer_titel
+        policies = policies_fuer_titel(policies_for_listing(policies, draft),
+                                       listing.get("title"))
+        adapter = LiveEbayAdapter(ebay, user_id)
+        legacy = uses_inventory_api(draft) and bool(draft.get("offer_id"))
 
-        await status_msg.edit_text("⏳ Lege Inventory Item an…")
-        await create_inventory_item(
-            ebay, sku,
-            user_id=user_id,
-            title=listing["title"],
-            description=listing["description_html"],
-            condition=listing["condition"],
-            condition_description=listing.get("condition_description"),
-            aspects=listing.get("aspects") or {},
-            image_urls=image_urls,
-            condition_descriptors=descriptors,
-            quantity=quantity,
-        )
-
-        if draft.get("offer_id"):
-            # Offer existiert schon (Dry-Run/Retry) — aktualisieren statt neu anlegen
-            await status_msg.edit_text("⏳ Aktualisiere bestehendes Offer…")
+        if legacy:
+            await status_msg.edit_text("Aktualisiere bestehendes Inventory-Angebot …")
+            await create_inventory_item(
+                ebay, sku,
+                user_id=user_id,
+                title=listing["title"],
+                description=listing["description_html"],
+                condition=listing["condition"],
+                condition_description=listing.get("condition_description"),
+                aspects=listing.get("aspects") or {},
+                image_urls=image_urls,
+                condition_descriptors=descriptors,
+                quantity=quantity,
+            )
             offer_id = draft["offer_id"]
             await update_offer(
                 ebay, policies, offer_id, sku,
@@ -688,59 +778,88 @@ async def run_upload(app: Application, draft_id: str, chat_id: int) -> None:
                 auction_days=int(draft.get("auction_days") or 7),
                 title=listing.get("title"),
             )
+            _set_intent(store, intent["id"], sku=sku, offer_id=offer_id)
+            if dry_run:
+                out = await execute_publish(store, adapter, intent["id"], dry_run=True)
+                apply_intent_to_draft(store, draft_id, out)
+                store.log_listing(sku, listing["title"], draft["price"], offer_id, None,
+                                  dry_run=True, telegram_id=user_id)
+                await status_msg.edit_text(
+                    "Testlauf: Inventory-Angebot liegt bei eBay, noch nicht veröffentlicht.\n"
+                    "Zum echten Veröffentlichen: /dryrun off, dann erneut bestätigen."
+                )
+                return
+            await status_msg.edit_text("Veröffentliche Listing …")
+            out = await execute_publish(store, adapter, intent["id"], dry_run=False)
         else:
-            await status_msg.edit_text("⏳ Erstelle Offer…")
-            offer_id = await create_offer(
-                ebay, policies, sku,
-                user_id=user_id,
+            draft["listing_api"] = "trading"
+            store.update_draft(draft_id, draft)
+            await status_msg.edit_text("Stelle Angebot bei eBay ein …")
+            location, country, postal_code = await resolve_item_location(
+                ebay, user_id, policies
+            )
+            xml_and_call = build_add_item_xml(
+                title=listing["title"],
+                description_html=listing.get("description_html") or "",
                 category_id=draft["category_id"],
                 price_eur=draft["price"],
-                listing_description=listing["description_html"],
+                condition=listing.get("condition") or "USED_VERY_GOOD",
+                aspects=listing.get("aspects") or {},
+                image_urls=image_urls,
+                policies=policies,
                 listing_format=draft.get("format", "FIXED_PRICE"),
                 quantity=quantity,
                 best_offer=draft.get("best_offer"),
                 auction_days=int(draft.get("auction_days") or 7),
-                title=listing.get("title"),
+                location=location,
+                country=country,
+                postal_code=postal_code,
             )
-            draft["offer_id"] = offer_id
-            store.update_draft(draft_id, draft)
+            _set_intent(store, intent["id"], sku=sku, offer_id=None)
+            tp = {"xml_and_call": xml_and_call, "channel": "trading"}
+            if dry_run:
+                out = await execute_publish(
+                    store, adapter, intent["id"], dry_run=True, trading_payload=tp)
+                apply_intent_to_draft(store, draft_id, out)
+                store.log_listing(sku, listing["title"], draft["price"], None, None,
+                                  dry_run=True, telegram_id=user_id)
+                await status_msg.edit_text(
+                    "Testlauf: Payload geprüft, nicht bei eBay veröffentlicht.\n"
+                    "Zum echten Veröffentlichen: /dryrun off, dann erneut bestätigen."
+                )
+                return
+            await status_msg.edit_text("Veröffentliche Listing …")
+            out = await execute_publish(
+                store, adapter, intent["id"], dry_run=False, trading_payload=tp)
 
-        if dry_run:
-            payload_summary = json.dumps(
-                {"sku": sku, "offerId": offer_id, "title": listing["title"],
-                 "price": draft["price"], "categoryId": draft["category_id"],
-                 "imageUrls": image_urls},
-                ensure_ascii=False, indent=2,
-            )
-            log.info("DRY_RUN — publishOffer übersprungen. Payload:\n%s", payload_summary)
-            store.log_listing(sku, listing["title"], draft["price"], offer_id, None,
-                              dry_run=True, telegram_id=user_id)
-            draft["status"] = "dry_run_done"
-            store.update_draft(draft_id, draft)
+        apply_intent_to_draft(store, draft_id, out)
+        draft = store.get_draft(draft_id) or draft
+        if out.get("state") == "published":
+            listing_id = out.get("listing_id")
+            if draft.get("listing_api") != "inventory":
+                draft["listing_api"] = "trading"
+                store.update_draft(draft_id, draft)
+            store.log_listing(sku, listing["title"], draft["price"],
+                              draft.get("offer_id"), listing_id,
+                              dry_run=False, telegram_id=user_id)
             await status_msg.edit_text(
-                f"🧪 DRY RUN: Alles bis auf publishOffer erledigt.\n"
-                f"SKU: {sku}\nOffer: {offer_id}\n"
-                f"Zum echten Veröffentlichen: /dryrun off, dann ✅ erneut drücken."
+                f"✅ <b>Listing ist live!</b>\n{html.escape(listing['title'])}\n"
+                f"💶 {draft['price']} €\n{draft.get('item_url')}\n\n"
+                "Du kannst das Listing jederzeit bearbeiten — die Änderungen gehen sofort live.",
+                parse_mode="HTML", reply_markup=build_published_actions(draft),
             )
-            return
+        elif out.get("state") == "publish_uncertain":
+            await status_msg.edit_text(
+                "⚠️ eBay-Antwort unklar. Das Listing wurde nicht automatisch erneut "
+                "gestartet. Bitte prüfe auf eBay, ob es schon live ist."
+            )
+        else:
+            await status_msg.edit_text(
+                f"❌ Veröffentlichen fehlgeschlagen ({out.get('state')}: "
+                f"{out.get('last_error') or 'unbekannt'})."
+            )
 
-        await status_msg.edit_text("⏳ Veröffentliche Listing…")
-        listing_id = await publish_offer(ebay, offer_id, user_id)
-        store.log_listing(sku, listing["title"], draft["price"], offer_id, listing_id,
-                          dry_run=False, telegram_id=user_id)
-        # Draft + Fotos BEHALTEN: ermöglicht nachträgliches Bearbeiten über Telegram
-        draft["status"] = "published"
-        draft["listing_id"] = listing_id
-        draft["item_url"] = f"https://www.ebay.de/itm/{listing_id}"
-        store.update_draft(draft_id, draft)
-        await status_msg.edit_text(
-            f"✅ <b>Listing ist live!</b>\n{html.escape(listing['title'])}\n"
-            f"💶 {draft['price']} €\n{draft['item_url']}\n\n"
-            "Du kannst das Listing jederzeit bearbeiten — die Änderungen gehen sofort live.",
-            parse_mode="HTML", reply_markup=build_published_actions(draft),
-        )
-
-    except (MediaError, InventoryError, EbayAuthError) as e:
+    except (MediaError, InventoryError, TradingError, EbayAuthError) as e:
         log.exception("Upload-Fehler für Draft %s", draft_id)
         # Sicherheitsnetz "nur einen Wert": betroffenes Merkmal aus der Meldung
         # parsen und selbst kürzen, falls die Taxonomy es nicht als SINGLE meldete
@@ -763,6 +882,8 @@ async def run_upload(app: Application, draft_id: str, chat_id: int) -> None:
     except Exception as e:  # noqa: BLE001
         log.exception("Unerwarteter Upload-Fehler für Draft %s", draft_id)
         await status_msg.edit_text(f"❌ Unerwarteter Fehler: {type(e).__name__}: {e}")
+    finally:
+        store.release_draft_claim(draft_id, status_vorher)
 
 
 # ---------------------------------------------------------------- Onboarding
@@ -774,8 +895,8 @@ async def complete_ebay_connection(app: Application, chat_id: int, code: str) ->
     status = await app.bot.send_message(chat_id, "⏳ Verbinde dein eBay-Konto…")
     try:
         await ebay.exchange_code(code, chat_id)
-        # Neuer Consent enthält sell.fulfillment — 403-Marke vom Sales-Sync weg.
-        store.kv_set(f"ebay_fulfillment_fehlt_{chat_id}", None)
+        # Flag ebay_fulfillment_fehlt_* bleibt, bis Orders-API wirklich klappt
+        # (sync_sales_status). Consent allein beweist den Scope nicht live.
         await continue_account_setup(app, chat_id, status)
     except (EbayAuthError, AccountSetupError) as e:
         log.exception("Onboarding-Fehler für %s", chat_id)
@@ -1447,9 +1568,14 @@ async def run_update(app: Application, draft_id: str, chat_id: int) -> None:
         allowed = [str(c["conditionId"]) for c in policy]
         item_text = " ".join([listing.get("title", ""), draft.get("caption") or "",
                               str(listing.get("aspects") or "")])
-        condition, _ = resolve_condition(listing["condition"], allowed, item_text,
-                                         is_graded=bool(listing.get("graded_info")))
-        listing["condition"] = condition
+        if "2750" in allowed and "4000" in allowed:
+            condition = ensure_card_condition(listing, allowed, item_text)
+        else:
+            condition, _ = resolve_condition(
+                listing.get("condition") or "USED_VERY_GOOD", allowed, item_text,
+                is_graded=has_real_graded_info(listing.get("graded_info")),
+            )
+            listing["condition"] = condition
         descriptors, frage = build_condition_descriptors(condition, policy, listing, item_text)
         if frage:
             _ctx(app).setdefault("pending_edits", {})[chat_id] = (draft_id, "graded")
@@ -1481,7 +1607,7 @@ async def run_update(app: Application, draft_id: str, chat_id: int) -> None:
             f"💶 {draft['price']} €\n{draft.get('item_url', '')}",
             parse_mode="HTML", reply_markup=build_published_actions(draft),
         )
-    except (MediaError, InventoryError, EbayAuthError) as e:
+    except (MediaError, InventoryError, TradingError, EbayAuthError) as e:
         log.exception("Update-Fehler für Listing %s", draft_id)
         await status.edit_text(
             f"❌ eBay-Fehler beim Aktualisieren:\n{e}\n\n"

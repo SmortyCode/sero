@@ -141,3 +141,44 @@ async def create_location(client: EbayClient, user_id: int, location_key: str,
             f"Versandstandort konnte nicht angelegt werden: {translate_ebay_error(resp.text, resp.status_code)}"
         )
     log.info("Location %s für Nutzer %s angelegt", location_key, user_id)
+
+
+async def list_business_policies(client: EbayClient, user_id: int) -> dict:
+    """Vorhandene Business Policies des Kontos auf EBAY_DE — zum Auswaehlen."""
+    out = {"fulfillment": [], "payment": [], "return": []}
+    mapping = [
+        ("fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId", "fulfillment"),
+        ("payment_policy", "paymentPolicies", "paymentPolicyId", "payment"),
+        ("return_policy", "returnPolicies", "returnPolicyId", "return"),
+    ]
+    for endpoint, list_key, id_key, bucket in mapping:
+        resp = await client.request(
+            "GET", f"{EBAY_API}/sell/account/v1/{endpoint}",
+            auth="user", user_id=user_id, params={"marketplace_id": "EBAY_DE"},
+        )
+        if resp.status_code != 200:
+            continue
+        for p in resp.json().get(list_key) or []:
+            mid = (p.get("marketplaceId") or "").upper()
+            if mid and mid != "EBAY_DE":
+                continue
+            row = {
+                "id": p.get(id_key),
+                "name": p.get("name") or p.get(id_key),
+                "marketplaceId": p.get("marketplaceId") or "EBAY_DE",
+            }
+            if bucket == "fulfillment":
+                from bot.ebay.payload import fulfillment_policy_view
+                view = fulfillment_policy_view(p)
+                row.update({
+                    "handling": view.get("handling"),
+                    "cost": view.get("cost"),
+                    "service": view.get("service"),
+                    "international": view.get("international"),
+                    "pickup": view.get("pickup"),
+                })
+            if bucket == "return":
+                row["returnsAccepted"] = bool(p.get("returnsAccepted"))
+            out[bucket].append(row)
+    return out
+

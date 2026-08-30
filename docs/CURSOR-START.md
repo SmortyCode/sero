@@ -38,9 +38,10 @@ offenen Fragen. Fang noch nicht an zu programmieren.
    Zahl, die nicht belegt ist. Das ist die wichtigste Regel im Projekt und
    steht in Tests festgeschrieben. Beim Listen kann ich den Preis manuell
    eintippen.
-2. **Nichts geht ohne meine Freigabe live** — und Achtung: Der Testmodus ist
-   aktuell aus. Jedes Veröffentlichen geht wirklich zu eBay und kostet mich
-   Gebühren. Beim Testen also nie ein echtes Listing erzeugen.
+2. **Nichts geht ohne meine Freigabe live.** Der Testmodus ist aus der App
+   entfernt. Jedes Veröffentlichen geht wirklich zu eBay und kostet mich
+   Gebühren. Beim Testen also nie ein echtes Listing erzeugen. Telegram
+   `/dryrun` bleibt als Notfall im Bot.
 3. **Es laufen zwei Dauerdienste** (`com.listo.web` auf Port 3000 und
    `com.listo.bot` für Telegram). Mein Handy hängt übers WLAN am Web-Dienst.
    Starte dort bitte nie einen eigenen Server und stopp die Dienste nicht —

@@ -54,6 +54,18 @@ CERT_QUESTION = (
 )
 
 
+def has_real_graded_info(info: dict | None) -> bool:
+    """Echte Graded-Angaben: Bewerter UND Note. Leere Dicts/Nullen zählen nicht.
+
+    Sonst landet eine Rohkarte fälschlich bei Zustand Graded (LIKE_NEW) und
+    eBay verlangt Zertifikat — obwohl nie ein Slab da war."""
+    if not info or not isinstance(info, dict):
+        return False
+    grader = str(info.get("grader") or "").strip()
+    grade = str(info.get("grade") or "").strip()
+    return bool(grader and grade)
+
+
 async def get_condition_policy(client: EbayClient, store: Store, category_id: str) -> list[dict]:
     """Vollständige Condition-Policy einer Kategorie (Conditions + Descriptors), gecacht."""
     cache_key = f"condition_policy_{category_id}"
@@ -164,9 +176,9 @@ def resolve_condition(intended_enum: str, allowed_ids: list[str], item_text: str
                       is_graded: bool = False) -> tuple[str, bool]:
     """(gültiger Condition-Enum, wurde_angepasst).
 
-    Karten-Kategorien (Graded/Ungraded): graded nur, wenn Claude einen Slab erkannt
-    hat (graded_info) ODER Graded-Marker im Verkäufertext stehen — lose Karten sind
-    ungraded, egal wie neuwertig. Sonst: numerisch nächstgelegener erlaubter Zustand.
+    Karten-Kategorien (Graded/Ungraded): graded nur, wenn echte graded_info
+    (Bewerter+Note) vorliegt ODER Graded-Marker im Verkäufertext stehen —
+    lose Karten sind ungraded. Sonst: numerisch nächstgelegener erlaubter Zustand.
     """
     intended_id = ENUM_TO_CONDITION_ID.get(intended_enum, "3000")
 
@@ -174,7 +186,7 @@ def resolve_condition(intended_enum: str, allowed_ids: list[str], item_text: str
         # Karten-Kategorie: die Metadata-API listet teils weitere Zustände (z.B. 3000),
         # die publishOffer dann trotzdem mit 25059 ablehnt — real gültig sind NUR
         # Graded (2750) und Ungraded (4000). Live beobachtet am 11.06.2026.
-        graded = is_graded or bool(GRADED_MARKERS.search(item_text or ""))
+        graded = bool(is_graded) or bool(GRADED_MARKERS.search(item_text or ""))
         pick = "2750" if graded else "4000"
         if intended_id == pick:
             return intended_enum, False
@@ -188,3 +200,49 @@ def resolve_condition(intended_enum: str, allowed_ids: list[str], item_text: str
         return intended_enum, False  # nichts Mappbares — Original behalten, eBay meldet dann konkret
     pick = min(known, key=lambda c: abs(int(c) - int(intended_id)))
     return CONDITION_ID_TO_ENUM[pick], True
+
+
+def ensure_card_condition(listing: dict, allowed_ids: list[str], item_text: str) -> str:
+    """Karten: Zustand setzen. Graded nur mit echten Angaben oder klarem Marker.
+
+    Verhindert, dass Rohkarten wegen leerem graded_info oder UI-Label
+    „Neuwertig“ (= LIKE_NEW) in die Graded-Pflichtfelder rutschen."""
+    info = listing.get("graded_info")
+    real = has_real_graded_info(info)
+    if not real:
+        listing.pop("graded_info", None)
+    intended = normalize_condition_input(listing.get("condition") or "USED_VERY_GOOD")
+    condition, _ = resolve_condition(
+        intended, allowed_ids, item_text, is_graded=real)
+    # LIKE_NEW ohne Slab-Daten und ohne PSA/CGC-Marker → Ungraded
+    if (condition == "LIKE_NEW" and not real
+            and not GRADED_MARKERS.search(item_text or "")):
+        condition = "USED_VERY_GOOD"
+    listing["condition"] = condition
+    return condition
+
+
+_LABEL_TO_ENUM = {
+    "neu": "NEW",
+    "neuwertig": "LIKE_NEW",
+    "professionell bewertet (graded)": "LIKE_NEW",
+    "graded": "LIKE_NEW",
+    "nicht bewertet (ungraded)": "USED_VERY_GOOD",
+    "ungraded": "USED_VERY_GOOD",
+    "gebraucht — sehr gut": "USED_VERY_GOOD",
+    "gebraucht — gut": "USED_GOOD",
+    "gebraucht — exzellent": "USED_EXCELLENT",
+    "gebraucht — akzeptabel": "USED_ACCEPTABLE",
+}
+
+
+def normalize_condition_input(value: str) -> str:
+    """UI-Freitext oder Enum → bekannter Condition-Enum."""
+    v = (value or "").strip()
+    if not v:
+        return "USED_VERY_GOOD"
+    if v in CONDITION_ID_TO_ENUM.values():
+        return v
+    if v in ENUM_TO_CONDITION_ID:
+        return CONDITION_ID_TO_ENUM[v]
+    return _LABEL_TO_ENUM.get(v.lower(), v)

@@ -50,12 +50,36 @@ async def suggest_category(client: EbayClient, store: Store, query: str) -> Opti
     return {"categoryId": cat["categoryId"], "categoryName": cat["categoryName"]}
 
 
+
+async def suggest_categories(client: EbayClient, store: Store, query: str, limit: int = 8) -> list[dict]:
+    """Mehrere Kategorievorschläge für die manuelle Korrektur im Review."""
+    q = (query or "").strip()
+    if len(q) < 2:
+        return []
+    tree_id = await get_category_tree_id(client, store)
+    resp = await client.request(
+        "GET", f"{EBAY_API}/commerce/taxonomy/v1/category_tree/{tree_id}/get_category_suggestions",
+        auth="app", params={"q": q},
+    )
+    if resp.status_code != 200:
+        raise TaxonomyError(f"getCategorySuggestions fehlgeschlagen ({resp.status_code}): {resp.text[:300]}")
+    out = []
+    for s in (resp.json().get("categorySuggestions") or [])[:limit]:
+        cat = s.get("category") or {}
+        cid = cat.get("categoryId")
+        name = cat.get("categoryName")
+        if cid and name:
+            out.append({"categoryId": str(cid), "categoryName": name})
+    return out
+
+
 async def get_required_aspects(client: EbayClient, store: Store, category_id: str) -> list[str]:
     """Namen der Pflicht-Aspects (aspectRequired: true) einer Kategorie, gecacht pro categoryId."""
     cached = store.get_aspects(category_id)
     # nur nutzen, wenn auch der Single-Value-Cache da ist (kam später dazu)
     if cached is not None and store.get_aspects(f"{category_id}:single") is not None:
-        return cached
+        from bot.ebay.payload import sanitize_required_aspects
+        return sanitize_required_aspects(cached)
     tree_id = await get_category_tree_id(client, store)
     resp = await client.request(
         "GET", f"{EBAY_API}/commerce/taxonomy/v1/category_tree/{tree_id}/get_item_aspects_for_category",
@@ -69,6 +93,8 @@ async def get_required_aspects(client: EbayClient, store: Store, category_id: st
         for a in aspects
         if a.get("aspectConstraint", {}).get("aspectRequired")
     ]
+    from bot.ebay.payload import sanitize_required_aspects
+    required = sanitize_required_aspects(required)
     # Nebenbei cachen, welche Merkmale nur EINEN Wert erlauben (Cardinality SINGLE) —
     # sonst lehnt eBay mit 25002 ab ("Verlag darf nur einen Wert enthalten").
     single = [

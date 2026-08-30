@@ -11,10 +11,21 @@ ck "Auth-Gate dashboard (401)"   "$(curl -s -o /dev/null -w '%{http_code}' local
 ck "Auth-Gate delete (401)"      "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:3000/api/app/account/delete)" "401"
 ck "Security-Header nosniff"     "$(curl -sI localhost:3000/app/ | grep -ci 'x-content-type-options')" "1"
 
-./.venv/bin/python -c "import web.server, web.catalog, web.sold, web.cardscan, web.pricecharting, web.ebay_insights" 2>/dev/null \
-  && echo "  ✓ Python-Module importieren" || { echo "  ✗ Python-Import kaputt"; FAIL=1; }
+./.venv/bin/python -c "
+import os, tempfile
+from pathlib import Path
+td = tempfile.mkdtemp()
+os.environ['SERO_DB'] = str(Path(td) / 'smoke.db')
+os.environ.setdefault('SERO_COL_DIR', str(Path(td) / 'fotos'))
+import web.server, web.catalog, web.sold, web.cardscan, web.pricecharting, web.ebay_insights
+" 2>/dev/null \
+  && echo "  ✓ Python-Module importieren (Temp-DB)" || { echo "  ✗ Python-Import kaputt"; FAIL=1; }
 node --check /Users/smorty/ebay-bot/frontend/sero.js 2>/dev/null \
   && echo "  ✓ sero.js Syntax" || { echo "  ✗ sero.js Syntax"; FAIL=1; }
+node --check /Users/smorty/ebay-bot/frontend/sero-mobile.js 2>/dev/null \
+  && echo "  ✓ sero-mobile.js Syntax" || { echo "  ✗ sero-mobile.js Syntax"; FAIL=1; }
+node --check /Users/smorty/ebay-bot/frontend/sero-detail.js 2>/dev/null \
+  && echo "  ✓ sero-detail.js Syntax" || { echo "  ✗ sero-detail.js Syntax"; FAIL=1; }
 
 CSSV=$(grep -o 'sero\.css?v=[0-9]*' /Users/smorty/ebay-bot/frontend/index.html | grep -o '[0-9]*')
 JSV=$(grep -o 'sero\.js?v=[0-9]*' /Users/smorty/ebay-bot/frontend/index.html | grep -o '[0-9]*')
@@ -33,7 +44,9 @@ BK=$(ls backups/data-*.db 2>/dev/null | wc -l | tr -d ' ')
 # hat — sie können nur schützen, wenn sie bei jeder Änderung mitlaufen.
 # Exitcode statt Wortsuche: „1 xfailed" (erwarteter, dokumentierter Fehlschlag)
 # enthält das Wort „failed" und färbte den Smoke fälschlich rot (03.08.).
-PT_ALL=$(./.venv/bin/python -m pytest tests/ -q -p no:cacheprovider 2>&1); RC=$?
+# NUMBA_DISABLE_JIT: verhindert flaky Cache-Locator-Fails in test_render
+# (pymatting/numba) bei parallelem Suite-Lauf.
+PT_ALL=$(NUMBA_DISABLE_JIT=1 ./.venv/bin/python -m pytest tests/ -q -p no:cacheprovider 2>&1); RC=$?
 PT=$(printf '%s\n' "$PT_ALL" | tail -1)
 if [ $RC -eq 0 ]; then
   echo "  ✓ Unit-Tests ($PT)"

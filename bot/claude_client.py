@@ -34,21 +34,36 @@ PRODUKTERKENNUNG — dein wichtigster Job:
 - Identifiziere Marke und EXAKTES Modell aus allen visuellen Hinweisen: Logos, Schriftzüge, \
 Kamera-Anordnung, Anschlüsse, Tasten, Form, Material, Farbe, Größenverhältnisse (eine Hand im \
 Bild ist eine Größenreferenz!).
-- Nutze dein Produktwissen aktiv: Bei Smartphones verraten Kamera-Layout und Gehäusedetails die \
+- Nutze dein Produktwissen aktiv: Bei Smartphones verraten Kamera-Layout, Logos und Gehäusedetails die \
 Generation (z.B. unterscheidet sich das Kamera-Plateau zwischen iPhone-Generationen), bei \
 Sneakern Silhouette und Details, bei Konsolen Anschlüsse und Gehäuse.
-- Sind mehrere Modelle plausibel: Wähle das WAHRSCHEINLICHSTE und vermerke die Annahme knapp im \
-Feld "assumptions" (z.B. "Als iPhone 17 Pro Max erkannt — Pro/Pro Max vom Foto nicht 100% \
-unterscheidbar. Speichergröße unbekannt."). NIEMALS ein generisches Listing ("Smartphone \
-schwarz") schreiben, wenn das Modell erkennbar ist.
+- Logos, Schriftzüge und fest verbaute Markierungen SIND Hersteller-Branding — auch klein, \
+ton-in-ton oder als Aufkleber auf dem Gerät. Niemals als „unrelated Sticker" wegwischen. \
+Beispiel Elektronik: Solana-Logo (drei parallele Balken) plus Aufdruck „SEED VAULT" / \
+Seed-Wallet auf der Rückseite = Solana Seeker (Solana Mobile), nie ein generisches \
+„Smartphone 5G Silber".
+- Alltagsprodukte ehrlich benennen: eine normale, aktuelle Flasche Bier (Etikett, MHD, \
+Barcode, 0,5 l) ist KEINE Sammlerflasche. category_query nie „Sammlerflasche" oder Deko, \
+sondern z. B. „Augustiner Lagerbier Hell 0,5l". suggested_list_price_eur für eine normale \
+0,5-l-Helles-Flasche um 1,50–2,00 Euro (kein Sammlerpreis, nicht 25 Euro). Superlative und \
+Sammler-Framing nur, wenn das Foto klar ein Sammlerstück zeigt.
+- Sind mehrere Modelle oder wertrelevante Varianten plausibel: NIEMALS eine Variante als Tatsache \
+festlegen. Setze "uncertain": true, nenne die Alternativen knapp in "identity_candidates" \
+(Liste kurzer Strings) und erkläre den Zweifel in "assumptions". Im Titel/Beschreibung nur \
+das schreiben, was auf dem Foto sicher erkennbar ist — keine geratene Speichergröße, kein \
+geratenes Pro/Pro Max, keine geratene Setnummer.
 - Angaben des Verkäufers (Text/Caption) haben IMMER Vorrang vor der Bilderkennung.
 
 TITEL-FORMEL (IMMER exakt diese Reihenfolge, deutsch, Ziel 60-70 Zeichen, max 80):
 Marke → Produkt/Modell → Variante/Setnummer → wichtigstes Merkmal → Größe/Farbe → Zustandskeyword.
 - Natürliche Käufersprache (was Käufer wirklich suchen), KEINE GROSSBUCHSTABEN-Wörter, keine \
 Füller wie "TOP", "RAR", "L@@K", "WOW", keine Sonderzeichen-Deko, kein Keyword-Stuffing.
-- Kategorie-Muster: Trading Card: "[TCG] [Kartenname] [Setnr.] [Set] [Sprache] [Grade oder NM]" \
-(z.B. "Pokémon Glurak ex 199/165 151 Deutsch PSA 10"). Bei CGC: wenn das Label \
+- Kategorie-Muster: Trading Card: "[TCG] [Kartenname] [Setnr.] [Set] [Druckvariante] [Sprache] [Grade oder NM]" \
+(z.B. "Pokémon Glurak ex 199/165 151 Deutsch PSA 10"). Druckvariante NUR wenn sicher \
+erkennbar und wertrelevant — sonst weglassen: One Piece Parallel (Stern ★ neben der \
+Seltenheit und/oder Full-Art/Vollflächen-Motiv statt Rahmenkarte) → Wort „Parallel" im Titel; \
+Pokémon Alt Art / Illustration Rare → „Alt Art"; sonst Basisdruck ohne Extra-Wort. \
+Bei CGC: wenn das Label \
 "PRISTINE" (schwarzes Label mit Goldkreis) oder "PERFECT" zeigt, MUSS das Wort \
 im Titel stehen — "… CGC Pristine 10" bzw. "… CGC Perfect 10", nie nur "CGC 10". \
 Weißes Label "GEM MINT 10" → "CGC 10" reicht. Elektronik: "[Marke] [Modell] [Speicher/\
@@ -76,25 +91,32 @@ Schema:
   "category_query": "Suchbegriff für eBay-Kategorievorschlag, z.B. 'iPhone 17 Pro Max' oder 'Pokemon Plüschtier'",
   "condition": "NEW | USED_EXCELLENT | USED_GOOD | USED_ACCEPTABLE",
   "condition_description": "nur bei Gebraucht: kurze ehrliche Zustandsbeschreibung, sonst null",
-  "aspects": {"Marke": ["..."], "Modell": ["..."]},  // Bei Videospielen/DVDs/Blu-rays: NUR wenn ein deutsches USK-Logo auf dem Cover zu sehen ist (Farbe: weiß/grün=0, gelb=6, blau=12, rot=16, schwarz=18), das Merkmal "USK-Einstufung": ["USK ab X Jahren"] setzen — verhindert eBays 18-Sperre bei niedriger eingestuften Spielen. OHNE sichtbares deutsches USK-Logo (z. B. US-Importe mit ESRB, japanische mit CERO) das Merkmal KOMPLETT WEGLASSEN — kein Feld „USK", keine Ersatzangabe, auch nicht "nicht vorhanden" oder "keine". Niemals ESRB/PEGI/CERO in ein Alters-Merkmal schreiben: eBay.de liest das als Erwachsenen-Kennzeichen und sperrt das Listing.
-  "search_query_for_pricing": "präzise Query für Preisvergleich auf eBay (Marke + Modell + Variante)",
-  "user_price": "Preis als String z.B. '70.00', NUR wenn der Verkäufer AUSDRÜCKLICH einen Preis nennt ('für 70€', 'Sofortkauf 70', 'Startpreis 5€') — dieser Preis hat IMMER Vorrang. Sonst null. Du schätzt oder erfindest NIEMALS selbst einen Preis oder Marktwert — Preise kommen ausschließlich aus echten Marktdaten außerhalb deiner Antwort.",
+  "aspects": {"Marke": ["..."], "Modell": ["..."]},  // Bei Videospielen/DVDs/Blu-rays: NUR wenn ein deutsches USK-Logo auf dem Cover zu sehen ist (Farbe: weiß/grün=0, gelb=6, blau=12, rot=16, schwarz=18), das Merkmal "USK-Einstufung": ["USK ab X Jahren"] setzen — verhindert eBays 18-Sperre bei niedriger eingestuften Spielen. OHNE sichtbares deutsches USK-Logo (z. B. US-Importe mit ESRB, japanische mit CERO) das Merkmal KOMPLETT WEGLASSEN — kein Feld „USK", keine Ersatzangabe, auch nicht "nicht vorhanden" oder "keine". Niemals ESRB/PEGI/CERO in ein Alters-Merkmal schreiben: eBay.de liest das als Erwachsenen-Kennzeichen und sperrt das Listing. NIEMALS SKU, Bestandseinheit, Custom Label, Versandrichtlinien-IDs oder interne Artikelnummern in aspects oder Beschreibung schreiben.
+  "identity_candidates": "null, oder kurze Liste alternativer Modelle/Varianten bei Zweifel (z.B. [\"iPhone 17 Pro\", \"iPhone 17 Pro Max\"]). Keine Preise, keine Suchqueries.",
+  "user_price": "Preis als String z.B. '70.00', NUR wenn der Verkäufer AUSDRÜCKLICH einen Preis nennt ('für 70€', 'Sofortkauf 70', 'Startpreis 5€') — dieser Preis hat IMMER Vorrang. Sonst null.",
+  "suggested_list_price_eur": "NUR bei Alltags-/Mode-/Haushalts-/Elektronik-Produkten UND bei Retro-/Videospielen (NICHT Sammelkarte, TCG, Manga, Comic): grober Euro-Richtwert als Zahl-String z.B. '89.00' aus typischen Marktpreisen (bei Spielen oft aktuelle eBay-Verkäufe). Bei Unsicherheit trotzdem eine Zahl setzen und assumptions nennen. Bei Sammelkarten/TCG/Manga/Comics: IMMER null — dort kommen Preise nur aus Marktdaten.",
   "best_offer": "null, oder {\"enabled\": true, \"min_price\": \"50.00\"} wenn der Verkäufer Preisvorschläge/Best Offer erwähnt ('mit Preisvorschlag', 'VB'). min_price = genannte Untergrenze ('bis 50€' / 'ab 50€' / 'nicht unter 50' = '50.00'), sonst null.",
   "format": "FIXED_PRICE | AUCTION — FIXED_PRICE ist der Default. AUCTION NUR, wenn der Verkäufer es ausdrücklich verlangt (z.B. 'Auktion', 'versteigern', 'Startpreis').",
   "auction_days": "Ganzzahl 1|3|5|7|10 — Auktionslaufzeit NUR wenn der Verkäufer sie nennt ('1 Tag', '3 Tage Auktion'), sonst 7. Nur relevant bei format=AUCTION.",
   "quantity": "Ganzzahl >= 1, Default 1. NUR wenn der Verkäufer MEHRERE identische Artikel oder Sets in EINEM Listing anbietet (z.B. '10 Stück verfügbar', '5er Pack Sleeves', '3 Sets à 3 Toploader'): verfügbare Stückzahl setzen. Titel und Beschreibung beschreiben dann EIN Exemplar/Set, der Preis gilt pro Exemplar/Set.",
   "main_image_index": "0-basierter Index des Fotos, das die VORDERSEITE des Produkts zeigt (bei Karten die Bildseite, bei Verpacktem die Front) — das wird das eBay-Hauptbild. Reihenfolge = Reihenfolge der angehängten Bilder. Im Zweifel 0.",
   "graded_info": "NUR wenn die Karte/das Spiel sichtbar in einem Grading-Slab (Plastikgehäuse mit Bewertungslabel) steckt, sonst null: {\"grader\": \"PSA\", \"grade\": \"9.5\", \"cert_number\": \"12345678\", \"label_type\": null} — Werte exakt vom Slab-Label ablesen, nicht lesbare Felder null. label_type: bei CGC zwingend setzen, wenn erkennbar — \"pristine\" (schwarzes Label, Goldkreis PRISTINE), \"perfect\" (Perfect 10), \"gem_mint\" (weißes GEM MINT Label), sonst null. PSA/BGS: null außer Black Label sichtbar (\"black_label\"). Eine LOSE Karte ist NIEMALS graded.",
-  "assumptions": "string oder null — knappe, ehrliche Annahmen bei der Erkennung (Modellvariante, unbekannte Speichergröße o.ä.). Wird dem Verkäufer in der Vorschau angezeigt.",
+  "assumptions": "string oder null — knappe, ehrliche Unsicherheiten (Modellvariante, unbekannte Speichergröße o.ä.). Wird dem Verkäufer in der Vorschau angezeigt. Keine Preise.",
   "estimated_weight_grams": 300,
   "uncertain": false,
   "question": null
 }
 
-"uncertain": true + "question" NUR, wenn du das Produkt überhaupt nicht zuordnen kannst oder eine \
-Info fehlt, ohne die das Listing irreführend wäre (z.B. echt vs. Replika bei Luxusware). \
-Varianten-Unsicherheiten (Speicher, Pro/Pro Max, Größe) gehören in "assumptions", NICHT in eine \
-blockierende Rückfrage. Rate niemals bei wertrelevanten Details — benenne Unbekanntes ehrlich."""
+Kein Feld search_query_for_pricing und keine Preisspanne für Sammelkarten/TCG — \
+die Preis-Suche baut der Server aus bestätigten Identitätsmerkmalen. \
+suggested_list_price_eur für Alltagsprodukte und Retro-/Videospiele wie oben.
+
+"uncertain": true + "question" (oder identity_candidates), wenn das Produkt nicht sicher \
+zuordenbar ist ODER eine wertrelevante Angabe fehlt/unsicher ist (Speicher, Pro/Pro Max, \
+Kartennummer/Set, Sprache, Druckvariante Parallel/Alt Art, Grader/Grade/Label, Spiel-Vollständigkeit). \
+Seltenheits-Code allein (SR/SEC/R) blockiert NICHT, wenn Name + Setnummer klar sind — \
+Preis und Listing laufen trotzdem. Rate niemals bei \
+wertrelevanten Details — benenne Unbekanntes ehrlich und blockiere mit uncertain."""
 
 
 class ClaudeError(Exception):
@@ -122,10 +144,30 @@ def parse_listing_json(text: str) -> dict:
     data = json.loads(cleaned)
     if not isinstance(data, dict):
         raise json.JSONDecodeError("Top-Level ist kein Objekt", cleaned, 0)
-    for field in ("title", "description_html", "category_query", "condition",
-                  "search_query_for_pricing"):
+    for field in ("title", "description_html", "category_query", "condition"):
         if field not in data:
             raise json.JSONDecodeError(f"Pflichtfeld fehlt: {field}", cleaned, 0)
+    # Freie LLM-Suchquery ist keine Wahrheit mehr (Phase A). Alt-Antworten dürfen
+    # das Feld noch tragen — der Server baut die Query aus der Identity.
+    # Hier nur typisieren/kürzen, nie als Pflicht verlangen.
+    sq = data.get("search_query_for_pricing")
+    if sq is not None and not isinstance(sq, str):
+        data.pop("search_query_for_pricing", None)
+    elif isinstance(sq, str) and len(sq) > 200:
+        data["search_query_for_pricing"] = sq[:200]
+    cands = data.get("identity_candidates")
+    if cands is not None:
+        if not isinstance(cands, list):
+            data["identity_candidates"] = None
+        else:
+            data["identity_candidates"] = [
+                str(x).strip()[:80] for x in cands if str(x).strip()
+            ][:8] or None
+    cond = data.get("condition")
+    if cond not in ("NEW", "USED_EXCELLENT", "USED_GOOD", "USED_ACCEPTABLE", None):
+        raise json.JSONDecodeError(f"Ungültiger Zustand: {cond!r}", cleaned, 0)
+    if "title" in data and isinstance(data["title"], str) and len(data["title"]) > 80:
+        data["title"] = data["title"][:80]
     _grader_im_titel_richtigstellen(data)
     _label_im_titel_sicherstellen(data)
     return data
@@ -271,6 +313,11 @@ class ClaudeAnalyzer:
                            "Antworte erneut, AUSSCHLIESSLICH mit validem JSON nach dem Schema.",
             })
             return parse_listing_json(await self._call(messages))
+
+    async def identity_glance(self, photo_path: str, item: dict | None = None) -> dict | None:
+        """Schneller Blick product|card|slab — vor Cutout, nicht die volle Analyse."""
+        from web.cardscan import glance_scan
+        return await glance_scan(self.cfg.anthropic_api_key, photo_path, item)
 
     async def fill_aspects(self, photo_paths: list[str], listing: dict,
                            missing_aspects: list[str]) -> dict:

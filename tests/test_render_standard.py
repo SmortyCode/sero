@@ -1,49 +1,58 @@
-"""Der RENDER-STANDARD — Svens Dauer-Entscheid vom 03.08.2026, in Tests gegossen.
+"""Der RENDER-STANDARD — Warp ohne Kosmetik; Freistellen per rembg danach.
 
-Drei Kosmetik-Anläufe an einem Tag (Milchglas, Dunkel-Regeln, Schutzboxen)
-erzeugten nacheinander schwarze Fetzen, ausgewaschene Cover und hellgraue
-Querstreifen — Sven musste jedes Mal korrigieren. Wörtlich: „Es kann ja
-nicht sein, dass ich dich immer korrigieren muss."
-
-Diese Datei ist der Vertrag: slab → Ecken-Warp OHNE rembg/Nachbearbeitung ·
-sleeve/raw → Segmentierer · unbekannt → Original. Jedes Ergebnis passiert
-bild_ok(). Wer den Standard ändern will, macht ERST diese Tests grün —
-und holt sich Svens Ja.
+Drei Kosmetik-Anläufe (Milchglas, Dunkel-Regeln, Schutzboxen) erzeugten
+Artefakte. Warp bleibt daher rein (Aufrichten/Zuschnitt). Seit 08.08.2026
+(Sven, Collection-Norm): nach dem Warp läuft rembg (`isnet-general-use`)
+für echte Transparenz — Layout nur aus der Alphamaske.
 """
 
 import inspect
 
 import pytest
 from PIL import Image, ImageDraw
+from pathlib import Path
 
 from web import cardscan
 
 
 # ────────────────── Der Vertrag: keine Kosmetik im Warp ──────────────────
 
+def test_graded_recut_uebergibt_kind_slab():
+    """Nach Graded-Erkennung muss _cutout kind='slab' bekommen — sonst BiRefNet."""
+    quelle = open("web/app_api.py", encoding="utf-8").read()
+    assert '_cutout_job, src, outp, "slab"' in quelle or "_cutout_job, src, outp, 'slab'" in quelle
+    # Der alte Bug: nur zwei Argumente nach src
+    assert "None, _cs._cutout, src, outp)" not in quelle
+    assert "None, _cs._cutout_job, src, outp)" not in quelle
+    # Warp allein ist kein erfolgreicher Freisteller (CutoutPipelineV2)
+    assert "Warp allein ist kein Freisteller" in quelle
+    assert "warp_tmp).replace(outp)" not in quelle
+
+
 def test_warp_pfad_enthaelt_keine_kosmetik():
-    """slab_recut darf NIE wieder Nachbearbeitung enthalten. Der Test liest
-    den Quelltext — Wiedereinbau von Milchglas & Co. macht ihn sofort rot."""
+    """slab_recut darf NIE Nachbearbeitung/rembg enthalten. rembg kommt
+    danach in crop_photos/_cutout — nicht im Warp selbst."""
     quelle = inspect.getsource(cardscan.slab_recut)
     for verboten in ("_studio_hintergrund", "rembg", "remove(", "milch",
                      "GaussianBlur", "dunkel"):
         assert verboten not in quelle, (
-            f"Kosmetik ({verboten}) im Warp-Pfad — Svens Standard vom 03.08. "
-            "verbietet Nachbearbeitung. Erst sein Ja holen, dann diesen Test ändern.")
+            f"Kosmetik ({verboten}) im Warp-Pfad — Warp bleibt rein. "
+            "Freistellen gehört in _cutout.")
 
 
 def test_standard_steht_im_modul():
     """Der Standard muss als Vertrag im Modul-Docstring stehen bleiben."""
     doc = cardscan.__doc__ or ""
-    assert "RENDER-STANDARD" in doc and "KEINE selektive Nachbearbeitung" in doc
+    assert "RENDER-STANDARD" in doc
+    assert "rembg" in doc.lower()
+    assert "isnet-general-use" in doc or "Alphamaske" in doc
 
 
-# ────────────────── Pfadwahl: slab→Warp, sonst Segmentierer ──────────────────
+# ────────────────── Pfadwahl: slab→Warp+Cutout, sonst Segmentierer ──────────────────
 
 @pytest.mark.asyncio
-async def test_slab_nimmt_den_warp(tmp_path, monkeypatch):
-    """Slab: nur Ecken-Warp. rembg steckt weder in slab_recut noch danach in
-    crop_photos — klares Plastik würde sonst als Hintergrund weggeschnitten."""
+async def test_slab_nimmt_warp_dann_cutout(tmp_path, monkeypatch):
+    """Slab: Ecken-Warp, danach rembg-Cutout (Collection-Norm 08.08.)."""
     foto = tmp_path / "slab.jpg"
     Image.new("RGB", (900, 1300), (120, 120, 130)).save(foto)
 
@@ -58,8 +67,9 @@ async def test_slab_nimmt_den_warp(tmp_path, monkeypatch):
         Image.new("RGB", (800, 1200), (90, 95, 100)).save(out)
         return True
 
-    def fake_cutout(src, out):
+    def fake_cutout(src, out, kind=None):
         aufrufe["cutout"] += 1
+        Image.new("RGBA", (700, 980), (90, 95, 100, 255)).save(out)
         return True
 
     monkeypatch.setattr(cardscan, "detect_card", fake_detect)
@@ -68,8 +78,60 @@ async def test_slab_nimmt_den_warp(tmp_path, monkeypatch):
     monkeypatch.setattr(cardscan, "bild_ok", lambda p, k=None: True)
 
     res, info = await cardscan.crop_photos("key", [str(foto)])
-    assert aufrufe["warp"] == 1 and aufrufe["cutout"] == 0
+    assert aufrufe["warp"] == 1 and aufrufe["cutout"] == 1
     assert res[0].endswith("_cut.png") and info["cropped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_non_card_skip_warp(tmp_path, monkeypatch):
+    """Flasche/Sneaker/Handy: kein Perspektiv-Warp, nur rembg."""
+    foto = tmp_path / "bottle.jpg"
+    Image.new("RGB", (600, 1400), (90, 50, 30)).save(foto)
+
+    async def fake_detect(client, p):
+        return {"kind": "slab", "corners": [[5, 3], [95, 3], [95, 97], [5, 97]],
+                "confidence": "high"}
+
+    aufrufe = {"warp": 0, "cutout": 0}
+
+    async def fake_recut(*a, **k):
+        aufrufe["warp"] += 1
+        return True
+
+    def fake_cutout(p, out, kind=None):
+        aufrufe["cutout"] += 1
+        Image.new("RGBA", (200, 500), (90, 50, 30, 255)).save(out)
+        return True
+
+    monkeypatch.setattr(cardscan, "detect_card", fake_detect)
+    monkeypatch.setattr(cardscan, "slab_recut", fake_recut)
+    monkeypatch.setattr(cardscan, "_cutout", fake_cutout)
+    monkeypatch.setattr(cardscan, "bild_ok", lambda p, k=None: True)
+
+    res, info = await cardscan.crop_photos(
+        "key", [str(foto)],
+        item={"canonical_identity": {"kind": "generic"}})
+    assert aufrufe["warp"] == 0 and aufrufe["cutout"] == 1
+    assert res[0].endswith("_cut.png")
+
+
+def test_crop_photos_nutzt_should_warp():
+    quelle = inspect.getsource(cardscan.crop_photos)
+    assert "should_warp" in quelle
+    assert "item_is_non_card" in quelle
+    assert "glance_scan" in quelle
+    assert "flat_rectangle_hint" in quelle
+
+
+def test_slab_warp_nicht_innenkarte():
+    """Graded: Case-Rechteck, nicht die Karte im Fenster entbiegen."""
+    quelle = inspect.getsource(cardscan.slab_recut)
+    assert "nicht entbiegen" in quelle
+    assert "is_slab" in quelle
+    assert 'det.get("kind") not in ("slab", "raw")' in quelle
+    doc = cardscan.__doc__ or ""
+    assert "product | card | slab" in doc or "product|card|slab" in doc
+    assert "Rechteck" in doc
 
 
 @pytest.mark.asyncio
@@ -87,7 +149,7 @@ async def test_huelle_nimmt_den_segmentierer(tmp_path, monkeypatch):
         aufrufe["warp"] += 1
         return True
 
-    def fake_cutout(p, out):
+    def fake_cutout(p, out, kind=None):
         aufrufe["cutout"] += 1
         Image.new("RGB", (700, 980), (90, 95, 100)).save(out)
         return True
@@ -117,7 +179,7 @@ async def test_warp_fehlschlag_faellt_auf_segmentierer(tmp_path, monkeypatch):
 
     getroffen = {"cutout": 0}
 
-    def fake_cutout(p, out):
+    def fake_cutout(p, out, kind=None):
         getroffen["cutout"] += 1
         Image.new("RGB", (700, 980), (90, 95, 100)).save(out)
         return True
@@ -129,6 +191,40 @@ async def test_warp_fehlschlag_faellt_auf_segmentierer(tmp_path, monkeypatch):
 
     res, info = await cardscan.crop_photos("key", [str(foto)])
     assert getroffen["cutout"] == 1 and info["cropped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_slab_qa_fail_behaelt_rembg_only(tmp_path, monkeypatch):
+    """Canvas-Touch / Slab-Format: rembg bleibt, wenn Alltags-QA passt."""
+    foto = tmp_path / "slab.jpg"
+    Image.new("RGB", (900, 1300), (120, 120, 130)).save(foto)
+
+    async def fake_detect(client, p):
+        return {"kind": "slab", "corners": [[5, 3], [95, 3], [95, 97], [5, 97]],
+                "confidence": "high"}
+
+    async def fake_recut(*a, **k):
+        return False
+
+    def fake_cutout(p, out, kind=None):
+        # Zu flach für Slab-Label (1.375 < 1.48), aber Alltags-QA ok.
+        _strukturbild(800, 1100).convert("RGBA").save(out)
+        return True
+
+    monkeypatch.setattr(cardscan, "detect_card", fake_detect)
+    monkeypatch.setattr(cardscan, "slab_recut", fake_recut)
+    monkeypatch.setattr(cardscan, "_cutout", fake_cutout)
+
+    res, info = await cardscan.crop_photos("key", [str(foto)])
+    assert res[0].endswith("_cut.png")
+    assert info["cropped"] == 1
+    assert Path(res[0]).exists()
+
+
+def test_crop_photos_nutzt_cutout_usable():
+    quelle = inspect.getsource(cardscan.crop_photos)
+    assert "cutout_usable" in quelle
+    assert "Warp-Fallback rembg-only" in quelle
 
 
 @pytest.mark.asyncio
@@ -146,7 +242,7 @@ async def test_schlechtes_bild_erreicht_nie_die_sammlung(tmp_path, monkeypatch):
         Image.new("RGB", (80, 90), (0, 0, 0)).save(out)   # Müll-Ergebnis
         return True
 
-    def fake_cutout(p, out):
+    def fake_cutout(p, out, kind=None):
         Image.new("RGB", (60, 60), (0, 0, 0)).save(out)   # auch Müll
         return True
 
@@ -365,8 +461,16 @@ def _strukturbild(w, h):
 
 def test_bild_ok_gutes_slab_format(tmp_path):
     p = tmp_path / "gut.png"
-    _strukturbild(800, 1150).save(p)
+    # Slab inkl. Label: höher als Rohkarte (~1.35) — mind. 1.48
+    _strukturbild(800, 1300).save(p)
     assert cardscan.bild_ok(str(p), "slab") is True
+
+
+def test_bild_ok_lehnt_karte_ohne_label_als_slab_ab(tmp_path):
+    """Nur die Innenkarte (ohne CGC-Label) darf nicht als Slab durchgehen."""
+    p = tmp_path / "nur_karte.png"
+    _strukturbild(800, 1100).save(p)  # Ratio 1.375 < 1.48
+    assert cardscan.bild_ok(str(p), "slab") is False
 
 
 @pytest.mark.parametrize("w,h,kind", [
@@ -383,7 +487,7 @@ def test_bild_ok_faengt_kaputte_formate(tmp_path, w, h, kind):
 
 def test_bild_ok_faengt_leere_crops(tmp_path):
     p = tmp_path / "leer.png"
-    Image.new("RGB", (800, 1150), (250, 250, 250)).save(p)
+    Image.new("RGB", (800, 1300), (250, 250, 250)).save(p)
     assert cardscan.bild_ok(str(p), "slab") is False
 
 
@@ -393,3 +497,15 @@ def test_bild_ok_ohne_kind_prueft_nur_generisch(tmp_path):
     p = tmp_path / "display.png"
     _strukturbild(1400, 900).save(p)
     assert cardscan.bild_ok(str(p), None) is True
+
+
+def test_bild_ok_rgba_flasche_mit_alpharand(tmp_path):
+    """Schlanke Flasche mit viel Transparenz darf nicht als 'schwarz' fallen."""
+    im = Image.new("RGBA", (400, 1100), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle([140, 80, 260, 1020], fill=(90, 50, 20, 255))
+    d.ellipse([150, 40, 250, 120], fill=(40, 30, 20, 255))
+    p = tmp_path / "flasche.png"
+    im.save(p)
+    assert cardscan.bild_ok(str(p), None) is True
+    assert cardscan.bild_ok(str(p), "other") is True

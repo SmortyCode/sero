@@ -1,16 +1,21 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="skin-clean force-dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=overlays-content">
   <title>SERO</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="manifest.webmanifest?v=7">
 
-  <!-- Home-Screen: apple-touch-icon in der von iOS erwarteten Größe (180 px);
-       app-icon.png (1024) bleibt die Quelle für Store und Manifest. -->
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="icon" href="assets/sero-slab.svg" type="image/svg+xml">
-  <link rel="alternate icon" href="assets/app-icon.png">
+  <!-- Home-Screen / PWA: bestehendes Chrome-Icon, sizes ehrlich.
+       Startup: Schwarz + zentrierte Wordmark (kein SR). -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=6">
+  <link rel="icon" href="assets/app-icon.png?v=6" type="image/png">
+  <link rel="alternate icon" href="assets/app-icon.png?v=6">
+  <link rel="apple-touch-startup-image" href="assets/startup-1170x2532.png?v=1"
+    media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="assets/startup-780x1688.png?v=1"
+    media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="assets/startup-1170x2532.png?v=1">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="SERO">
@@ -18,79 +23,126 @@
        Vorher standen hier ZWEI widersprüchliche Angaben — welche galt, entschied
        die Reihenfolge im Dokument, nicht wir. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
-<link rel="stylesheet" href="sero.css?v=62">
-  <link rel="stylesheet" href="sero-dark.css?v=3">
+  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="sero.css?v=162">
+  <link rel="stylesheet" href="sero-dark.css?v=22">
+  <link rel="stylesheet" href="sero-clean.css?v=41">
 </head>
 <body>
 
-<!-- Marken-Splash beim Start -->
-<div id="splash"><img src="assets/monogram-navy.png" alt="SERO"></div>
+<!-- Marken-Splash beim Start — Chrome-Wordmark, nie SR -->
+<div id="splash">
+  <img src="assets/wordmark-sero-chrome.png?v=4" alt="SERO">
+</div>
 
 <!-- ═══════════ Login ═══════════ -->
 <section id="viewLogin" class="view" hidden>
   <div class="login-wrap">
-    <img class="login-logo" src="assets/stacked-navy.png" alt="SERO">
-    <p class="login-sub">Deine Karten. Dein Marktplatz.</p>
-    <ul class="login-feats">
-      <li><span class="lf-ic" data-ic="camera"></span>Karte fotografieren</li>
-      <li><span class="lf-ic" data-ic="chart"></span>Marktwert aus echten eBay-Verkäufen</li>
-      <li><span class="lf-ic" data-ic="arrowup"></span>Mit einem Tipp auf eBay listen</li>
-    </ul>
+    <div class="login-hero">
+      <img class="login-mark" src="assets/wordmark-sero-chrome.png?v=3" alt="SERO">
+      <div class="login-soon">
+        <img class="login-app-icon" src="assets/app-icon.png?v=6" alt="">
+        <p class="login-soon-copy">Bald im App Store und für Android</p>
+      </div>
+      <p class="login-sub">Scannen. Prüfen. Bei eBay verkaufen.</p>
+      <ul class="login-feats">
+        <li><span class="lf-ic" data-ic="camera"></span>Fertiger eBay-Entwurf direkt nach dem Scan</li>
+        <li><span class="lf-ic" data-ic="chart"></span>Alles prüfen und ändern, bevor etwas live geht</li>
+        <li><span class="lf-ic" data-ic="arrowup"></span>Bei eBay erst nach deiner Freigabe</li>
+      </ul>
+    </div>
+    <div class="login-dock">
     <div class="login-card" id="loginStep1">
-      <label>E-Mail-Adresse oder Benutzername</label>
-      <input id="loginId" type="email" autocomplete="email" placeholder="du@mail.de" enterkeyhint="next">
+      <label for="loginId">E-Mail-Adresse oder Benutzername</label>
+      <input id="loginId" type="text" autocomplete="username" placeholder="du@mail.de" enterkeyhint="next">
       <button class="btn-primary" id="loginNext">Weiter</button>
-      <p class="login-err" id="loginErr1"></p>
+      <p class="login-err" id="loginErr1" role="status" aria-live="polite"></p>
+      <div id="loginSocial" class="login-social" hidden></div>
+    </div>
+    <div class="login-card" id="loginPhoneCard" hidden>
+      <label for="loginPhone">Telefonnummer</label>
+      <input id="loginPhone" type="tel" autocomplete="tel" placeholder="+49 170 1234567" enterkeyhint="next">
+      <button class="btn-primary" id="loginPhoneNext">Code senden</button>
+      <p class="login-hint">SMS kostet — nur wenn der Versand eingerichtet ist.</p>
+      <p class="login-err" id="loginPhoneErr" role="status" aria-live="polite"></p>
+      <button type="button" class="login-link" id="loginPhoneBack">Zurück</button>
+    </div>
+    <div class="login-card" id="loginPhoneStep2" hidden>
+      <label for="loginPhoneCode">Dein SMS-Code</label>
+      <input id="loginPhoneCode" inputmode="text" autocomplete="one-time-code" placeholder="L-123456" enterkeyhint="go">
+      <button class="btn-primary" id="loginPhoneVerify">Anmelden</button>
+      <p class="login-err" id="loginPhoneErr2" role="status" aria-live="polite"></p>
+    </div>
+    <div class="login-card" id="loginSignupCard" hidden>
+      <label for="signupEmail">E-Mail</label>
+      <input id="signupEmail" type="email" autocomplete="email" placeholder="du@mail.de" enterkeyhint="next">
+      <label for="signupUser">Benutzername</label>
+      <input id="signupUser" type="text" autocomplete="username" placeholder="dein.name" maxlength="24" enterkeyhint="go">
+      <button class="btn-primary" id="signupBtn">Konto erstellen</button>
+      <p class="login-err" id="signupErr" role="status" aria-live="polite"></p>
+      <p class="login-hint">Den Anmeldecode schickt SERO an deine E-Mail.</p>
     </div>
     <div class="login-card" id="loginStep2" hidden>
-      <label>Dein Anmeldecode</label>
+      <label for="loginCode">Dein Anmeldecode</label>
       <p class="login-hint" id="codeHint">SERO hat dir einen Code geschickt.</p>
       <input id="loginCode" inputmode="text" autocomplete="one-time-code" placeholder="L-123456" enterkeyhint="go">
       <button class="btn-primary" id="loginVerify">Anmelden</button>
-      <p class="login-err" id="loginErr2"></p>
+      <p class="login-err" id="loginErr2" role="status" aria-live="polite"></p>
     </div>
-    <p class="login-foot">Noch kein Konto? <button class="login-link" id="loginSignup">Konto erstellen</button></p>
+    <p class="login-foot" id="loginFootSignup">Noch kein Konto? <button type="button" class="login-link" id="loginSignup">Konto erstellen</button></p>
+    <p class="login-foot" id="loginFootLogin" hidden>Schon ein Konto? <button type="button" class="login-link" id="loginBack">Anmelden</button></p>
+    </div>
   </div>
 </section>
 
 <!-- ═══════════ App ═══════════ -->
 <section id="viewApp" class="view" hidden>
   <header class="topbar">
-    <img class="topbar-logo logo-light" src="assets/wordmark-navy.png" alt="SERO">
-    <img class="topbar-logo logo-dark" src="assets/wordmark-white.png" alt="SERO">
+    <div class="topbar-brand">
+      <img class="topbar-logo logo-light" src="assets/wordmark-sero-chrome.png?v=3" alt="SERO">
+      <img class="topbar-logo logo-dark" src="assets/wordmark-sero-chrome.png?v=3" alt="SERO">
+      <span class="topbar-rule" aria-hidden="true"></span>
+      <span class="topbar-section" id="topbarSection" aria-live="polite"></span>
+    </div>
     <span class="topbar-spacer"></span>
-    <span class="topbar-badge" id="dryBadge" hidden>Testmodus</span>
+    <div class="topbar-actions">
+      <button type="button" class="topbar-ico" id="eyeBtn" aria-label="Werte verbergen"></button>
+      <button type="button" class="topbar-ico" id="dashRefresh" aria-label="Preise aktualisieren"></button>
+      <button type="button" class="topbar-ava" id="topAva" aria-label="Profil" hidden></button>
+    </div>
   </header>
 
   <!-- Tab: Home (Dashboard) -->
-  <main id="tabHome" class="tab-page">
+  <main id="tabHome" class="tab-page" hidden>
     <div class="page-scroll" id="homeScroll"></div>
   </main>
 
   <!-- Tab: Sammlung -->
-  <main id="tabCollection" class="tab-page" hidden>
+  <main id="tabCollection" class="tab-page">
     <div class="page-scroll" id="colScroll">
-      <div class="title-row">
-        <h1 class="large-title">Sammlung</h1>
-        <button class="icon-btn" id="btnSort" aria-label="Sortieren"></button>
-        <button class="icon-btn" id="btnFilter" aria-label="Filtern"></button>
+      <div class="tab-title-glass tab-title-flush page-tab-title">
+        <img class="tab-title title-light" src="assets/titles/sammlung-dark.png?v=10" alt="Sammlung" width="2272" height="738">
+        <img class="tab-title title-dark" src="assets/titles/sammlung.png?v=10" alt="Sammlung" width="2072" height="718">
       </div>
       <div id="colHero"></div>
-      <div class="sysbanner" id="sysBanner" hidden></div>
-      <div class="search" id="colSearchBox" hidden>
-        <span id="colSearchIcon"></span>
-        <input id="colSearch" type="text" placeholder="Sammlung durchsuchen" autocomplete="off">
+      <div id="colInvBar" class="inv-bar" hidden>
+        <div class="inv-search" id="colSearchWrap" hidden>
+          <span class="inv-search-ic"></span>
+          <input id="colSearchLive" type="search" inputmode="search" enterkeyhint="search"
+            placeholder="Titel, Set, Cert-Nr." autocomplete="off">
+          <button type="button" class="inv-search-clear" id="colSearchClear" aria-label="Zurücksetzen" hidden></button>
+        </div>
+        <div class="inv-applied" id="colInvApplied" hidden></div>
+        <div class="inv-count" id="colInvCount"></div>
       </div>
-      <div class="chips" id="colChips" hidden></div>
+      <div class="sysbanner" id="sysBanner" hidden></div>
       <div class="grid" id="colGrid"></div>
+      <!-- Ein Weg nach vorn: SR-Monogramm, ein Satz, ein Knopf. Der Import steht
+           in den Einstellungen unter „Daten & Backup“ und lenkte hier nur ab. -->
       <div class="empty" id="colEmpty" hidden>
-        <img src="assets/monogram-navy.png" alt="">
-        <h2>Deine Sammlung startet hier</h2>
-        <p>Scanne deine erste Karte — SERO erkennt sie, ermittelt den Marktwert und macht sie mit einem Tipp eBay-fertig.</p>
+        <img class="empty-wordmark" src="assets/wordmark-sero-chrome.png?v=4" alt="">
+        <h2>Noch keine Stücke.</h2>
         <button class="btn-primary" id="emptyAdd"></button>
-        <button class="btn-secondary" id="emptyImport">Aus eBay-Listings importieren</button>
       </div>
     </div>
   </main>
@@ -98,18 +150,22 @@
   <!-- Tab: Scanner -->
   <main id="tabScan" class="tab-page" hidden>
     <div class="page-scroll">
-      <h1 class="large-title">Scanner</h1>
-      <div class="seg" id="scanModeSeg" style="margin:0 0 14px">
-        <button data-m="collect">Sammlung</button>
-        <button data-m="sell">Verkauf</button>
+      <div class="tab-title-glass page-tab-title">
+        <img class="tab-title title-light" src="assets/titles/scanner-dark.png?v=10" alt="Scanner" width="2032" height="1018">
+        <img class="tab-title title-dark" src="assets/titles/scanner.png?v=10" alt="Scanner" width="2064" height="1006">
       </div>
-      <div class="scan-hero">
-        <span class="scan-ic" id="scanHeroIcon"></span>
-        <h2>Karte scannen</h2>
-        <p id="scanHeroText">SERO erkennt jedes Stück und ermittelt den Marktwert.</p>
-        <div class="scan-actions">
-          <button class="btn-primary" id="btnScanNow"></button>
-          <button class="btn-secondary sq" id="btnScanGallery" aria-label="Aus Fotos auswählen"></button>
+      <div class="scan-finder" id="scanFinder">
+        <div class="scan-finder-frame">
+          <span class="scan-br scan-br-tl" aria-hidden="true"></span>
+          <span class="scan-br scan-br-tr" aria-hidden="true"></span>
+          <span class="scan-br scan-br-bl" aria-hidden="true"></span>
+          <span class="scan-br scan-br-br" aria-hidden="true"></span>
+          <span class="scan-ic" id="scanHeroIcon"></span>
+          <p id="scanHeroText">SERO erkennt dein Produkt und bereitet dein eBay-Angebot vor.</p>
+          <div class="scan-actions">
+            <button class="btn-primary" id="btnScanNow"></button>
+            <button class="btn-secondary sq" id="btnScanGallery" aria-label="Aus Fotos auswählen"></button>
+          </div>
         </div>
       </div>
       <div id="sellTplRow"></div>
@@ -121,15 +177,30 @@
     </div>
   </main>
 
-  <!-- Tab: Verkauf -->
+  <!-- Tab: Verkaufen -->
   <main id="tabSales" class="tab-page" hidden>
-    <div class="page-scroll">
-      <h1 class="large-title">Verkauf</h1>
+    <div class="page-scroll" id="salesScroll">
+      <div class="sales-title-row page-tab-title" hidden aria-hidden="true">
+        <div class="tab-title-glass tab-title-flush">
+          <img class="tab-title title-light" src="assets/titles/verkauf-dark.png?v=10" alt="Verkaufen" width="2020" height="1216">
+          <img class="tab-title title-dark" src="assets/titles/verkauf.png?v=10" alt="Verkaufen" width="1778" height="1076">
+        </div>
+      </div>
       <div id="salesStats"></div>
       <div class="seg" id="salesSeg">
-        <button data-b="active" class="on">Aktiv</button>
-        <button data-b="draft">Entwürfe</button>
-        <button data-b="ended">Beendet</button>
+        <button data-b="draft" class="on">Entwürfe</button>
+        <button data-b="active">Aktiv</button>
+        <button data-b="ended">Verkauft</button>
+      </div>
+      <div id="salesInvBar" class="inv-bar" hidden>
+        <div class="inv-search" id="salesSearchWrap" hidden>
+          <span class="inv-search-ic"></span>
+          <input id="salesSearchLive" type="search" inputmode="search" enterkeyhint="search"
+            placeholder="Titel, Artikelnummer" autocomplete="off">
+          <button type="button" class="inv-search-clear" id="salesSearchClear" aria-label="Zurücksetzen" hidden></button>
+        </div>
+        <div class="inv-applied" id="salesInvApplied" hidden></div>
+        <div class="inv-count" id="salesInvCount"></div>
       </div>
       <div id="salesBulk"></div>
       <div id="salesList"></div>
@@ -137,30 +208,42 @@
     </div>
   </main>
 
-  <!-- Tab: Profil -->
-  <main id="tabProfile" class="tab-page" hidden>
+  <!-- Tab: eBay-Hub (SERO-Profil nur noch über Avatar-Overlay) -->
+  <main id="tabProfile" class="tab-page ebay-page" hidden>
     <div class="page-scroll" id="profileScroll"></div>
   </main>
 
   <nav class="tabbar">
-    <button class="tab active" data-tab="tabHome"><span class="tic"></span><span>Übersicht</span></button>
-    <button class="tab" data-tab="tabCollection"><span class="tic"></span><span>Sammlung</span></button>
-    <button class="tab-cam" id="btnCamera" aria-label="Scannen"></button>
-    <button class="tab" data-tab="tabSales"><span class="tic"></span><span>Verkauf</span></button>
-    <button class="tab" data-tab="tabProfile"><span class="tic"></span><span>Profil</span></button>
+    <button class="tab" data-tab="tabHome" aria-label="Übersicht"><span class="tic"></span><span class="tab-lab">Start</span></button>
+    <button class="tab active" data-tab="tabCollection" aria-label="Sammlung"><span class="tic"></span><span class="tab-lab">Sammlung</span></button>
+    <button class="tab-cam" id="btnCamera" aria-label="Scannen" type="button"><span class="tab-cam-lab">Scannen</span></button>
+    <!-- Verkaufen trägt dasselbe Linien-Icon wie die anderen Registerkarten (Preisschild).
+         Die eBay-Wortmarke stand hier für einen Marktplatz — SERO ist das Haus, eBay nur der Weg. -->
+    <button class="tab" data-tab="tabSales" aria-label="Verkaufen"><span class="tic"></span><span class="tab-lab">Verkaufen</span></button>
   </nav>
 </section>
+
+<!-- Einstellungen — vollhohe sekundäre Ansicht -->
+<div id="settingsView" class="settings-view" hidden aria-hidden="true">
+  <div class="settings-bar">
+    <button type="button" class="icon-btn" id="settingsBack" aria-label="Zurück"></button>
+    <h2 id="settingsTitle">Einstellungen</h2>
+  </div>
+  <div class="settings-body page-scroll" id="settingsBody"></div>
+</div>
 
 <!-- ═══════════ Detail-Overlay ═══════════ -->
 <div id="detail" class="detail" hidden>
   <div class="detail-bar">
-    <button class="icon-btn" id="detailClose" aria-label="Schließen"></button>
+    <button class="icon-btn" id="detailClose" aria-label="Zurück"></button>
     <span class="dtitle" id="detailTitle"></span>
-    <button class="icon-btn" id="detailMore" aria-label="Mehr" hidden></button>
+    <button class="icon-btn" id="detailShare" aria-label="Stück teilen" hidden></button>
     <button class="icon-btn" id="detailFav" aria-label="Favorit"></button>
+    <button class="icon-btn" id="detailMore" aria-label="Mehr" hidden></button>
     <button class="icon-btn" id="detailTrash" aria-label="Entfernen"></button>
   </div>
   <div class="detail-body" id="detailBody"></div>
+  <div id="detailCtaDock" class="d-cta-dock" hidden></div>
 </div>
 
 <!-- ═══════════ Bottom-Sheet ═══════════ -->
@@ -178,8 +261,41 @@
 </div>
 
 <input id="fileInput" type="file" accept="image/*" multiple hidden>
-<input id="cameraInput" type="file" accept="image/*" capture="environment" multiple hidden>
+<input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="libraryInput" type="file" accept="image/*" multiple hidden>
 
-<script src="sero.js?v=111"></script>
+<div id="scanReview" class="scan-review" hidden>
+  <div class="scan-review-inner">
+    <h2 id="scanReviewTitle">Prüfen.</h2>
+    <p id="scanReviewLead">Das Foto wird der Entwurf.</p>
+    <div class="scan-review-ph"><img id="scanReviewImg" alt=""></div>
+    <button type="button" class="btn-primary" id="scanReviewKeep"></button>
+    <button type="button" class="btn-secondary" id="scanReviewAgain"></button>
+  </div>
+</div>
+
+<div id="camOverlay" class="cam-overlay" hidden>
+  <video id="camVideo" playsinline autoplay muted></video>
+  <canvas id="camCanvas" hidden></canvas>
+  <div class="cam-top">
+    <button type="button" class="cam-x" id="camClose" aria-label="Schließen"></button>
+    <span class="cam-count" id="camCount"></span>
+    <div class="cam-top-acts">
+      <button type="button" class="cam-tool" id="camFlash" hidden aria-label="Blitz"></button>
+      <button type="button" class="cam-tool" id="camFlip" aria-label="Kamera wechseln"></button>
+    </div>
+  </div>
+  <div class="cam-strip" id="camStrip"></div>
+  <div class="cam-bar">
+    <button type="button" class="cam-lib" id="camLibrary">Aus Mediathek</button>
+    <button type="button" class="cam-shutter" id="camShutter" aria-label="Auslösen"></button>
+    <button type="button" class="cam-next" id="camNext">Weiter</button>
+  </div>
+</div>
+
+<script src="sero-mobile.js?v=4"></script>
+<script src="sero-detail.js?v=7"></script>
+<script src="sero.js?v=253"></script>
+<script src="sero-profile.js?v=22"></script>
 </body>
 </html>
