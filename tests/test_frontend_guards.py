@@ -329,8 +329,9 @@ def test_clean_ebay_tab_opens_hub():
     assert "function catUiLabel" in JS
     assert "Weitere Karten" in JS
     assert "function catChipHtml" in JS
-    assert "logo-pokemon.svg" in JS
-    assert "logo-onepiece.svg" in JS
+    # Chips sind Text. Markenlogos brachten ihre eigene Schrift mit.
+    assert "logo-pokemon.svg" not in JS
+    assert "logo-onepiece.svg" not in JS
     assert 'if (id === "tabProfile") renderEbayHub()' not in JS
     assert 'btn.onclick = () => openSeroProfile()' in JS
     assert 'if (id === "tabProfile") renderProfile()' not in JS

@@ -687,7 +687,7 @@ function renderLegalPane(body) {
 function renderAboutPane(body) {
   body.innerHTML = `
     <div class="set-card set-pad about-card">
-      <img src="assets/app-icon.png?v=7" alt="" width="64" height="64" class="about-icon">
+      <img src="assets/app-icon.png?v=8" alt="" width="64" height="64" class="about-icon">
       <p class="set-plan-name">SERO</p>
       <p class="set-sub">${_esc(SERO_APP_VERSION)} · ${_esc(platformLabel())}</p>
       <button type="button" class="btn-secondary" id="aboutSite">${_L("Website öffnen")}</button>
@@ -764,7 +764,7 @@ function paintProfileHub(sc, me, summary, statsBusy) {
         <span class="tv-ava" aria-hidden="true">
           ${me.avatar_url
             ? `<img src="${_esc(me.avatar_url)}" alt="">`
-            : `<img src="assets/app-icon.png?v=7" alt="">`}
+            : `<img src="assets/app-icon.png?v=8" alt="">`}
           <span class="tv-ava-cam">${_icon("camera", 14)}</span>
         </span>
         <span class="tv-prof-info">

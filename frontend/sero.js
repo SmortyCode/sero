@@ -939,10 +939,9 @@ const CAT_COLORS = {
 /** Anzeige ohne Sammelbegriff TCG — intern bleibt domain/category unverändert. */
 const CAT_UI_LABEL = { "TCG Sonstiges": "Weitere Karten", "Sonstiges": "Weiteres" };
 function catUiLabel(c) { return CAT_UI_LABEL[c] || c || ""; }
-const CAT_CHIP_LOGO = {
-  "Pokémon": "assets/logo-pokemon.svg",
-  "One Piece": "assets/logo-onepiece.svg",
-};
+/* Kategorie-Chips sind Text, keine Markenlogos. Pokémon und One Piece
+   brachten ihre eigene Schrift mit — im Filter standen dann zwei
+   Fremdschriften neben „Games" und „Weitere Karten". */
 const CAT_CHIP_ORDER = ["One Piece", "Pokémon", "Games", "Magic", "Yu-Gi-Oh!", "Lorcana", "Dragon Ball", "Sport", "Manga", "Comics", "LEGO", "TCG Sonstiges", "Sonstiges"];
 function itemMatchesFilterCat(item, cat) {
   if (!cat || cat === "Alle") return true;
@@ -983,11 +982,7 @@ function collectionChipCats(items) {
 }
 function catChipHtml(cat, on) {
   const label = catUiLabel(cat);
-  const logo = CAT_CHIP_LOGO[cat];
-  const inner = logo
-    ? `<img class="fchip-logo" src="${esc(logo)}" alt="">`
-    : esc(L(label));
-  return `<button type="button" class="fchip${logo ? " fchip-logoed" : ""} ${on ? "on" : ""}" data-c="${esc(cat)}" aria-label="${esc(L(label))}">${inner}</button>`;
+  return `<button type="button" class="fchip ${on ? "on" : ""}" data-c="${esc(cat)}" aria-label="${esc(L(label))}">${esc(L(label))}</button>`;
 }
 
 /** Sichtbare Inventar-Kategorien — Multi-Select, leer = alle. */
@@ -1031,11 +1026,7 @@ function invCatsChipOrder() {
 }
 function invCatChipHtml(cat, on) {
   const label = catUiLabel(cat);
-  const logo = CAT_CHIP_LOGO[cat];
-  const inner = logo
-    ? `<img class="fchip-logo" src="${esc(logo)}" alt="">`
-    : `<span class="fchip-lab">${esc(L(label))}</span>`;
-  return `<button type="button" class="fchip inv-chip${logo ? " fchip-logoed" : ""} ${on ? "on" : ""}" data-c="${esc(cat)}" aria-pressed="${on ? "true" : "false"}" aria-label="${esc(L(label))}">${inner}</button>`;
+  return `<button type="button" class="fchip inv-chip ${on ? "on" : ""}" data-c="${esc(cat)}" aria-pressed="${on ? "true" : "false"}" aria-label="${esc(L(label))}"><span class="fchip-lab">${esc(L(label))}</span></button>`;
 }
 function invCatsSelected(f) {
   const cats = (f && f.cats) || [];
@@ -2041,6 +2032,7 @@ const STR_EN = {
   "Erstes Stück scannen": "Scan your first item", "Jetzt scannen": "Scan now",
   "Sammlungswert": "Collection value",
   "Weitere Karten": "Other cards",
+  "Weiteres": "Other",
   "Manga": "Manga",
   "Comics": "Comics",
   "Listing-Design": "Listing design",
@@ -3278,14 +3270,14 @@ function paintTopAva() {
   const me = state.me;
   btn.hidden = false;
   if (!me) {
-    btn.innerHTML = `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    btn.innerHTML = `<img src="assets/app-icon.png?v=8" alt="SERO">`;
     btn.onclick = () => openSaveLoginSheet();
     btn.setAttribute("aria-label", L("Anmelden zum Speichern"));
     return;
   }
   btn.innerHTML = me.avatar_url
     ? `<img src="${esc(me.avatar_url)}" alt="">`
-    : `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    : `<img src="assets/app-icon.png?v=8" alt="SERO">`;
   btn.onclick = () => openSeroProfile();
   btn.setAttribute("aria-label", L("Profil"));
 }
@@ -4091,8 +4083,8 @@ function showTour() {
     const last = page === TOUR_PAGES.length - 1;
     el.innerHTML = `
       <div class="party-card tour-card">
-        <img class="tour-wordmark logo-light" src="assets/wordmark-navy.png?v=2" alt="SERO">
-        <img class="tour-wordmark logo-dark" src="assets/wordmark-white.png?v=2" alt="SERO">
+        <img class="tour-wordmark logo-light" src="assets/wordmark-navy.png?v=4" alt="SERO">
+        <img class="tour-wordmark logo-dark" src="assets/wordmark-white.png?v=4" alt="SERO">
         <button type="button" class="tour-skip" id="tourSkip">${L("Überspringen")}</button>
         <h2>${L(h)}</h2>
         <p class="tour-lead voll">${L(p)}</p>

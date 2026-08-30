@@ -88,26 +88,52 @@ for (const f of ["sero.js", "sero-profile.js", "sero-detail.js", "sero-mobile.js
   }
 }
 
-/* ── 3. Anthrazit-Inseln im Hell-Modus ── */
+/* ── 3. Anthrazit-Inseln im Hell-Modus ──
+   Jede dunkle Fläche oder dicke dunkle Kante in skin-clean braucht ein
+   force-light-Gegenstück. Der Vergleich muss EXAKT sein: eine Regel für
+   ".scan-finder .btn-secondary" deckt ".scan-finder" nicht ab — mit einem
+   Präfix-Vergleich blieben genau deshalb der Scan-Sucher und andere
+   Flächen unentdeckt schwarz. */
 {
   const DUNKEL = /#(?:1c1c1e|000000|000|111111|111|2c2c2e|0a0a0a|121212|1a1a1c|18181a)\b/i;
+  /* Kommentare weg, sonst schluckt ein Kommentar den ersten Selektor der
+     folgenden Regel — und die Regel gilt als nicht vorhanden. */
+  let flach = clean.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (let i = 0; i < 6; i++) {
+    const vorher = flach;
+    flach = flach.replace(/@[a-z-]+[^{]*\{((?:[^{}]|\{[^{}]*\})*)\}/gi, "$1");
+    if (flach === vorher) break;
+  }
   const regeln = [];
-  const re = /([^{}]+)\{([^{}]*)\}/g;
-  let m;
-  while ((m = re.exec(clean))) regeln.push({ sel: m[1].trim(), body: m[2] });
+  {
+    const re = /([^{}]+)\{([^{}]*)\}/g;
+    let m;
+    while ((m = re.exec(flach))) regeln.push({ sel: m[1].trim(), body: m[2] });
+  }
+  /* Genau die Selektoren, die eine Hell-Regel haben. */
+  const hell = new Set();
   for (const r of regeln) {
-    const dunkel = r.body.split(";").filter((d) => /background/.test(d) && DUNKEL.test(d));
-    if (!dunkel.length) continue;
+    for (const s of r.sel.split(",")) {
+      const t = s.trim();
+      if (t.startsWith("html.skin-clean.force-light")) {
+        hell.add(t.slice("html.skin-clean.force-light".length).trim());
+      }
+    }
+  }
+  for (const r of regeln) {
+    const treffer = r.body.split(";").filter(
+      (d) => /background|border/.test(d) && DUNKEL.test(d));
+    if (!treffer.length) continue;
     for (const s of r.sel.split(",")) {
       const t = s.trim();
       if (!t.startsWith("html.skin-clean")) continue;
+      /* force-dark-Regeln greifen im Hell-Modus gar nicht. */
       if (t.includes("force-light") || t.includes("force-dark")) continue;
       /* Splash, Kamera und Foto-Prüfung sind absichtlich immer schwarz. */
       if (/#splash|cam-|scan-review/.test(t)) continue;
-      const bare = t.replace("html.skin-clean", "").trim();
-      const gedeckt = clean.includes("html.skin-clean.force-light " + bare)
-        || clean.includes("html.skin-clean.force-light" + bare);
-      if (!gedeckt) fehler.push(`Anthrazit ohne Hell-Regel: ${t}`);
+      const bare = t.replace(/^html\.skin-clean/, "").trim();
+      if (!bare) continue;
+      if (!hell.has(bare)) fehler.push(`Anthrazit ohne Hell-Regel: ${t}`);
     }
   }
 }

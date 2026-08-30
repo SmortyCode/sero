@@ -1394,7 +1394,6 @@ html.force-light .tab-title.title-invert {
 }
 .fchip.on { background: var(--navy); color: #fff; border-color: transparent; }
 .fchip-lab { white-space: nowrap; }
-.fchip-logoed { gap: 8px; }
 .inv-range input.is-bad { border-color: var(--red); }
 .fchip.status { color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
 .fchip.status.on { background: var(--green); color: #fff; }

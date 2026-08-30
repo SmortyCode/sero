@@ -1,8 +1,37 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 30. August 2026 — Master-Auftrag Nachmittag (English-only, Glyph, Hell, Scan/Verkaufen-Chrome); Pins js 258 / css 167 / clean 46 / profile 25. Kein Deploy, kein Publish (Master).**
+**Stand: 30. August 2026 — Nachtrag zum Master (Filter-Schrift, Logos, Hell: Scan/Profil/Splash); Pins js 259 / css 168 / clean 47 / profile 25. Kein Deploy, kein Publish.**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.
+
+## Nachtrag 30.08. — Svens Rückmeldung nach dem Master-PR
+
+Branch `ui/english-only-glyph-30-08`, PR #1. Fünf gemeldete Fehler, alle mit
+Playwright-Bildern bei 390×844 nachgestellt und danach nachgewiesen behoben
+(Skript lag unter `tmp/`, ist nicht eingecheckt).
+
+| Fehler | Ursache | Behoben |
+|---|---|---|
+| „One Piece“ und „Pokémon“ in fremder Schrift | Die Chips rendeten das **Marken-SVG** statt eines Labels — `CAT_CHIP_LOGO` in `catChipHtml`/`invCatChipHtml`. Ein Logo kann nie die Schrift des Nachbarn haben. | Beide Chip-Bauer geben nur noch Text. `CAT_CHIP_LOGO`, `.fchip-logo` und `.fchip-logoed` sind weg. „Weiteres“ fehlte im Wörterbuch → „Other“. |
+| Logo hell falsch / weiß auf Weiß | Die Bilder waren neu gezeichnet, aber Topbar, Login und Leerzustände zeigten weiter auf `?v=3`, die Tour auf `?v=2`, Profil und Avatar auf `app-icon?v=7`. Wer die alte Datei im Cache hatte, sah dauerhaft das alte Glyph. | Alle Verweise auf einen Pin gezogen (`wordmark-navy/white?v=4`, `app-icon?v=8`). Neue Wache `test_asset_pins_einheitlich` schlägt an, sobald ein Bild zwei Pins hat. |
+| Splash schwarz auf schwarz / heller Start schwarz | Der Splash trug **ein** Bild, und `force-light` erzwang `#000`. Dazu stand `force-dark` fest im `html`-Tag: bis `sero.js` am Seitenende lief, blitzte immer Schwarz auf. | Splash hat jetzt `logo-light` (`wordmark-navy`) und `logo-dark` (`wordmark-sero-chrome`); hell = `#fff`. Ein kurzes Skript im `<head>` setzt das Thema vor dem ersten Anstrich. Helle Startbilder `startup-*-light.png` per `prefers-color-scheme` verdrahtet, vor den dunklen. |
+| Scan hell ein schwarzer Block | `.scan-hero` und `.scan-finder` stehen fest auf `#1c1c1e` und hatten **keine** Hell-Regel. Der schwarze „Photograph“-Knopf und der graue Hinweis verschwanden darin; randlos und fast bildschirmhoch sah der Block aus wie ein dicker schwarzer Rahmen. | Hell: Fläche `#f2f2f7`, Text `#3c3c43`/`#1c1c1e`, Sucher-Ecken `rgba(0,0,0,.28)` statt Weiß auf Weiß. |
+| Profil hell schwarz, dicker schwarzer Rand | Die Profilseite war weiß auf weiß, die Kennzahlen-Karte dagegen dunkelblau. Der „dicke Rand“ war der **Fokusring**: 2px reines Schwarz, den das Profil beim Öffnen auf den Zurück-Knopf setzt. | Gruppierte Liste nach iOS-Art: `#tabProfile`/`#profileScroll`/`.settings-view` grau `#f2f2f7`, `.tv-prof-card`/`.set-card`/`.impact-card` weiß. Fokusring bleibt sichtbar, aber `rgba(0,0,0,.42)`. |
+
+Nebenbefund: der Prüfer `tests/_ui_en_light_audit.js` verglich Selektoren per
+Präfix und CSS-Kommentare schluckten den ersten Selektor der Folgeregel. Eine
+Regel für `.scan-finder .btn-secondary` galt damit als Deckung für
+`.scan-finder` — genau deshalb blieb der Scan-Sucher unentdeckt schwarz. Jetzt
+exakter Vergleich, Kommentare vorher entfernt, `force-dark`-Regeln übersprungen.
+
+Pins: `sero.js?v=259`, `sero.css?v=168`, `sero-clean.css?v=47`,
+`sero-profile.js?v=25`, `manifest.webmanifest?v=9`, `sero-dark.css` unverändert
+`v=22`. Suite 809 passed, 4 skipped; Smoke grün. **Kein Deploy** — Contabo läuft
+weiter auf js 256 / css 165 / clean 44.
+
+**Offen:** Auf der Sammlungs-Startseite stehen weiter „Scan multiple products“
+und „Add to collection only“; der Master wollte sie nur auf der Scan-Seite
+loswerden. Ob sie auf der Sammlung bleiben, muss Sven sagen.
 
 ## Auftrag 30.08. (Master Nachmittag) — English-only, Glyph, Hell fertig
 

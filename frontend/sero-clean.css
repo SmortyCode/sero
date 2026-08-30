@@ -812,26 +812,6 @@ html.skin-clean .col-ebay-mini .sale-row {
 html.skin-clean .sheet .chips {
   flex-wrap: wrap;
 }
-html.skin-clean .fchip.fchip-logoed {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  min-height: 44px;
-}
-html.skin-clean .fchip-logo {
-  display: block;
-  height: 14px;
-  width: auto;
-  max-width: 78px;
-  object-fit: contain;
-  filter: none;
-  opacity: .88;
-}
-html.skin-clean.force-dark .fchip-logo,
-html.skin-clean:not(.force-light) .fchip-logo { filter: invert(1); }
-html.skin-clean.force-light .fchip-logo { filter: none; }
-html.skin-clean .fchip.on .fchip-logo { opacity: 1; }
 html.skin-clean .inv-range input.is-bad {
   border-color: var(--red);
   box-shadow: inset 0 0 0 1px var(--red);
@@ -1640,7 +1620,6 @@ html.skin-clean.force-light #toast {
   background: #f2f2f7 !important;
   color: #000;
 }
-html.skin-clean.force-light #splash { background: #000 !important; }
 html.skin-clean.force-light .ptr-spin {
   border-top-color: #1c1c1e;
   border-right-color: #1c1c1e;
@@ -2312,11 +2291,15 @@ html.skin-clean #toast {
 }
 
 html.skin-clean.force-light #viewLogin { background: #fff; }
+/* Der Fokusring bleibt sichtbar, aber nicht als 2 px reines Schwarz.
+   Das Profil setzt den Fokus beim Öffnen auf den Zurück-Knopf; im Hellen
+   sah das aus wie ein dicker schwarzer Rahmen um den Knopf. */
 html.skin-clean.force-light :focus-visible,
 html.skin-clean.force-light button:focus-visible,
 html.skin-clean.force-light a:focus-visible,
 html.skin-clean.force-light input:focus-visible {
-  outline-color: #000;
+  outline: 2px solid rgba(0, 0, 0, .42);
+  outline-offset: 2px;
 }
 html.skin-clean.force-light #colGrid .gitem:not(.gitem-add),
 html.skin-clean.force-light .impact-card,
@@ -2390,6 +2373,63 @@ html.skin-clean.force-light .d-seg-sticky { background: #fff !important; }
 html.skin-clean.force-light .d-desc-preview.is-collapsed::after {
   background: linear-gradient(180deg, transparent, #fff) !important;
 }
+
+/* ── Hell: der Scan-Sucher ──
+   .scan-finder ist eine randlose, fast bildschirmhohe Fläche in #1c1c1e.
+   Im Hell-Modus blieb sie schwarz: der schwarze „Photograph"-Knopf und der
+   graue Hinweis verschwanden darin, und der Block sah aus wie ein dicker
+   schwarzer Rahmen unter der Kopfzeile. */
+html.skin-clean.force-light .scan-hero,
+html.skin-clean.force-light .scan-finder {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+}
+html.skin-clean.force-light .scan-hero p,
+html.skin-clean.force-light .scan-finder p {
+  color: #3c3c43 !important;
+}
+html.skin-clean.force-light .scan-hero h2,
+html.skin-clean.force-light .scan-finder h2,
+html.skin-clean.force-light .scan-finder .scan-ic {
+  color: #1c1c1e !important;
+}
+/* Die Sucher-Ecken waren weiß auf Weiß. */
+html.skin-clean.force-light .scan-br {
+  border-color: rgba(0, 0, 0, .28) !important;
+}
+
+/* ── Hell: Profil ──
+   Gruppierte Liste nach iOS-Art: die Seite grau, die Karten darauf weiß.
+   Vorher lag eine weiße Karte auf weißem Grund, die Kennzahlen-Karte war
+   dagegen dunkelblau — im Hell-Modus wirkte das wie ein schwarzer Block. */
+html.skin-clean.force-light #tabProfile,
+html.skin-clean.force-light #profileScroll,
+html.skin-clean.force-light .settings-view {
+  background: #f2f2f7 !important;
+}
+html.skin-clean.force-light .tv-prof-card,
+html.skin-clean.force-light .set-card,
+html.skin-clean.force-light .impact-card {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .06) !important;
+}
+html.skin-clean.force-light .impact-card,
+html.skin-clean.force-light .impact-card-title,
+html.skin-clean.force-light .impact-value {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-card::before { background: none !important; }
+html.skin-clean.force-light .impact-badge {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .10) !important;
+  color: #3c3c43 !important;
+}
+
+/* ── Hell: Splash ──
+   Weiß mit Anthrazit-Glyph. Auf Schwarz blieb der helle Start eine
+   schwarze Fläche, und das dunkle Glyph wäre darauf unsichtbar. */
+html.skin-clean.force-light #splash { background: #fff !important; }
 
 @media (prefers-reduced-motion: reduce) {
   html.skin-clean .login-card,
