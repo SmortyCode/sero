@@ -66,7 +66,12 @@ def test_tabbar_start_label():
 
 
 def test_account_delete_requires_loschen():
-    assert '!== "LÖSCHEN"' in PROF
+    """Das Bestaetigungswort folgt dem Label: englische App verlangt DELETE."""
+    assert 'const delWord = _L("LÖSCHEN")' in PROF
+    assert "function typedOk" in PROF or "const typedOk" in PROF
+    assert "if (!typedOk()) return;" in PROF
+    assert '"LÖSCHEN": "DELETE"' in JS
+    assert '"Tippe LÖSCHEN zur Bestätigung": "Type DELETE to confirm"' in JS
     assert "Bereits auf eBay veröffentlichte Angebote bleiben bei eBay bestehen" in PROF
 
 

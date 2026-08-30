@@ -1,8 +1,41 @@
 # SERO — Stand der Umsetzung
 
-**Stand: 30. August 2026 — aaaa.md Follow-up (Filter/Sheet/Detail/Light nachgezogen); Pins js 257 / css 166 / clean 45. Kein Deploy (Briefing).**
+**Stand: 30. August 2026 — Master-Auftrag Nachmittag (English-only, Glyph, Hell, Scan/Verkaufen-Chrome); Pins js 258 / css 167 / clean 46 / profile 25. Kein Deploy, kein Publish (Master).**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.
+
+## Auftrag 30.08. (Master Nachmittag) — English-only, Glyph, Hell fertig
+
+Master-Prompt `docs/SERO-CURSOR-MASTER-2026-08-30.md`. Nur skin-clean, keine
+zweite Haut. **Kein Contabo-Deploy, kein Publish, kein Löschen, kein OAuth-Abschluss.**
+`kv['dry_run']` unangetastet, `SERO_APP_VERSION` bleibt 4.1.0.
+
+| Stück | Stand |
+|---|---|
+| Sprache | `const LANG = "en"` fest verdrahtet. Keine Gerätesprache, kein Umschalter: Zeile `apLang` und `langValueLabel()` sind aus den Einstellungen raus, die Seite heißt nur noch „Darstellung“. `<html lang="en">`. Manifest `lang: en`, Name „SERO — Your cards. Your market.“ |
+| Wörterbuch | Der deutsche Text bleibt der Schlüssel. Copy-Tabelle des Masters zeichengenau eingetragen (Aktiv→Live, Kacheln→Grid, Darstellung→Display, Erlöse→„Sold items show up here“ …). 25 fehlende Schlüssel nachgetragen, darunter Speichern, Auslösen, LÖSCHEN, du@mail.de. Euro-Format `167,00 €` unverändert. |
+| Kontolöschung | Das Bestätigungswort folgt jetzt dem Label (`_L("LÖSCHEN")` → DELETE). Vorher stand „Type DELETE“ da und der Knopf blieb grau. |
+| Glyph | Fetter Monoline-S+O aus `wordmark-white.png` abgeleitet: Anthrazit für den hellen Kopf, weiß für Splash/Dunkel. Icons, Apple-Touch und Startup neu; nach `landing/assets/` kopiert. Kein „SERO“-Schriftzug in Kopf, Splash oder Reiter-Balken. Kein SR-Monogramm. PTR bleibt CSS-Spinner. |
+| Hell | 20 verbliebene Anthrazit-Inseln geschlossen: Login-Felder, OAuth-Knöpfe, Avatar, Kennzahlen- und Zeilenkarten, Sammelbalken im Verkauf, der ganze eBay-Bereich im Detail (`.d-sell-input`, `.d-chip`, `.d-src`, `.d-seg-sticky`). Dunkelmodus unberührt. |
+| Verkaufen | Primäre Aktion ist „List item“ und führt in den Scan-Reiter — „Photograph“ wohnt nur noch dort. Gilt für beide Leerzustände und die Pille über der Liste. |
+| Sammlung | Ein Stück in der Sammlung ist kein Entwurf mehr. Status: Sold / Live / Wunsch / **Hold** (`.gstat.hold`, gedämpft). Entwürfe leben im Verkaufen-Reiter. |
+| Layout | Scan ohne Querlauf bei 390. Preis-Chips im Defaults-Sheet brechen um, „Fest:“ ist voll tippbar. Leerzustände: 96px aus `.page-scroll` plus 24px — vorher waren zweimal 96px eingebaut und rissen ein Loch. Detail-Body 148px unter den Sticky-CTAs, `#toast` 78px. |
+| Nicht angefasst | Publish-Gate (`ebayConnectedNow` → „eBay is not connected“-Sheet, Timeout 20s, Retry), Entfernen-Sheet mit Rückgängig, Navigations- und Zurück-Wege. |
+
+Website: `~/listo-website/legal.html` sagt in §4, Titel und Fußzeile SERO statt
+Listo. **Offen:** die Nav-Wortmarke `lısto` und die übrigen Seiten (index, guide,
+onboarding) sind weiter Listo-gebrandet — das ist ein Rebrand, keine Textkorrektur,
+und braucht Svens Entscheid.
+
+Pins: `sero.js?v=258`, `sero.css?v=167`, `sero-clean.css?v=46`,
+`sero-profile.js?v=25`, `manifest.webmanifest?v=9`. `sero-dark.css` unverändert
+bei `v=22`. Logo-Dateien neu gepinnt (`wordmark-navy/white?v=3`,
+`wordmark-sero-chrome?v=6`, `app-icon/apple-touch?v=8`, `startup?v=3`) — ohne
+neuen Pin liefert der Cache dem Handy das alte Bild.
+Wache: `tests/test_ui_english_only.py` + `tests/_ui_en_light_audit.js`
+(prüft STR_EN-Lücken, statische HTML-Texte und Anthrazit-Flächen ohne Hell-Regel).
+Suite: 807 passed, 4 skipped. Smoke grün.
+**Kein Deploy gelaufen** — Contabo läuft noch auf js 256 / css 165 / clean 44.
 
 ## Auftrag 30.08. — aaaa.md (Filter, Sheet, Detail-Tabs, Light)
 

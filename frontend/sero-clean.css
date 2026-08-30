@@ -1203,8 +1203,10 @@ html.skin-clean .d-cta-dock {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* Der Dock steht fest über dem Inhalt: 148px, damit die letzte Zeile im Detail
+   und der Teilen-Hinweis nicht darunter verschwinden. */
 html.skin-clean #detail.has-cta-dock .detail-body {
-  padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
+  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
 }
 html.skin-clean .d-ebay-cta {
   width: 100%;
@@ -2236,6 +2238,79 @@ html.skin-clean.force-light .scan-ic {
   filter: none !important;
 }
 
+html.skin-clean.force-light .d-hero-title {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .d-pill {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .empty h2,
+html.skin-clean.force-light .empty.empty-well h2 {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .empty p,
+html.skin-clean.force-light .empty.empty-well p {
+  color: #636366 !important;
+}
+html.skin-clean.force-light .empty.empty-well {
+  background: #f2f2f7 !important;
+  border-color: rgba(0, 0, 0, .08) !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-value,
+html.skin-clean.force-light .impact-card-title {
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .impact-card {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .ebay-sec,
+html.skin-clean.force-light .d-card,
+html.skin-clean.force-light .btn-secondary,
+html.skin-clean.force-light .seg {
+  color: #1c1c1e;
+}
+html.skin-clean.force-light .btn-secondary {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+}
+html.skin-clean.force-light .tab-page,
+html.skin-clean.force-light #tabScan .page-scroll {
+  overflow-x: hidden;
+}
+html.skin-clean #tabScan .page-scroll {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+/* Scan-Home hat genau einen Auslöser. Die Zusatz-Chips sind aus dem JS raus —
+   die Regel bleibt als Riegel, falls ein Gerät noch altes sero.js im Cache hat. */
+html.skin-clean .scan-extra { display: none !important; }
+html.skin-clean .sell-tpl-chips,
+html.skin-clean #sheetBody .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+html.skin-clean #sheetBody .fchip {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+/* Der Reiter-Balken schwebt über dem Inhalt. Die Scrollfläche hält schon 96px
+   frei (siehe .page-scroll); leere Zustände legen nur noch etwas Luft darunter,
+   damit „Filter zurücksetzen" nicht am Balken klebt. Zweimal 96px ergäbe ein
+   Loch von fast 200px. */
+html.skin-clean #colEmpty,
+html.skin-clean #colGrid .empty.compact,
+html.skin-clean #salesEmpty {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+html.skin-clean #toast {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+}
+
 html.skin-clean.force-light #viewLogin { background: #fff; }
 html.skin-clean.force-light :focus-visible,
 html.skin-clean.force-light button:focus-visible,
@@ -2274,6 +2349,47 @@ html.skin-clean.force-light .seg button.on {
 }
 html.skin-clean #sheetBody .sheet-hint { margin-bottom: 8px; }
 html.skin-clean #sheetBody .inv-range { margin: 0 0 8px; }
+
+/* ── Hell: die letzten Anthrazit-Inseln ──
+   Das Grundgerüst war schon weiß, einzelne Flächen aber noch #1c1c1e/#2c2c2e:
+   Login-Felder, Kennzahlen-Kärtchen, Zeilenkarten, der Verkaufs-Sammelbalken
+   und der ganze eBay-Bereich im Detail. Auf Weiß standen dort weiße Glyphen
+   auf dunklem Grund — lesbar, aber es sah nach halbem Dunkelmodus aus. */
+html.skin-clean.force-light .login-card input,
+html.skin-clean.force-light .oauth-btn,
+html.skin-clean.force-light .login-social .btn-secondary,
+html.skin-clean.force-light .d-sell-input,
+html.skin-clean.force-light .inv-range input {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+  border: 1px solid rgba(0, 0, 0, .12) !important;
+}
+html.skin-clean.force-light .login-card input::placeholder,
+html.skin-clean.force-light .d-sell-input::placeholder,
+html.skin-clean.force-light .inv-range input::placeholder {
+  color: #8e8e93;
+}
+html.skin-clean.force-light .stat,
+html.skin-clean.force-light .card,
+html.skin-clean.force-light .rc,
+html.skin-clean.force-light .scan-done-ph,
+html.skin-clean.force-light .sales-bulk-bar,
+html.skin-clean.force-light .bulk-sum-row,
+html.skin-clean.force-light .inv-applied-chip,
+html.skin-clean.force-light .topbar-badge,
+html.skin-clean.force-light .d-ebay-photos,
+html.skin-clean.force-light .d-chip,
+html.skin-clean.force-light .d-src,
+html.skin-clean.force-light .d-pane[data-pane="ebay"] .price-tap {
+  background: #f2f2f7 !important;
+  color: #1c1c1e !important;
+  border-color: rgba(0, 0, 0, .08);
+}
+html.skin-clean.force-light .topbar-ava { background: #e5e5ea !important; }
+html.skin-clean.force-light .d-seg-sticky { background: #fff !important; }
+html.skin-clean.force-light .d-desc-preview.is-collapsed::after {
+  background: linear-gradient(180deg, transparent, #fff) !important;
+}
 
 @media (prefers-reduced-motion: reduce) {
   html.skin-clean .login-card,

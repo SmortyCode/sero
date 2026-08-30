@@ -1566,6 +1566,8 @@ html.force-light .tab-title.title-invert {
 }
 .gstat.live { color: var(--green); }
 .gstat.draft { color: var(--orange); }
+/* Bestand ist der Normalfall und darf nicht schreien wie ein Entwurf. */
+.gstat.hold { color: var(--label-3); }
 .gstat.sold { color: var(--label-3); }
 .gstat.wish { color: #d9488a; }
 .gmore {

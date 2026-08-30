@@ -1841,18 +1841,18 @@ function applyTheme() {
   }
 }
 
-/* Sprache: auto = Gerätesprache; explizit de/en speichern */
-const _langPref = storeSafe.getString("sero_lang") || "auto";
-const LANG = (_langPref === "de" || _langPref === "en")
-  ? _langPref
-  : ((navigator.language || "de").toLowerCase().startsWith("de") ? "de" : "en");
+/* Sprache: App ist English-only (Master 30.08.). Der deutsche Text bleibt der
+   Schlüssel, STR_EN legt die Oberfläche darüber. Kein Umschalter, keine
+   Gerätesprache — sonst steht die Hälfte der App wieder deutsch da. */
+const LANG = "en";
 try { document.documentElement.lang = LANG; } catch (_) { /* */ }
+try { storeSafe.setString("sero_lang", "en"); } catch (_) { /* */ }
 const STR_EN = {
   /* ── Navigation, Tabs, Grundgerüst ── */
   "Sammlung": "Collection", "Verkauf": "Selling", "Profil": "Profile", "Scanner": "Scanner",
   "Start": "Home", "eBay": "eBay", "Info": "Info",
   "Karte scannen": "Scan item", "Scannen": "Scan", "Aus Fotos auswählen": "Choose from photos",
-  "Verbindungen": "Connections", "Darstellung": "Appearance", "Daten & Sync": "Data & sync",
+  "Verbindungen": "Connections", "Darstellung": "Display", "Daten & Sync": "Data & sync",
   "Hilfe & Rechtliches": "Help & legal", "Einrichten": "Set up",
   "Preis selbst setzen": "Set price yourself",
   "Dein Portfolio-Wert für dieses Stück. Leer lassen löscht den manuellen Wert.":
@@ -1872,7 +1872,8 @@ const STR_EN = {
     "SERO re-analyzes all items with a photo — set, number and language are updated. This can take a while with many items.",
   "Sammlung durchsuchen": "Search collection", "Suchen": "Search",
   "Wird analysiert": "Analyzing", "Scan-Verlauf": "Scan history",
-  "Aktiv": "Active", "Entwürfe": "Drafts", "Beendet": "Ended", "Verkauft": "Sold",
+  "Aktiv": "Live", "Entwürfe": "Drafts", "Beendet": "Ended", "Verkauft": "Sold",
+  "Bestand": "Hold", "Stück listen": "List item", "eBay einstellen": "List",
   "Deine Karten. Dein Marktplatz.": "Your cards. Your marketplace.",
   "Testmodus": "Test mode", "Scannen": "Scan", "Verkaufen": "Sell", "Karte": "Card",
   "Sortieren": "Sort", "Filtern": "Filter", "Filter": "Filter", "Schließen": "Close",
@@ -1881,7 +1882,7 @@ const STR_EN = {
   "Aus Mediathek": "From library",
   "Aus Fotos": "From photos",
   "Wert wird ab dem 3. Stück sichtbar": "Value appears from the 3rd item",
-  "Erlöse erscheinen hier": "Proceeds appear here",
+  "Erlöse erscheinen hier": "Sold items show up here",
   "Business Policies deines eBay-Kontos. Keine US-Dienste.":
     "Business policies of your eBay account. No US services.",
   "Weiteres Foto": "Another photo",
@@ -2223,7 +2224,7 @@ const STR_EN = {
   "Preise aktualisieren": "Refresh prices",
   "Foto entfernen": "Remove photo", "nach vorn": "move forward", "nach hinten": "move back",
   "Senden": "Send", "Weniger": "Less",
-  "Liste": "List", "Kacheln": "Tiles", "Große Kacheln": "Large tiles", "Kleine Kacheln": "Small tiles",
+  "Liste": "List", "Kacheln": "Grid", "Große Kacheln": "Large grid", "Kleine Kacheln": "Small grid",
   "Liste ein Stück aus deiner Sammlung — SERO baut das Angebot fertig auf.":
     "List an item from your collection — SERO builds the whole listing.",
   "Keine offenen Entwürfe": "No open drafts",
@@ -2328,7 +2329,7 @@ const STR_EN = {
   "Aus": "Off",
   "An": "On",
   "eBay verbinden": "Connect eBay",
-  "Darstellung": "Appearance",
+  "Darstellung": "Display",
   "in Sammlung": "in collection", "im Verkauf ({0})": "listed ({0})",
   "Wertvollste Stücke": "Most valuable", "Alle ansehen": "View all", "Kategorien": "Categories",
   "{0} Stücke": "{0} items", "Deine NFTs (Solana)": "Your NFTs (Solana)",
@@ -2400,7 +2401,7 @@ const STR_EN = {
   "Alles prüfen und ändern, bevor etwas live geht": "Review and edit everything before anything goes live",
   "Bei eBay erst nach deiner Freigabe": "Live on eBay only after you approve",
   "SERO erkennt dein Produkt und bereitet dein eBay-Angebot vor.": "SERO recognizes your product and prepares your eBay listing.",
-  "Artikel fotografieren": "Photograph item",
+  "Artikel fotografieren": "Photograph",
   "Mehrere Produkte scannen": "Scan multiple products",
   "Nur zur Sammlung hinzufügen": "Add to collection only",
   "Analysieren & Entwurf erstellen": "Analyze & create draft",
@@ -2446,7 +2447,7 @@ const STR_EN = {
   "eBay-Entwurf vorbereiten": "Prepare eBay draft",
   "Jetzt bei eBay veröffentlichen": "Publish on eBay now",
   "Live bei eBay": "Live on eBay",
-  "Standard für eBay-Entwürfe": "Default for eBay drafts",
+  "Standard für eBay-Entwürfe": "Defaults for eBay drafts",
   "Standard für eBay-Entwürfe gespeichert": "Default for eBay drafts saved",
   "Fotografieren. Prüfen. Bei eBay verkaufen.": "Photograph. Review. Sell on eBay.",
   "SERO bereitet aus deinem Foto einen editierbaren eBay-Entwurf vor. Live geht es erst nach deiner Freigabe.": "SERO turns your photo into an editable eBay draft. Nothing goes live until you approve.",
@@ -2458,7 +2459,7 @@ const STR_EN = {
   "Noch nicht mit eBay verbunden — Entwurf geht trotzdem": "Not connected to eBay yet — draft still works",
   "{0} Entwürfe warten auf Prüfung": "{0} drafts waiting for review",
   "Erstes Listing vorbereiten": "Prepare first listing",
-  "Fotografieren": "Take a photo",
+  "Fotografieren": "Photograph",
   "Aus der Mediathek": "From the photo library",
   "Keine Kamera an diesem Gerät — wähle ein Foto aus der Mediathek.":
     "No camera on this device — pick a photo from the library.",
@@ -2680,7 +2681,7 @@ const STR_EN = {
   "Besitz inklusive eBay-Angebote": "Owned incl. eBay listings",
   "In Sammlung": "In collection", "Verkauft": "Sold",
   "Im Portfolio": "In portfolio",
-  "Tarif & Abrechnung": "Plan & billing", "Tarif wählen": "Choose a plan",
+  "Tarif & Abrechnung": "Plan & billing", "Tarif wählen": "Choose plan",
   "Abo verwalten": "Manage subscription",
   "Listings ohne Monatslimit": "Listings without a monthly limit",
   "Scans ohne Limit": "Scans without limit",
@@ -2707,10 +2708,10 @@ const STR_EN = {
     "The item leaves the collection. You can undo this right away.",
   "Entfernen": "Remove",
   "Freistellen…": "Cutting out…",
-  "Keine Entwürfe.": "No drafts.",
+  "Keine Entwürfe.": "No drafts",
   "Fotografiere ein Stück. SERO baut den Entwurf.": "Photograph an item. SERO builds the draft.",
-  "Noch nichts live.": "Nothing live yet.",
-  "Noch nichts verkauft.": "Nothing sold yet.",
+  "Noch nichts live.": "Nothing live yet",
+  "Noch nichts verkauft.": "Nothing sold yet",
   "Fotografieren.": "Photograph.",
   "Ein Foto reicht.": "One photo is enough.",
   "Prüfen.": "Review.",
@@ -2722,7 +2723,7 @@ const STR_EN = {
   "Das Foto wird der Entwurf.": "This photo becomes the draft.",
   "Nochmal fotografieren": "Photograph again",
   "Noch keine Stücke.": "No items yet.",
-  "Profil bearbeiten": "Edit profile", "Profilbild ändern": "Change profile photo",
+  "Profil bearbeiten": "Edit profile", "Profilbild ändern": "Change profile picture",
   "Anzeigename": "Display name", "E-Mail": "Email",
   "Anmeldung per E-Mail-Code, kein Passwort": "Sign-in with email code, no password",
   "Mitglied seit": "Member since",
@@ -2733,7 +2734,7 @@ const STR_EN = {
   "Bereits auf eBay veröffentlichte Angebote bleiben bei eBay bestehen und müssen dort beendet werden.":
     "Listings already published on eBay stay on eBay and must be ended there.",
   "Zuerst Sammlung exportieren": "Export collection first",
-  "Tippe LÖSCHEN zur Bestätigung": "Type LÖSCHEN to confirm",
+  "Tippe LÖSCHEN zur Bestätigung": "Type DELETE to confirm",
   "Konto endgültig löschen": "Permanently delete account",
   "Versand & eBay-Richtlinien": "Shipping & eBay policies",
   "Dafür braucht SERO zuerst dein eBay-Konto. Versandstandort und Verkaufsrichtlinien liegen dort.":
@@ -2768,7 +2769,7 @@ const STR_EN = {
   "Einstellen": "List",
   "über eBay": "via eBay",
   "Notizen": "Notes",
-  "Aktiv": "Active",
+  "Aktiv": "Live",
   "Bestehende Schwellen bleiben beim Pausieren gespeichert":
     "Existing thresholds stay saved while paused",
   "{0} aktiv": "{0} active",
@@ -3132,6 +3133,34 @@ const STR_EN = {
   "Marke": "Brand",
   "Modell": "Model",
   "Band": "Volume",
+  /* ── English-only (Master 30.08.): restliche Lücken. Die App läuft nur noch
+     auf en, ein fehlender Schlüssel bleibt sonst still deutsch stehen. ── */
+  "Speichern": "Save",
+  "Auslösen": "Shutter",
+  "LÖSCHEN": "DELETE",
+  "du@mail.de": "you@mail.com",
+  "dein.name": "your.name",
+  "In Sammlung öffnen": "Open in collection",
+  "Keine Fotos": "No photos",
+  "Nicht erkannt": "Not recognized",
+  "Starte neu …": "Restarting …",
+  "Jetzt senden": "Send now",
+  "Ohne Titel": "Untitled",
+  "Mehr laden": "Load more",
+  "Nicht verknüpft": "Not linked",
+  "Telegram verknüpft": "Telegram linked",
+  "Kopieren nicht möglich": "Could not copy",
+  "Speichern fehlgeschlagen": "Saving failed",
+  "Stück nicht erkannt": "Item not recognized",
+  "Original (kein Freisteller)": "Original (no cutout)",
+  "Foto wird hochgeladen …": "Uploading photo …",
+  "Foto wird schon hochgeladen …": "Photo is already uploading …",
+  "Das hat zu lange gedauert. Versuch es noch einmal.":
+    "That took too long. Try again.",
+  "Keine Verbindung. Prüf dein Netz und versuch es noch einmal.":
+    "No connection. Check your network and try again.",
+  "Die Analyse ist fehlgeschlagen. Meist hilft ein Foto mit mehr Licht und ohne Spiegelung.":
+    "The analysis failed. Usually a photo with more light and no glare helps.",
 };
 const L = (s) => (LANG === "de" ? s : (STR_EN[s] ?? s));
 
@@ -3148,6 +3177,11 @@ function _translateNode(root) {
   for (const el of (root.querySelectorAll ? root.querySelectorAll("[placeholder]") : [])) {
     const p = el.getAttribute("placeholder");
     if (p && STR_EN[p]) el.setAttribute("placeholder", STR_EN[p]);
+  }
+  /* Vorlesehilfen zählen mit: ohne das bleiben aria-Labels deutsch stehen. */
+  for (const el of (root.querySelectorAll ? root.querySelectorAll("[aria-label]") : [])) {
+    const a = el.getAttribute("aria-label");
+    if (a && STR_EN[a]) el.setAttribute("aria-label", STR_EN[a]);
   }
 }
 if (LANG !== "de") {
@@ -5600,10 +5634,12 @@ function renderCollection() {
     const busy = i.status === "analyzing" || i.status === "waiting" || i.cutout_status === "running";
     const badge = i.quantity > 1 ? `<span class="gbadge">×${i.quantity}</span>` : "";
     const liveOn = itemLiveOnEbay(i);
+    /* Ein Stück in der Sammlung ist kein Entwurf — Entwürfe leben im Verkauf.
+       Hier zählt nur: verkauft, live, Wunsch oder einfach im Bestand. */
     const stat = i.sold || i.draft_status === "ended" ? ["sold", L("Verkauft")]
       : liveOn ? ["live", L("Aktiv")]
       : i.wishlist ? ["wish", L("Wunsch")]
-      : ["draft", L("Entwurf")];
+      : ["hold", L("Bestand")];
     const statLine = `<span class="gstat ${stat[0]}">${stat[1]}</span>`;
     const fav = i.favorite ? `<span class="gfav">${icon("starfill", 15)}</span>` : "";
     const value = busy
@@ -5850,24 +5886,13 @@ function renderScanMode() {
       + "<span>" + esc(L(kam ? "Artikel fotografieren" : "Aus der Mediathek")) + "</span>";
   }
   const gal = $("btnScanGallery");
-  if (gal) gal.hidden = !canLiveCam();
-  let extra = $("scanExtraActions");
-  if (!extra) {
-    const hero = document.querySelector(".scan-actions");
-    if (hero && !$("scanExtraActions")) {
-      extra = document.createElement("div");
-      extra.id = "scanExtraActions";
-      extra.className = "scan-extra";
-      extra.innerHTML = `
-        <button type="button" class="scan-chip" id="btnScanBatch">${L("Mehrere Produkte scannen")}</button>
-        <button type="button" class="scan-chip" id="btnScanCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>`;
-      hero.parentNode.insertBefore(extra, hero.nextSibling);
-      const bb = $("btnScanBatch");
-      if (bb) bb.onclick = () => startScanMode("SELL_BATCH");
-      const co = $("btnScanCollectOnly");
-      if (co) co.onclick = () => startScanMode("COLLECT_ONLY");
-    }
+  if (gal) {
+    gal.hidden = !canLiveCam();
+    gal.innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
   }
+  /* Master 30 Aug: Scan-Home nur Photograph (+ optional From photos). Keine Extra-CTAs. */
+  const dead = $("scanExtraActions");
+  if (dead) dead.remove();
   const box = $("sellTplRow");
   if (!box) return;
   const t = sellTpl();
@@ -5877,7 +5902,7 @@ function renderScanMode() {
   const bg = { white: L("Weiß"), warm: L("Warmweiß"), black: L("Schwarz"),
     logo: L("Mein Logo") }[t.bg] || L("Schwarz");
   box.innerHTML = `<button class="irow tap sell-tpl-stack" id="sellTplBtn">
-    <span class="ric" style="background:#3478f6">${icon("gear", 15)}</span>
+    <span class="ric">${icon("gear", 15)}</span>
     <span class="sell-tpl-text">
       <span class="rlabel">${L("Standard für eBay-Entwürfe")}</span>
       <span class="rvalue">${esc(fmt)} · ${esc(price)} · ${esc(bg)}</span>
@@ -8401,9 +8426,9 @@ function renderSales() {
   if (fotoHost) {
     if (!bucketLeer && bucket !== "ended") {
       fotoHost.hidden = false;
-      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Fotografieren"))}</button>`;
+      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Stück listen"))}</button>`;
       const fb = $("salesFoto");
-      if (fb) fb.onclick = () => startScanMode("SELL_SINGLE");
+      if (fb) fb.onclick = goListItem;
     } else {
       fotoHost.hidden = true;
       fotoHost.innerHTML = "";
@@ -8411,9 +8436,6 @@ function renderSales() {
   }
   if (!rows.length) {
     const v = state.salesBucket;
-    const openCam = () => {
-      startScanMode("SELL_SINGLE");
-    };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
     $("salesEmpty").innerHTML = filteredOut ? emptyState({
@@ -8432,11 +8454,11 @@ function renderSales() {
     }) : v === "active" ? emptyState({
       icon: "bag", titel: "Noch nichts live.",
       text: "",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      aktion: "Stück listen", onAktion: goListItem, well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
       text: "Fotografiere ein Stück. SERO baut den Entwurf.",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      aktion: "Stück listen", onAktion: goListItem, well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
@@ -8470,6 +8492,13 @@ function renderSales() {
 /* `well: true` stellt den Leerzustand in ein anthrazitfarbenes Foto-Feld —
    die Fläche, auf der später das Bild liegt. Ohne das las sich der leere
    Verkaufen-Reiter wie ein Dashboard ohne Zahlen. */
+/* Verkaufen führt zum Listen, nicht zur Kamera: „Fotografieren" wohnt allein
+   im Scan-Reiter (Master 30.08.). Von hier geht es dorthin — ein Weg, kein
+   zweiter Auslöser an anderer Stelle. */
+function goListItem() {
+  switchTab("tabScan");
+}
+
 function emptyState({ icon: ic = "stack", titel, text, aktion, onAktion, sekundar, onSekundar, well }) {
   const id = "es" + Math.random().toString(36).slice(2, 8);
   setTimeout(() => {
