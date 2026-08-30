@@ -87,9 +87,11 @@ def test_a4_desktop_responsive_und_tabs():
     assert 'data-tab="tabSales"' in HTML
     # Playbook Step 12: der eBay-Reiter ist raus, Start bleibt (im Clean-Skin verborgen).
     assert 'data-tab="tabProfile"' not in HTML
+    # 30.08.: Scannen sitzt nicht mehr zwischen den Reitern, sondern als
+    # runder Plus-Knopf hinter der Pille.
     tabs = re.findall(r'data-tab="([^"]+)"|id="(btnCamera)"', HTML)
     flat = [a or b for a, b in tabs]
-    assert flat == ["tabHome", "tabCollection", "btnCamera", "tabSales"]
+    assert flat == ["tabHome", "tabCollection", "tabSales", "btnCamera"]
 
 
 def test_a5_pins_hochgezaehlt():
@@ -314,8 +316,9 @@ def test_clean_ebay_tab_opens_hub():
     assert clean.startswith(b"/* SERO"), clean[:20]
     clean_txt = clean.decode("utf-8")
     assert re.search(r'tab\[data-tab="tabCollection"\]\s*\{\s*order:\s*1', clean_txt)
-    assert re.search(r"#btnCamera\s*\{\s*order:\s*2", clean_txt)
+    assert re.search(r"\.tab-sep\s*\{\s*order:\s*2", clean_txt)
     assert re.search(r'tab\[data-tab="tabSales"\]\s*\{\s*order:\s*3', clean_txt)
+    assert re.search(r"#btnCamera\s*\{\s*order:\s*4", clean_txt)
     hidden_block = re.search(
         r"html\.skin-clean \.tabbar \.tab\[data-tab=\"tabHome\"\]\s*\{[^}]*display:\s*none",
         clean_txt,
@@ -358,20 +361,26 @@ def test_clean_ebay_tab_opens_hub():
 
 
 def test_tabbar_buttons_unveraendert():
-    """Drei sichtbare Reiter: Sammlung, Scannen, Verkaufen. Kein eBay-Reiter."""
+    """Pille mit Sammlung | Verkaufen, Scannen als Plus-Knopf daneben."""
     assert 'tab-lab">Start' in HTML
     assert 'tab-lab">Sammlung' in HTML
-    assert 'tab-cam-lab">Scannen' in HTML
     assert 'tab-lab">Verkaufen' in HTML
     assert 'aria-label="Verkaufen"' in HTML
+    assert 'aria-label="Scannen"' in HTML
     assert 'tab-lab">eBay' not in HTML
     tabs = re.findall(r'data-tab="([^"]+)"|id="(btnCamera)"', HTML)
     flat = [a or b for a, b in tabs]
-    assert flat == ["tabHome", "tabCollection", "btnCamera", "tabSales"]
+    assert flat == ["tabHome", "tabCollection", "tabSales", "btnCamera"]
     nav = re.search(r'<nav class="tabbar">([\s\S]*?)</nav>', HTML)
     assert nav, "tabbar nav fehlt"
     inner = nav.group(1)
     assert inner.count("<button") == 4
+    # Die beiden Reiter stehen in der Pille, der Plus-Knopf steht daneben.
+    pill = re.search(r'<div class="tabbar-pill">([\s\S]*?)</div>', inner)
+    assert pill, "tabbar-pill fehlt"
+    assert 'data-tab="tabSales"' in pill.group(1)
+    assert 'id="btnCamera"' not in pill.group(1)
+    assert 'class="tab-sep"' in pill.group(1)
     assets = ROOT / "frontend" / "assets"
     bad = [p.name for p in assets.rglob("*") if p.is_file()
            and "ebay" in p.name.lower() and p.suffix.lower() in {".svg", ".png", ".jpg", ".webp"}]
@@ -418,10 +427,10 @@ def test_kein_sero_mascot_tabbar_content_breit():
     assert "sero-mascot-trail" not in clean_txt
     assert "@keyframes sero-mascot-bob" not in clean_txt
     bar = re.search(
-        r"html\.skin-clean \.tabbar,\s*html\.skin-clean\.force-dark \.tabbar\s*\{([^}]*)\}",
+        r"html\.skin-clean \.tabbar-pill,\s*html\.skin-clean\.force-dark \.tabbar-pill\s*\{([^}]*)\}",
         clean_txt,
     )
-    assert bar, "Clean-Tabbar-Regel fehlt"
+    assert bar, "Clean-Pillen-Regel fehlt"
     body = bar.group(1)
     assert "width: max-content" in body
     assert "340px" not in body

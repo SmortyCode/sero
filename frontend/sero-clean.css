@@ -269,50 +269,73 @@ html.skin-clean .topbar-badge {
   border: 0;
 }
 
+/* ── Bodenleiste: Pille mit zwei Reitern, Scannen als runder Knopf rechts ──
+   Die Leiste selbst ist nur noch ein durchsichtiger Rahmen. Das Glas sitzt
+   auf der Pille; der Plus-Knopf steht frei daneben und öffnet das Scan-Menü. */
 html.skin-clean .tabbar,
 html.skin-clean.force-dark .tabbar {
   position: absolute;
   left: 50%;
   right: auto;
-  width: max-content;
-  max-width: calc(100vw - 32px);
+  width: min(430px, calc(100% - 28px));
+  max-width: none;
   transform: translateX(-50%);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
-  background: var(--glass-bg) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--glass-radius) !important;
-  box-shadow: var(--glass-shadow), 0 4px 14px rgba(0, 0, 0, .28) !important;
-  backdrop-filter: var(--glass-blur) !important;
-  -webkit-backdrop-filter: var(--glass-blur) !important;
-  padding: 5px 6px;
-  min-height: 54px;   /* 44pt Trefferfläche + Polsterung */
-  gap: 3px;
-}
-html.skin-clean .tabbar::before {
-  display: block !important;
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .14) 0%, transparent 46%);
+  pointer-events: none;   /* nur Pille und Plus fangen Tipps ab */
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 0;
+  min-height: 56px;
+  gap: 0;
+}
+html.skin-clean .tabbar::before { display: none !important; }
+html.skin-clean .tabbar-pill,
+html.skin-clean.force-dark .tabbar-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100% - 74px);   /* Plus-Knopf bleibt frei */
+  min-height: 56px;
+  padding: 4px 6px;
+  gap: 2px;
+  pointer-events: auto;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 28px;
+  box-shadow: var(--glass-shadow), 0 4px 14px rgba(0, 0, 0, .28);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 html.skin-clean .tabbar .tab[data-tab="tabHome"] {
   display: none !important;
 }
 html.skin-clean .tabbar .tab[data-tab="tabCollection"] { order: 1; }
-html.skin-clean .tabbar #btnCamera { order: 2; }
+html.skin-clean .tabbar .tab-sep { order: 2; }
 /* Verkaufen ist eine Registerkarte wie die anderen: gleiches Linien-Icon,
    gleiche Breite. Die Sonderbreite war nur für die eBay-Wortmarke da. */
 html.skin-clean .tabbar .tab[data-tab="tabSales"] {
   order: 3;
   flex: 0 0 auto;
+}
+html.skin-clean .tabbar #btnCamera { order: 4; }
+/* Feiner Strich zwischen den beiden Reitern — kurz, halbtransparent. */
+html.skin-clean .tab-sep {
+  display: block;
+  flex: 0 0 auto;
+  width: 1px;
+  height: 22px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, .16);
 }
 html.skin-clean .tab {
   flex: 0 0 auto;
@@ -321,24 +344,32 @@ html.skin-clean .tab {
   min-height: 44px;
   border-radius: var(--glass-radius-sm);
   color: #8e8e93;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  gap: 0;
-  padding: 0 16px;
+  gap: 3px;
+  padding: 0 18px;
 }
+/* Aktiv heißt: Symbol und Wort in voller Farbe. Die gefüllte Kachel
+   dahinter machte die Pille unruhig — der Mockup zeigt sie ohne. */
 html.skin-clean .tab.active,
 html.skin-clean.force-dark .tab.active {
   color: #fff !important;
-  background: var(--glass-inlay) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  background: none !important;
+  box-shadow: none;
 }
 html.skin-clean .tab .tic {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 0;
   background: none !important;
   border: 0 !important;
   box-shadow: none !important;
+}
+/* Dünnere Linien: das Icon-Wörterbuch zeichnet mit Strichstärke 2. */
+html.skin-clean .tab .tic svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.6;
 }
 html.skin-clean .tab.active .tic {
   background: none !important;
@@ -358,24 +389,43 @@ html.skin-clean .tab-ebay-mark svg {
   width: auto;
   fill: currentColor;
 }
+/* Scannen: runder Knopf rechts neben der Pille, umgekehrte Farben —
+   im Dunkeln weiß auf Schwarz, im Hellen schwarz auf Weiß. */
 html.skin-clean .tab-cam,
 html.skin-clean.force-dark .tab-cam,
 html.skin-clean.force-dark #btnCamera {
+  position: absolute;
+  right: 0;
   flex: 0 0 auto;
-  width: auto;
-  height: 44px;
-  min-height: 44px;   /* gleiche 44pt-Trefferfläche wie die Reiter daneben */
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
   margin: 0;
-  border-radius: var(--glass-radius-sm);
+  padding: 0;
   gap: 0;
-  color: #8e8e93;
-  padding: 0 16px;
+  border-radius: 50%;
+  pointer-events: auto;
+  color: #000;
+  background: #ffffff !important;
+  border: 0 !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .48) !important;
+  transition: transform .16s ease;
 }
+html.skin-clean .tab-cam svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2;
+  transition: transform .24s cubic-bezier(.22, 1, .36, 1);
+}
+/* Offenes Menü: das Plus dreht sich zum Kreuz. */
+html.skin-clean .tab-cam.is-open svg { transform: rotate(45deg); }
+html.skin-clean .tab-cam:active { transform: scale(.94); }
+/* Der Scan-Reiter existiert intern weiter — der Knopf sieht dabei gleich aus. */
 html.skin-clean .tab-cam.active,
 html.skin-clean .tab-cam[aria-current="page"] {
-  background: var(--glass-inlay) !important;
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  background: #ffffff !important;
+  color: #000;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .48) !important;
 }
 html.skin-clean .tab-cam::after { display: none !important; }
 html.skin-clean .cam-ico {
@@ -390,10 +440,77 @@ html.skin-clean.force-dark .tab-cam-lab {
   font-weight: 600;
   margin: 0;
 }
-html.skin-clean .tab-cam.active .cam-ico,
-html.skin-clean .tab-cam[aria-current="page"] .cam-ico {
-  filter: grayscale(1) brightness(2);
+
+/* ── Scan-Menü: kleines Popover über dem Plus ──
+   Kein Bottom-Sheet, keine Vollbildfläche. Die Scrim fängt nur Tipps
+   außerhalb ab und bleibt unsichtbar. */
+html.skin-clean .scan-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  background: transparent;
+}
+html.skin-clean .scan-menu {
+  position: absolute;
+  right: max(14px, calc((100% - 430px) / 2));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 82px);
+  z-index: 22;
+  width: max-content;
+  min-width: 214px;
+  max-width: calc(100vw - 28px);
+  padding: 5px;
+  border-radius: 18px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), 0 16px 34px rgba(0, 0, 0, .34);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transform-origin: calc(100% - 24px) bottom;
+  transform: translateY(10px) scale(.86);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, transform .24s cubic-bezier(.22, 1, .36, 1);
+}
+html.skin-clean .scan-menu.is-open {
+  opacity: 1;
   transform: none;
+  pointer-events: auto;
+}
+html.skin-clean .scan-menu[hidden] { display: none; }
+html.skin-clean .scan-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--label);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+  text-align: left;
+  -webkit-appearance: none;
+  appearance: none;
+}
+html.skin-clean .scan-menu-row svg {
+  flex: 0 0 auto;
+  stroke-width: 1.7;
+  opacity: .92;
+}
+html.skin-clean .scan-menu-row:active { background: var(--glass-inlay); }
+html.skin-clean .scan-menu-sep {
+  display: block;
+  height: 1px;
+  margin: 2px 12px;
+  background: var(--separator);
+}
+@media (prefers-reduced-motion: reduce) {
+  html.skin-clean .scan-menu,
+  html.skin-clean .tab-cam,
+  html.skin-clean .tab-cam svg { transition: none; }
 }
 
 html.skin-clean .gitem,
@@ -1581,7 +1698,6 @@ html.skin-clean.force-light,
 html.skin-clean.force-light body,
 html.skin-clean.force-light #viewApp,
 html.skin-clean.force-light .topbar,
-html.skin-clean.force-light .tabbar,
 html.skin-clean.force-light .detail,
 html.skin-clean.force-light .detail-bar,
 html.skin-clean.force-light .settings-view,
@@ -2183,11 +2299,29 @@ html.skin-clean.force-light .d-cta-dock {
   border-top: 1px solid rgba(0, 0, 0, .08);
 }
 html.skin-clean.force-light .d-cta-sub { color: #8e8e93 !important; }
-html.skin-clean.force-light .tabbar {
-  background: rgba(255, 255, 255, .92) !important;
-  border: 1px solid rgba(0, 0, 0, .1) !important;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .12) !important;
+html.skin-clean.force-light .tabbar-pill {
+  background: rgba(255, 255, 255, .96) !important;
+  border: 1px solid rgba(0, 0, 0, .06) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .12) !important;
 }
+html.skin-clean.force-light .tab-sep { background: rgba(0, 0, 0, .10); }
+/* Hell: schwarzer Kreis mit weißem Plus — wie im Entwurf. */
+html.skin-clean.force-light .tab-cam,
+html.skin-clean.force-light #btnCamera,
+html.skin-clean.force-light .tab-cam.active,
+html.skin-clean.force-light .tab-cam[aria-current="page"] {
+  background: #000000 !important;
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .24) !important;
+}
+html.skin-clean.force-light .scan-menu {
+  background: rgba(255, 255, 255, .98) !important;
+  border: 1px solid rgba(0, 0, 0, .06) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .16) !important;
+}
+html.skin-clean.force-light .scan-menu-row { color: #000; }
+html.skin-clean.force-light .scan-menu-row:active { background: rgba(0, 0, 0, .05); }
+html.skin-clean.force-light .scan-menu-sep { background: rgba(0, 0, 0, .08); }
 html.skin-clean.force-light .tab,
 html.skin-clean.force-light .tab .tic,
 html.skin-clean.force-light .tab-lab { color: #8e8e93; }

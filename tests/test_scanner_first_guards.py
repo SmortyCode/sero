@@ -14,7 +14,8 @@ PRE = (ROOT / "web" / "preflight.py").read_text(encoding="utf-8")
 
 def test_01_scan_button_opens_camera_sync_and_has_label():
     assert 'id="btnCamera"' in HTML
-    assert "tab-cam-lab" in HTML or "tab-cam-lab" in JS
+    # Der Plus-Knopf trägt kein Wort mehr — die Beschriftung hängt am aria-label.
+    assert 'aria-label="Scannen"' in HTML
     assert 'L("Scannen")' in JS
     # Kamera im gleichen Gesture: startScanMode öffnet Input vor Tab-Wechsel
     assert "$(\"btnCamera\").onclick" in JS
@@ -39,7 +40,22 @@ def test_01_scan_button_opens_camera_sync_and_has_label():
     assert 'id="scanFinder"' in HTML
     assert "scan-finder" in HTML
     assert "scan-br-tl" in HTML
-    assert '$("btnCamera").onclick = () => {\n  switchTab("tabScan");\n};' in JS
+    # Das Plus öffnet das Scan-Menü; erst die Zeile darin startet Kamera
+    # oder Mediathek — beide im bestehenden Ablauf.
+    assert '$("btnCamera").onclick = () => {\n  toggleScanMenu();\n};' in JS
+    assert 'id="scanMenu"' in HTML
+    assert 'id="scanMenuCam"' in HTML
+    assert 'id="scanMenuLib"' in HTML
+    assert "function openScanMenu" in JS
+    assert "function closeScanMenu" in JS
+    assert 'scanMenuPick(() => startScanMode("SELL_SINGLE"))' in JS
+    assert "scanMenuPick(openScanLibrary)" in JS
+    assert "function openScanLibrary" in JS
+    # Doppeltipp-Schutz: kein zweiter Kamera- oder Dateidialog.
+    assert "function scanMenuPick" in JS
+    assert "scanMenuPick._last" in JS
+    assert '"Foto machen": "Take photo"' in JS
+    assert '"Aus Mediathek auswählen": "Choose from library"' in JS
     assert '$("emptyAdd").onclick = () => startScanMode("SELL_SINGLE")' in JS
 
 

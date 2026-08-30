@@ -94,17 +94,19 @@ def test_dark_tabbar_hellblau_transparent():
     assert "--glass-blur:" in clean
     assert "--glass-radius:" in clean
     assert "--glass-radius-sm:" in clean
+    # Das Glas sitzt seit 30.08. auf der Pille — die Leiste selbst ist leer.
     bar = re.search(
-        r"html\.skin-clean \.tabbar,\s*html\.skin-clean\.force-dark \.tabbar\s*\{([^}]*)\}",
+        r"html\.skin-clean \.tabbar-pill,\s*html\.skin-clean\.force-dark \.tabbar-pill\s*\{([^}]*)\}",
         clean,
     )
-    assert bar, "Clean-Tabbar-Regel fehlt"
+    assert bar, "Clean-Pillen-Regel fehlt"
     body = bar.group(1)
     assert "backdrop-filter" in body
     assert "-webkit-backdrop-filter" in body
     assert "var(--glass-bg)" in body
     assert "var(--glass-border)" in body
-    assert "var(--glass-radius)" in body
+    # Die Bodenpille ist rund wie im Entwurf, kein Squircle wie die Karten.
+    assert "border-radius: 28px" in body
     assert "999px" not in body
     assert "rgba(168, 210, 255" not in body
     ava = re.search(r"html\.skin-clean \.topbar-ava\s*\{([^}]*)\}", clean)

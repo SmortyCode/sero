@@ -34,7 +34,7 @@
   <meta name="theme-color" content="#000000">
   <link rel="stylesheet" href="sero.css?v=168">
   <link rel="stylesheet" href="sero-dark.css?v=22">
-  <link rel="stylesheet" href="sero-clean.css?v=47">
+  <link rel="stylesheet" href="sero-clean.css?v=49">
   <!-- Thema vor dem ersten Anstrich setzen. sero.js läuft erst am Seitenende;
        bis dahin galt das feste force-dark aus dem html-Tag, und der helle Start
        zeigte erst einen schwarzen Splash und sprang dann auf Weiß. -->
@@ -242,14 +242,27 @@
     <div class="page-scroll" id="profileScroll"></div>
   </main>
 
+  <!-- Zwei Reiter in der Pille, Scannen als runder Knopf rechts daneben.
+       Scannen war ein Reiter zwischen den beiden — als Hauptweg der App
+       gehört es auf einen eigenen Knopf, nicht in die Registerkarten. -->
   <nav class="tabbar">
-    <button class="tab" data-tab="tabHome" aria-label="Übersicht"><span class="tic"></span><span class="tab-lab">Start</span></button>
-    <button class="tab active" data-tab="tabCollection" aria-label="Sammlung"><span class="tic"></span><span class="tab-lab">Sammlung</span></button>
-    <button class="tab-cam" id="btnCamera" aria-label="Scannen" type="button"><span class="tab-cam-lab">Scannen</span></button>
-    <!-- Verkaufen trägt dasselbe Linien-Icon wie die anderen Registerkarten (Preisschild).
-         Die eBay-Wortmarke stand hier für einen Marktplatz — SERO ist das Haus, eBay nur der Weg. -->
-    <button class="tab" data-tab="tabSales" aria-label="Verkaufen"><span class="tic"></span><span class="tab-lab">Verkaufen</span></button>
+    <div class="tabbar-pill">
+      <button class="tab" data-tab="tabHome" aria-label="Übersicht"><span class="tic"></span><span class="tab-lab">Start</span></button>
+      <button class="tab active" data-tab="tabCollection" aria-label="Sammlung"><span class="tic"></span><span class="tab-lab">Sammlung</span></button>
+      <span class="tab-sep" aria-hidden="true"></span>
+      <!-- Verkaufen trägt dasselbe Linien-Icon wie die anderen Registerkarten (Preisschild).
+           Die eBay-Wortmarke stand hier für einen Marktplatz — SERO ist das Haus, eBay nur der Weg. -->
+      <button class="tab" data-tab="tabSales" aria-label="Verkaufen"><span class="tic"></span><span class="tab-lab">Verkaufen</span></button>
+    </div>
+    <button class="tab-cam" id="btnCamera" aria-label="Scannen" type="button"
+      aria-haspopup="menu" aria-expanded="false" aria-controls="scanMenu"></button>
   </nav>
+  <div id="scanMenuScrim" class="scan-menu-scrim" hidden></div>
+  <div id="scanMenu" class="scan-menu" role="menu" aria-label="Scannen" hidden>
+    <button type="button" class="scan-menu-row" id="scanMenuCam" role="menuitem"></button>
+    <span class="scan-menu-sep" aria-hidden="true"></span>
+    <button type="button" class="scan-menu-row" id="scanMenuLib" role="menuitem"></button>
+  </div>
 </section>
 
 <!-- Einstellungen — vollhohe sekundäre Ansicht -->
@@ -326,7 +339,7 @@
 
 <script src="sero-mobile.js?v=4"></script>
 <script src="sero-detail.js?v=7"></script>
-<script src="sero.js?v=259"></script>
+<script src="sero.js?v=261"></script>
 <script src="sero-profile.js?v=25"></script>
 </body>
 </html>

@@ -221,10 +221,14 @@ function mountStaticIcons() {
   if (su) su.onclick = showSignup;
   const back = $("loginBack");
   if (back) back.onclick = showLogin;
-  $("btnCamera").innerHTML = `
-    <img src="assets/scan-cam-light.png?v=3" alt="" class="cam-ico cam-ico-light">
-    <img src="assets/scan-cam-dark.png?v=3" alt="" class="cam-ico cam-ico-dark">
-    <span class="tab-cam-lab">${L("Scannen")}</span>`;
+  /* Der Scan-Knopf trägt nur noch das Pluszeichen. Was dahinter steckt,
+     sagt das Menü darüber — die Beschriftung bleibt am aria-label. */
+  $("btnCamera").innerHTML = icon("plus", 26);
+  $("btnCamera").setAttribute("aria-label", L("Scannen"));
+  const smCam = $("scanMenuCam");
+  if (smCam) smCam.innerHTML = icon("camera", 20) + "<span>" + L("Foto machen") + "</span>";
+  const smLib = $("scanMenuLib");
+  if (smLib) smLib.innerHTML = icon("photo", 20) + "<span>" + L("Aus Mediathek auswählen") + "</span>";
   $("detailClose").innerHTML = icon("chevron", 20);
   $("detailClose").style.transform = "rotate(180deg)";
   $("detailTrash").innerHTML = icon("trash", 18);
@@ -1872,6 +1876,9 @@ const STR_EN = {
   "Wird geladen …": "Loading…",
   "Aus Mediathek": "From library",
   "Aus Fotos": "From photos",
+  /* Die zwei Zeilen im Scan-Menü am Plus-Knopf. */
+  "Foto machen": "Take photo",
+  "Aus Mediathek auswählen": "Choose from library",
   "Wert wird ab dem 3. Stück sichtbar": "Value appears from the 3rd item",
   "Erlöse erscheinen hier": "Sold items show up here",
   "Business Policies deines eBay-Kontos. Keine US-Dienste.":
@@ -4560,6 +4567,8 @@ window.openSeroProfile = openSeroProfile;
 
 const TAB_ORDER = ["tabHome", "tabCollection", "tabScan", "tabSales", "tabProfile"];
 function switchTab(id) {
+  // Ein Wechsel auf Sammlung oder Verkaufen schließt das Scan-Menü.
+  try { closeScanMenu(); } catch (_) { /* Menü noch nicht im DOM */ }
   // Richtung merken, BEVOR die alte Seite versteckt wird — die neue Seite
   // schiebt sich dann aus der logischen Richtung herein (räumliche Kontinuität)
   const prev = TAB_ORDER.findIndex((t) => { const p = $(t); return p && !p.hidden; });
@@ -4819,12 +4828,10 @@ function homeSellHero(d) {
   return `<div class="home-sell-hero">
     <h1 class="home-sell-title">${L("Fotografieren. Prüfen. Bei eBay verkaufen.")}</h1>
     <p class="home-sell-lead">${L("SERO bereitet aus deinem Foto einen editierbaren eBay-Entwurf vor. Live geht es erst nach deiner Freigabe.")}</p>
+    <!-- Ein Weg nach vorn. Stapel und „nur erfassen" hängen am Plus-Knopf
+         der Bodenleiste, nicht als zweite Knopfreihe hier. -->
     <div class="home-sell-actions">
       <button type="button" class="btn-primary" id="homeScanOne">${icon("camera", 18)}<span>${L("Artikel fotografieren")}</span></button>
-      <div class="home-sell-chips">
-        <button type="button" class="scan-chip" id="homeScanBatch">${icon("stack", 16)}<span>${L("Mehrere Produkte scannen")}</span></button>
-        <button type="button" class="scan-chip" id="homeCollectOnly">${L("Nur zur Sammlung hinzufügen")}</button>
-      </div>
     </div>
     <ul class="home-trust">
       <li>${L("Automatische Vorbereitung von Titel, Kategorie und Preisvorschlag")}</li>
@@ -4960,19 +4967,6 @@ function wireHomeSellHero() {
     const inp = $("cameraInput");
     try { if (inp) inp.click(); } catch (_) { /* */ }
     try { trackFunnel("scan_mode_selected", { mode: "SELL_SINGLE" }); } catch (_) { /* */ }
-  };
-  const batch = $("homeScanBatch");
-  if (batch) batch.onclick = () => {
-    const inp = $("fileInput");
-    try { if (inp) { inp.multiple = true; inp.click(); } } catch (_) { /* */ }
-    try { trackFunnel("scan_mode_selected", { mode: "SELL_BATCH" }); } catch (_) { /* */ }
-  };
-  const only = $("homeCollectOnly");
-  if (only) only.onclick = () => {
-    state.scanIntent = "COLLECT_ONLY";
-    const inp = $("cameraInput");
-    try { if (inp) inp.click(); } catch (_) { /* */ }
-    try { trackFunnel("scan_mode_selected", { mode: "COLLECT_ONLY" }); } catch (_) { /* */ }
   };
   const drafts = $("homeDrafts");
     if (drafts) drafts.onclick = () => {
@@ -6100,9 +6094,91 @@ function openQuickListSheet(item) {
   openItemDetail(item.id, "sell");
 }
 
+/* ═══════════════════ Scan-Menü am Plus ═══════════════════
+   Der Plus-Knopf neben der Pille öffnet ein kleines Popover statt sofort
+   die Kamera. Beide Zeilen münden in den bestehenden Ablauf:
+   startScanMode() für die Kamera, libraryInput für die Mediathek. */
+
+const SCAN_MENU_ANIM_MS = 200;
+
+function scanMenuIsOpen() {
+  const m = $("scanMenu");
+  return !!(m && !m.hidden);
+}
+
+function openScanMenu() {
+  const menu = $("scanMenu");
+  if (!menu || scanMenuIsOpen()) return;
+  if (menu._closeTimer) { clearTimeout(menu._closeTimer); menu._closeTimer = null; }
+  const scrim = $("scanMenuScrim");
+  if (scrim) scrim.hidden = false;
+  menu.hidden = false;
+  void menu.offsetWidth;                 // Übergang neu anstoßen
+  menu.classList.add("is-open");
+  const btn = $("btnCamera");
+  if (btn) {
+    btn.classList.add("is-open");
+    btn.setAttribute("aria-expanded", "true");
+  }
+  try { haptic("light"); } catch (_) { /* */ }
+}
+
+function closeScanMenu() {
+  const menu = $("scanMenu");
+  if (!menu || menu.hidden) return;
+  menu.classList.remove("is-open");
+  const scrim = $("scanMenuScrim");
+  if (scrim) scrim.hidden = true;
+  const btn = $("btnCamera");
+  if (btn) {
+    btn.classList.remove("is-open");
+    btn.setAttribute("aria-expanded", "false");
+  }
+  if (menu._closeTimer) clearTimeout(menu._closeTimer);
+  menu._closeTimer = setTimeout(() => {
+    menu.hidden = true;
+    menu._closeTimer = null;
+  }, SCAN_MENU_ANIM_MS);
+}
+
+function toggleScanMenu() {
+  if (scanMenuIsOpen()) closeScanMenu();
+  else openScanMenu();
+}
+
+/* Doppeltipp-Schutz: zwei schnelle Tipps dürfen Kamera oder Dateiauswahl
+   nicht zweimal öffnen — iOS legt sonst zwei Dialoge übereinander. */
+function scanMenuPick(fn) {
+  const jetzt = Date.now();
+  if (jetzt - (scanMenuPick._last || 0) < 700) return;
+  scanMenuPick._last = jetzt;
+  closeScanMenu();
+  fn();
+}
+
+/** Mediathek öffnen — derselbe Weg wie „Aus Fotos" im Scan-Reiter. */
+function openScanLibrary() {
+  const inp = $("libraryInput") || $("fileInput");
+  try { if (inp) inp.click(); } catch (_) { /* */ }
+}
+
 $("btnCamera").onclick = () => {
-  switchTab("tabScan");
+  toggleScanMenu();
 };
+{
+  const cam = $("scanMenuCam");
+  if (cam) cam.onclick = () => scanMenuPick(() => startScanMode("SELL_SINGLE"));
+  const lib = $("scanMenuLib");
+  if (lib) lib.onclick = () => scanMenuPick(openScanLibrary);
+  const scrim = $("scanMenuScrim");
+  if (scrim) scrim.onclick = () => closeScanMenu();
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !scanMenuIsOpen()) return;
+    closeScanMenu();
+    const btn = $("btnCamera");
+    if (btn) try { btn.focus(); } catch (_) { /* */ }
+  });
+}
 
 /** Scan-Modus starten — Kamera/Galerie im gleichen Gesture (iOS). */
 function startScanMode(mode) {
@@ -6618,6 +6694,7 @@ function normalizeItemPhotos(item) {
 }
 
 function openScanModePicker() {
+  try { closeScanMenu(); } catch (_) { /* */ }
   openSheet(L("Scan-Modus"), L("Ein Artikel, Mehrere Artikel oder nur erfassen."),
     `<div class="scan-mode-list">
       <button type="button" class="btn-secondary" id="smSingle">${icon("camera", 17)}<span>${L("Ein Artikel")}</span></button>
