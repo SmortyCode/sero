@@ -182,7 +182,7 @@ html.skin-clean .login-social .btn-secondary {
 html.skin-clean .btn-primary,
 html.skin-clean.force-dark .btn-primary {
   background: #fff !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
   box-shadow: none !important;
   border-radius: var(--glass-radius);
   font-weight: 600;
@@ -358,10 +358,11 @@ html.skin-clean .tab {
   min-height: 44px;
   border-radius: var(--glass-radius-sm);
   color: #8e8e93;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   gap: 0;
-  padding: 0 16px;
+  padding: 0 18px;
 }
 html.skin-clean .tab.active,
 html.skin-clean.force-dark .tab.active {
@@ -440,12 +441,13 @@ html.skin-clean .col-top-main {
 }
 html.skin-clean .col-port-val {
   font-size: 44px !important;
-  font-weight: 700;
-  letter-spacing: -1.6px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
   line-height: 1.05;
-  color: #fff;
+  color: #1C1C1E;
   font-variant-numeric: tabular-nums;
 }
+html.skin-clean.force-dark .col-port-val { color: #fff; }
 html.skin-clean .col-hub-date {
   color: #8e8e93;
   font-size: 13px;
@@ -517,6 +519,8 @@ html.skin-clean .range-pill {
   background: #1c1c1e;
   color: #a1a1a6;
   border: 0;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 html.skin-clean .fchip.on,
 html.skin-clean .range-pill.on,
@@ -663,10 +667,11 @@ html.skin-clean .ebay-hub-shop {
 }
 html.skin-clean .ebay-hub-sum {
   font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -2.2px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
   line-height: 1.02;
   color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 html.skin-clean .ebay-hub-sub {
   margin: 8px 0 0;
@@ -1244,7 +1249,7 @@ html.skin-clean .d-cta-mark {
   order: 0;
   flex: 0 0 auto;
   height: 16px;
-  color: #000;
+  color: #1C1C1E;
   filter: grayscale(1);
 }
 html.skin-clean .d-ebay-cta .d-cta-lab {
@@ -1399,11 +1404,12 @@ html.skin-clean .sale-row .mv-ph {
 }
 html.skin-clean .sr-t {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 500;
   -webkit-line-clamp: 2;
 }
 html.skin-clean .sr-m {
   font-size: 12.5px;
+  font-weight: 400;
   color: #a1a1a6;
   margin-top: 3px;
 }
@@ -1590,11 +1596,11 @@ html.skin-clean.force-light {
   --bg-elevated: #ffffff;
   --fill: #f2f2f7;
   --fill-2: #e5e5ea;
-  --label: #000000;
+  --label: #1C1C1E;
   --label-2: #636366;
   --label-3: #8e8e93;
   --separator: rgba(0, 0, 0, .12);
-  --tint: #000000;
+  --tint: #1C1C1E;
   --tint-soft: rgba(0, 0, 0, .06);
   --surface: #f2f2f7;
   --surface-solid: #f2f2f7;
@@ -1610,7 +1616,7 @@ html.skin-clean.force-light {
   --btn-fg: #ffffff;
   --btn-bg-top: #000000;
   --btn-bg-bot: #000000;
-  --navy: #000000;
+  --navy: #1C1C1E;
   --hairline: rgba(0, 0, 0, .1);
   --green: #248a3d;
   --red: #ff3b30;
@@ -1630,9 +1636,9 @@ html.skin-clean.force-light .settings-bar,
 html.skin-clean.force-light .tab-page,
 html.skin-clean.force-light .page-scroll {
   background: #fff !important;
-  color: #000;
+  color: #1C1C1E;
 }
-html.skin-clean.force-light a { color: #000; }
+html.skin-clean.force-light a { color: #1C1C1E; }
 html.skin-clean.force-light .gitem,
 html.skin-clean.force-light .set-card,
 html.skin-clean.force-light .ilist,
@@ -1641,25 +1647,25 @@ html.skin-clean.force-light .ov-card,
 html.skin-clean.force-light .sale-row,
 html.skin-clean.force-light .sale-tile {
   background: #f2f2f7 !important;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light .tab.active,
-html.skin-clean.force-light .tab.active .tic { color: #000; }
+html.skin-clean.force-light .tab.active .tic { color: #1C1C1E; }
 html.skin-clean.force-light .btn-primary {
   background: #000 !important;
   color: #fff !important;
 }
 html.skin-clean.force-light .btn-secondary {
   background: #f2f2f7 !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
 }
 html.skin-clean.force-light .sheet {
   background: #fff !important;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light #toast {
   background: #f2f2f7 !important;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light #splash { background: #000 !important; }
 html.skin-clean.force-light .ptr-spin {
@@ -1723,7 +1729,7 @@ html.skin-clean.force-light .inv-chip {
 html.skin-clean.force-light .inv-tool.on,
 html.skin-clean.force-light .inv-chip.on {
   background: #e5e5ea;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean #colGrid.grid {
   gap: 16px;
@@ -1750,12 +1756,13 @@ html.skin-clean #colGrid .gitem .gname {
   overflow: hidden;
   text-overflow: clip;
   white-space: normal;
+  font-weight: 500;
 }
 html.skin-clean #colGrid .gitem .gcat,
 html.skin-clean #colGrid .gitem .gmeta {
   text-transform: none;
   letter-spacing: 0;
-  font-weight: 500;
+  font-weight: 400;
   color: #8e8e93;
   font-size: 12px;
 }
@@ -1811,8 +1818,8 @@ html.skin-clean.force-dark #salesSeg button.on {
   border-bottom-color: #fff;
 }
 html.skin-clean.force-light #salesSeg button.on {
-  color: #000 !important;
-  border-bottom-color: #000;
+  color: #1C1C1E !important;
+  border-bottom-color: #1C1C1E;
 }
 html.skin-clean .scan-review {
   position: fixed;
@@ -1890,7 +1897,7 @@ html.skin-clean .guest-save-btn {
 html.skin-clean.force-light .guest-save-btn,
 html.skin-clean.force-light body .guest-save-btn {
   background: #f2f2f7;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean .sales-foto-pill {
   display: block;
@@ -1933,7 +1940,7 @@ html.skin-clean.force-light .ov-hero {
   background: #f2f2f7 !important;
 }
 html.skin-clean.force-light .ov-hero.themed .ov-value,
-html.skin-clean.force-light .ov-hero .ov-value { color: #000 !important; }
+html.skin-clean.force-light .ov-hero .ov-value { color: #1C1C1E !important; }
 
 html.skin-clean .home-sell-actions {
   display: flex;
@@ -1964,7 +1971,7 @@ html.skin-clean .home-sell-chips .scan-chip {
 }
 html.skin-clean.force-light .scan-chip {
   border-color: rgba(0, 0, 0, .16);
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean .scan-gal {
   display: inline-flex;
@@ -1985,7 +1992,7 @@ html.skin-clean .scan-gal {
 }
 html.skin-clean.force-light .scan-gal {
   border-color: rgba(0, 0, 0, .16);
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean .scan-finder .scan-actions {
   width: 100%;
@@ -2019,7 +2026,7 @@ html.skin-clean .sell-tpl-text .rvalue {
   font-weight: 500;
   color: #8e8e93;
 }
-html.skin-clean.force-light .sell-tpl-text .rlabel { color: #000; }
+html.skin-clean.force-light .sell-tpl-text .rlabel { color: #1C1C1E; }
 
 html.skin-clean .gitem .ghead {
   display: flex;
@@ -2124,7 +2131,7 @@ html.skin-clean .help-faq details p {
   line-height: 1.4;
 }
 html.skin-clean.force-light .help-faq details { border-bottom-color: rgba(0, 0, 0, .08); }
-html.skin-clean.force-light .help-faq summary { color: #000; }
+html.skin-clean.force-light .help-faq summary { color: #1C1C1E; }
 
 html.skin-clean .inv-bar .inv-search { display: flex; }
 
@@ -2159,8 +2166,8 @@ html.skin-clean .sheet-head { min-height: 44px; }
 html.skin-clean.force-light .d-seg { border-bottom-color: rgba(0, 0, 0, .08); }
 html.skin-clean.force-light .d-seg button { color: #8e8e93; }
 html.skin-clean.force-light .d-seg button.on {
-  color: #000;
-  border-bottom-color: #000;
+  color: #1C1C1E;
+  border-bottom-color: #1C1C1E;
 }
 
 /* aaaa.md Light: keine Near-Black-Inseln, keine weißen Glyphs auf hell */
@@ -2181,7 +2188,7 @@ html.skin-clean.force-light .empty,
 html.skin-clean.force-light #salesEmpty .empty,
 html.skin-clean.force-light .sales-empty-well {
   background: #f2f2f7 !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
   border: 0 !important;
   box-shadow: none !important;
 }
@@ -2202,7 +2209,7 @@ html.skin-clean.force-light .d-fact,
 html.skin-clean.force-light .sero-price-val,
 html.skin-clean.force-light #detailBody,
 html.skin-clean.force-light #detailBody .section-label {
-  color: #000 !important;
+  color: #1C1C1E !important;
 }
 html.skin-clean.force-light .tv-phandle,
 html.skin-clean.force-light .tv-prof-stat span,
@@ -2220,7 +2227,7 @@ html.skin-clean.force-light .d-cta-dock,
 html.skin-clean.force-light .settings-view,
 html.skin-clean.force-light .settings-bar {
   background: #fff !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
 }
 html.skin-clean.force-light .d-cta-dock {
   border-top: 1px solid rgba(0, 0, 0, .08);
@@ -2236,27 +2243,27 @@ html.skin-clean.force-light .tab .tic,
 html.skin-clean.force-light .tab-lab { color: #8e8e93; }
 html.skin-clean.force-light .tab.active,
 html.skin-clean.force-light .tab.active .tic,
-html.skin-clean.force-light .tab.active .tab-lab { color: #000 !important; }
+html.skin-clean.force-light .tab.active .tab-lab { color: #1C1C1E !important; }
 html.skin-clean.force-light .scan-finder .btn-secondary,
 html.skin-clean.force-light .scan-actions .btn-secondary,
 html.skin-clean.force-light #btnScanGallery {
   background: #f2f2f7 !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
   border: 1px solid rgba(0, 0, 0, .12) !important;
 }
 html.skin-clean.force-light .scan-finder p,
 html.skin-clean.force-light #scanHeroText { color: #a1a1a6 !important; }
 html.skin-clean.force-light .sell-tpl-text .rvalue { color: #636366 !important; }
 html.skin-clean.force-light .set-row { border-color: rgba(0, 0, 0, .08); }
-html.skin-clean.force-light .help-faq summary { color: #000 !important; }
+html.skin-clean.force-light .help-faq summary { color: #1C1C1E !important; }
 html.skin-clean.force-light a,
 html.skin-clean.force-light .sec-link,
 html.skin-clean.force-light .rrow {
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light .rrow .tic,
 html.skin-clean.force-light .scan-ic {
-  color: #000 !important;
+  color: #1C1C1E !important;
   filter: none !important;
 }
 
@@ -2265,19 +2272,19 @@ html.skin-clean.force-light :focus-visible,
 html.skin-clean.force-light button:focus-visible,
 html.skin-clean.force-light a:focus-visible,
 html.skin-clean.force-light input:focus-visible {
-  outline-color: #000;
+  outline-color: #1C1C1E;
 }
 html.skin-clean.force-light #colGrid .gitem:not(.gitem-add),
 html.skin-clean.force-light .impact-card,
 html.skin-clean.force-light .ebay-sec {
   background: #f2f2f7 !important;
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light .col-port-val,
 html.skin-clean.force-light .ebay-sec-h,
 html.skin-clean.force-light .icon-btn:not(.col-act),
 html.skin-clean.force-light .col-actions .col-act {
-  color: #000;
+  color: #1C1C1E;
 }
 html.skin-clean.force-light .icon-btn:not(.col-act) {
   background: #f2f2f7 !important;
@@ -2294,7 +2301,7 @@ html.skin-clean.force-light .fchip.on,
 html.skin-clean.force-light .range-pill.on,
 html.skin-clean.force-light .seg button.on {
   background: #e5e5ea !important;
-  color: #000 !important;
+  color: #1C1C1E !important;
 }
 html.skin-clean #sheetBody .sheet-hint { margin-bottom: 8px; }
 html.skin-clean #sheetBody .inv-range { margin: 0 0 8px; }
