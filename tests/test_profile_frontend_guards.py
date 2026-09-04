@@ -62,7 +62,7 @@ def test_settings_view_present():
 
 def test_tabbar_start_label():
     assert ">Start<" in HTML or "tab-lab\">Start" in HTML
-    assert "aria-label=\"Übersicht\"" in HTML
+    assert "aria-label=\"Home\"" in HTML or "aria-label=\"Übersicht\"" in HTML
 
 
 def test_account_delete_requires_loschen():

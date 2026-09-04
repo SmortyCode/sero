@@ -230,7 +230,7 @@ function mountStaticIcons() {
   if ($("scanHeroIcon")) $("scanHeroIcon").innerHTML = icon("scanframe", 44);
   if ($("btnScanNow")) $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
   if ($("btnScanGallery")) $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
-  const tabIcons = { tabHome: "home", tabCollection: "stack", tabSales: "tag", tabProfile: "person" };
+  const tabIcons = { tabHome: "home", tabCollection: "grid", tabSales: "tag", tabProfile: "person" };
   document.querySelectorAll(".tab").forEach((t) => {
     const tic = t.querySelector(".tic");
     if (tic) tic.innerHTML = icon(tabIcons[t.dataset.tab], 24);

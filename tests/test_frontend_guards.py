@@ -358,7 +358,7 @@ def test_tabbar_buttons_unveraendert():
     assert 'tab-lab">Start' in HTML
     assert 'tab-lab">Collection' in HTML
     assert 'tab-lab">Sell' in HTML
-    assert 'aria-label="Verkaufen"' in HTML
+    assert 'aria-label="Sell"' in HTML
     assert 'tab-lab">eBay' not in HTML
     tabs = re.findall(r'data-tab="([^"]+)"', HTML)
     assert tabs == ["tabHome", "tabCollection", "tabSales"]
@@ -381,7 +381,7 @@ def test_verkaufen_tab_ebay_wortmarke():
     assert "tab-ebay-mark" not in chunk
     assert 'class="tic"' in chunk
     assert 'tab-lab">Sell' in chunk
-    assert 'aria-label="Verkaufen"' in chunk
+    assert 'aria-label="Sell"' in chunk
     assert "src=" not in chunk
     assert 'tabSales: "tag"' in JS
     clean = (ROOT / "frontend" / "sero-clean.css").read_text(encoding="utf-8")

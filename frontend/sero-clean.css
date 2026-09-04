@@ -1705,7 +1705,7 @@ html.skin-clean .inv-chip.on {
 html.skin-clean.force-light .inv-tool,
 html.skin-clean.force-light .inv-chip {
   background: #f2f2f7;
-  border-color: rgba(0, 0, 0, .1);
+  border-color: #C7C7CC;
   color: #636366;
 }
 html.skin-clean.force-light .inv-tool.on,
