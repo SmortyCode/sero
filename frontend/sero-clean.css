@@ -423,7 +423,7 @@ html.skin-clean.force-dark .gitem,
 html.skin-clean.force-dark .scan-hero,
 html.skin-clean.force-dark .scan-finder {
   background: #1c1c1e !important;
-  border: 0 !important;
+  border: 1px solid rgba(255, 255, 255, .06) !important;
   box-shadow: none !important;
   border-radius: 22px;
 }
@@ -1738,6 +1738,7 @@ html.skin-clean #colGrid .gitem:not(.gitem-add) {
   display: flex;
   flex-direction: column;
   background: #1c1c1e !important;
+  overflow: visible;
 }
 html.skin-clean #colGrid .gitem .gph-box {
   flex: 1 1 auto;
