@@ -1801,6 +1801,7 @@ html.skin-clean #salesSeg button {
   border-radius: 0;
   color: #8e8e93;
   padding: 8px 0;
+  letter-spacing: 0.02em;
 }
 html.skin-clean #salesSeg button.on,
 html.skin-clean.force-dark #salesSeg button.on {
