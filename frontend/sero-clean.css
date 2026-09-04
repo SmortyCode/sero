@@ -307,12 +307,31 @@ html.skin-clean .tabbar .tab[data-tab="tabHome"] {
   display: none !important;
 }
 html.skin-clean .tabbar .tab[data-tab="tabCollection"] { order: 1; }
-html.skin-clean .tabbar #btnCamera { order: 2; }
-/* Verkaufen ist eine Registerkarte wie die anderen: gleiches Linien-Icon,
-   gleiche Breite. Die Sonderbreite war nur für die eBay-Wortmarke da. */
 html.skin-clean .tabbar .tab[data-tab="tabSales"] {
-  order: 3;
+  order: 2;
   flex: 0 0 auto;
+}
+html.skin-clean .fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  z-index: 21;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .28);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+html.skin-clean .fab:active { transform: scale(.92); }
+html.skin-clean.force-light .fab {
+  background: #000;
+  color: #fff;
 }
 html.skin-clean .tab {
   flex: 0 0 auto;
@@ -359,42 +378,7 @@ html.skin-clean .tab-ebay-mark svg {
   fill: currentColor;
 }
 html.skin-clean .tab-cam,
-html.skin-clean.force-dark .tab-cam,
-html.skin-clean.force-dark #btnCamera {
-  flex: 0 0 auto;
-  width: auto;
-  height: 44px;
-  min-height: 44px;   /* gleiche 44pt-Trefferfläche wie die Reiter daneben */
-  margin: 0;
-  border-radius: var(--glass-radius-sm);
-  gap: 0;
-  color: #8e8e93;
-  padding: 0 16px;
-}
-html.skin-clean .tab-cam.active,
-html.skin-clean .tab-cam[aria-current="page"] {
-  background: var(--glass-inlay) !important;
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
-}
-html.skin-clean .tab-cam::after { display: none !important; }
-html.skin-clean .cam-ico {
-  width: 24px;
-  height: 24px;
-  filter: grayscale(1) brightness(1.4);
-}
-html.skin-clean .tab-cam-lab,
-html.skin-clean.force-dark .tab-cam-lab {
-  color: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  margin: 0;
-}
-html.skin-clean .tab-cam.active .cam-ico,
-html.skin-clean .tab-cam[aria-current="page"] .cam-ico {
-  filter: grayscale(1) brightness(2);
-  transform: none;
-}
+html.skin-clean .tab-cam-lab { display: none !important; }
 
 html.skin-clean .gitem,
 html.skin-clean .ov-card,
@@ -622,6 +606,21 @@ html.skin-clean .scan-done-acts .btn-plain {
 }
 html.skin-clean .sheet.sheet-scan-done .sheet-actions { display: none; }
 html.skin-clean .sheet.sheet-no-actions .sheet-actions { display: none; }
+html.skin-clean .plus-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+html.skin-clean .plus-sheet-list .btn-secondary {
+  width: 100%;
+  min-height: 52px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  font-size: 17px;
+  font-weight: 600;
+  border-radius: var(--glass-radius);
+}
 
 html.skin-clean .login-card .login-hint {
   margin: 0 2px 10px;

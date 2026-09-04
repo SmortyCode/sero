@@ -148,35 +148,8 @@
     </div>
   </main>
 
-  <!-- Tab: Scanner -->
-  <main id="tabScan" class="tab-page" hidden>
-    <div class="page-scroll">
-      <div class="tab-title-glass page-tab-title">
-        <img class="tab-title title-light" src="assets/titles/scanner-dark.png?v=10" alt="Scanner" width="2032" height="1018">
-        <img class="tab-title title-dark" src="assets/titles/scanner.png?v=10" alt="Scanner" width="2064" height="1006">
-      </div>
-      <div class="scan-finder" id="scanFinder">
-        <div class="scan-finder-frame">
-          <span class="scan-br scan-br-tl" aria-hidden="true"></span>
-          <span class="scan-br scan-br-tr" aria-hidden="true"></span>
-          <span class="scan-br scan-br-bl" aria-hidden="true"></span>
-          <span class="scan-br scan-br-br" aria-hidden="true"></span>
-          <span class="scan-ic" id="scanHeroIcon"></span>
-          <p id="scanHeroText">SERO erkennt dein Produkt und bereitet dein eBay-Angebot vor.</p>
-          <div class="scan-actions">
-            <button class="btn-primary" id="btnScanNow"></button>
-            <button type="button" class="scan-gal" id="btnScanGallery" aria-label="Aus Fotos"></button>
-          </div>
-        </div>
-      </div>
-      <div id="sellTplRow"></div>
-      <div class="sec-row" id="scanHistLabel" hidden>
-        <span class="section-label" style="margin:0">Zuletzt gescannt</span>
-        <button class="sec-link" id="scanAll">Alle anzeigen</button>
-      </div>
-      <div id="scanHistory" class="ilist"></div>
-    </div>
-  </main>
+  <!-- Tab: Scanner (removed from IA — kept hidden for JS compat) -->
+  <main id="tabScan" class="tab-page" hidden aria-hidden="true"></main>
 
   <!-- Tab: Verkaufen -->
   <main id="tabSales" class="tab-page" hidden>
@@ -217,12 +190,12 @@
 
   <nav class="tabbar">
     <button class="tab" data-tab="tabHome" aria-label="Übersicht"><span class="tic"></span><span class="tab-lab">Start</span></button>
-    <button class="tab active" data-tab="tabCollection" aria-label="Sammlung"><span class="tic"></span><span class="tab-lab">Sammlung</span></button>
-    <button class="tab-cam" id="btnCamera" aria-label="Scannen" type="button"><span class="tab-cam-lab">Scannen</span></button>
-    <!-- Verkaufen trägt dasselbe Linien-Icon wie die anderen Registerkarten (Preisschild).
-         Die eBay-Wortmarke stand hier für einen Marktplatz — SERO ist das Haus, eBay nur der Weg. -->
-    <button class="tab" data-tab="tabSales" aria-label="Verkaufen"><span class="tic"></span><span class="tab-lab">Verkaufen</span></button>
+    <button class="tab active" data-tab="tabCollection" aria-label="Sammlung"><span class="tic"></span><span class="tab-lab">Collection</span></button>
+    <button class="tab" data-tab="tabSales" aria-label="Verkaufen"><span class="tic"></span><span class="tab-lab">Sell</span></button>
   </nav>
+  <button type="button" class="fab" id="btnCamera" aria-label="Add">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3v16M3 11h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+  </button>
 </section>
 
 <!-- Einstellungen — vollhohe sekundäre Ansicht -->

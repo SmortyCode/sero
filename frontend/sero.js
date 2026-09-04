@@ -79,9 +79,8 @@ function isGuestItemId(id) {
 /** Sichtbare DE-Bezeichnungen für Topbar/ARIA. */
 const TAB_SECTION = {
   tabHome: ["portfolio", "Portfolio"],
-  tabCollection: ["sammlung", "Sammlung"],
-  tabScan: ["scanner", "Scanner"],
-  tabSales: ["verkauf", "Verkaufen"],
+  tabCollection: ["sammlung", "Collection"],
+  tabSales: ["verkauf", "Sell"],
   tabProfile: ["profil", "Profil"],
 };
 function isDarkTheme() {
@@ -221,19 +220,16 @@ function mountStaticIcons() {
   if (su) su.onclick = showSignup;
   const back = $("loginBack");
   if (back) back.onclick = showLogin;
-  $("btnCamera").innerHTML = `
-    <img src="assets/scan-cam-light.png?v=3" alt="" class="cam-ico cam-ico-light">
-    <img src="assets/scan-cam-dark.png?v=3" alt="" class="cam-ico cam-ico-dark">
-    <span class="tab-cam-lab">${L("Scannen")}</span>`;
+  /* FAB + icon set in HTML — no dynamic innerHTML needed */
   $("detailClose").innerHTML = icon("chevron", 20);
   $("detailClose").style.transform = "rotate(180deg)";
   $("detailTrash").innerHTML = icon("trash", 18);
   if ($("detailShare")) $("detailShare").innerHTML = icon("share", 18);
   if ($("detailMore")) $("detailMore").innerHTML = icon("ellipsis", 18);
   $("emptyAdd").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
-  $("scanHeroIcon").innerHTML = icon("scanframe", 44);
-  $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
-  $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
+  if ($("scanHeroIcon")) $("scanHeroIcon").innerHTML = icon("scanframe", 44);
+  if ($("btnScanNow")) $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
+  if ($("btnScanGallery")) $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
   const tabIcons = { tabHome: "home", tabCollection: "stack", tabSales: "tag", tabProfile: "person" };
   document.querySelectorAll(".tab").forEach((t) => {
     const tic = t.querySelector(".tic");
@@ -1879,6 +1875,8 @@ const STR_EN = {
   "Favorit": "Favorite", "Entfernen": "Remove", "Abbrechen": "Cancel", "Übernehmen": "Apply",
   "Wird geladen …": "Loading…",
   "Aus Mediathek": "From library",
+  "Aus Mediathek auswählen": "Choose from library",
+  "Foto aufnehmen": "Take photo",
   "Aus Fotos": "From photos",
   "Wert wird ab dem 3. Stück sichtbar": "Value appears from the 3rd item",
   "Erlöse erscheinen hier": "Proceeds appear here",
@@ -4532,7 +4530,7 @@ async function renderEbayHub() {
 window.renderEbayHub = renderEbayHub;
 window.openSeroProfile = openSeroProfile;
 
-const TAB_ORDER = ["tabHome", "tabCollection", "tabScan", "tabSales", "tabProfile"];
+const TAB_ORDER = ["tabHome", "tabCollection", "tabSales", "tabProfile"];
 function switchTab(id) {
   // Richtung merken, BEVOR die alte Seite versteckt wird — die neue Seite
   // schiebt sich dann aus der logischen Richtung herein (räumliche Kontinuität)
@@ -6084,8 +6082,23 @@ function openQuickListSheet(item) {
 }
 
 $("btnCamera").onclick = () => {
-  switchTab("tabScan");
+  openPlusSheet();
 };
+
+function openPlusSheet() {
+  openSheet("", "", `<div class="plus-sheet-list">
+    <button type="button" class="btn-secondary" id="plusPhoto">${icon("camera", 17)}<span>${L("Foto aufnehmen")}</span></button>
+    <button type="button" class="btn-secondary" id="plusLibrary">${icon("photo", 17)}<span>${L("Aus Mediathek auswählen")}</span></button>
+  </div>`, null);
+  $("plusPhoto").onclick = () => { closeSheet(); startScanMode("SELL_SINGLE"); };
+  $("plusLibrary").onclick = () => {
+    closeSheet();
+    const inp = $("libraryInput") || $("fileInput");
+    try { if (inp) { inp.multiple = true; inp.click(); } } catch (_) { /* */ }
+  };
+  const sh = $("sheet");
+  if (sh) sh.classList.add("sheet-no-actions");
+}
 
 /** Scan-Modus starten — Kamera/Galerie im gleichen Gesture (iOS). */
 function startScanMode(mode) {
