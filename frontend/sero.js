@@ -79,9 +79,8 @@ function isGuestItemId(id) {
 /** Sichtbare DE-Bezeichnungen für Topbar/ARIA. */
 const TAB_SECTION = {
   tabHome: ["portfolio", "Portfolio"],
-  tabCollection: ["sammlung", "Sammlung"],
-  tabScan: ["scanner", "Scanner"],
-  tabSales: ["verkauf", "Verkaufen"],
+  tabCollection: ["sammlung", "Collection"],
+  tabSales: ["verkauf", "Sell"],
   tabProfile: ["profil", "Profil"],
 };
 function isDarkTheme() {
@@ -221,20 +220,17 @@ function mountStaticIcons() {
   if (su) su.onclick = showSignup;
   const back = $("loginBack");
   if (back) back.onclick = showLogin;
-  $("btnCamera").innerHTML = `
-    <img src="assets/scan-cam-light.png?v=3" alt="" class="cam-ico cam-ico-light">
-    <img src="assets/scan-cam-dark.png?v=3" alt="" class="cam-ico cam-ico-dark">
-    <span class="tab-cam-lab">${L("Scannen")}</span>`;
+  /* FAB + icon set in HTML — no dynamic innerHTML needed */
   $("detailClose").innerHTML = icon("chevron", 20);
   $("detailClose").style.transform = "rotate(180deg)";
   $("detailTrash").innerHTML = icon("trash", 18);
   if ($("detailShare")) $("detailShare").innerHTML = icon("share", 18);
   if ($("detailMore")) $("detailMore").innerHTML = icon("ellipsis", 18);
   $("emptyAdd").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
-  $("scanHeroIcon").innerHTML = icon("scanframe", 44);
-  $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
-  $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
-  const tabIcons = { tabHome: "home", tabCollection: "stack", tabSales: "tag", tabProfile: "person" };
+  if ($("scanHeroIcon")) $("scanHeroIcon").innerHTML = icon("scanframe", 44);
+  if ($("btnScanNow")) $("btnScanNow").innerHTML = icon("camera", 18) + "<span>" + L("Artikel fotografieren") + "</span>";
+  if ($("btnScanGallery")) $("btnScanGallery").innerHTML = icon("photo", 16) + "<span>" + L("Aus Fotos") + "</span>";
+  const tabIcons = { tabHome: "home", tabCollection: "grid", tabSales: "tag", tabProfile: "person" };
   document.querySelectorAll(".tab").forEach((t) => {
     const tic = t.querySelector(".tic");
     if (tic) tic.innerHTML = icon(tabIcons[t.dataset.tab], 24);
@@ -354,7 +350,7 @@ function removeItemWithUndo(item) {
   } catch (_) { /* */ }
   state._colSig = null;
   renderCollection();
-  if (!$("tabScan").hidden) renderScan();
+  const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan();
 
   const undoGone = { done: false };
   const clearPending = () => {
@@ -1879,6 +1875,8 @@ const STR_EN = {
   "Favorit": "Favorite", "Entfernen": "Remove", "Abbrechen": "Cancel", "Übernehmen": "Apply",
   "Wird geladen …": "Loading…",
   "Aus Mediathek": "From library",
+  "Aus Mediathek auswählen": "Choose from library",
+  "Foto aufnehmen": "Take photo",
   "Aus Fotos": "From photos",
   "Wert wird ab dem 3. Stück sichtbar": "Value appears from the 3rd item",
   "Erlöse erscheinen hier": "Proceeds appear here",
@@ -2765,7 +2763,7 @@ const STR_EN = {
     "Partly saved — remaining drafts stay on this device.",
   "Anmeldung fehlgeschlagen": "Sign-in failed",
   "Code": "Code",
-  "Einstellen": "List",
+  "Einstellen": "List item",
   "über eBay": "via eBay",
   "Notizen": "Notes",
   "Aktiv": "Active",
@@ -3243,15 +3241,16 @@ function paintTopAva() {
   if (!btn) return;
   const me = state.me;
   btn.hidden = false;
+  const personSvg = `<svg class="topbar-ava-fallback" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="14" r="6" fill="currentColor"/><path d="M6 32c0-6.6 5.4-12 12-12s12 5.4 12 12" fill="currentColor"/></svg>`;
   if (!me) {
-    btn.innerHTML = `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    btn.innerHTML = personSvg;
     btn.onclick = () => openSaveLoginSheet();
     btn.setAttribute("aria-label", L("Anmelden zum Speichern"));
     return;
   }
   btn.innerHTML = me.avatar_url
-    ? `<img src="${esc(me.avatar_url)}" alt="">`
-    : `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    ? `<img src="${esc(me.avatar_url)}" alt="">${personSvg}`
+    : personSvg;
   btn.onclick = () => openSeroProfile();
   btn.setAttribute("aria-label", L("Profil"));
 }
@@ -4201,7 +4200,7 @@ function showApp() {
   api("/api/app/settings").then((s) => {
     state.settings = s;
     if (state.dash) renderDashboard();
-    if (!$("tabScan").hidden) renderScan();
+    { const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan(); }
   }).catch(() => {});
   loadDashboard();
   loadCollection();
@@ -4532,7 +4531,7 @@ async function renderEbayHub() {
 window.renderEbayHub = renderEbayHub;
 window.openSeroProfile = openSeroProfile;
 
-const TAB_ORDER = ["tabHome", "tabCollection", "tabScan", "tabSales", "tabProfile"];
+const TAB_ORDER = ["tabHome", "tabCollection", "tabSales", "tabProfile"];
 function switchTab(id) {
   // Richtung merken, BEVOR die alte Seite versteckt wird — die neue Seite
   // schiebt sich dann aus der logischen Richtung herein (räumliche Kontinuität)
@@ -4560,13 +4559,11 @@ function switchTab(id) {
   });
   paintTopbarSection(id);
   const review = $("scanReview");
-  if (review && id !== "tabScan") review.hidden = true;
+  if (review) review.hidden = true;
   const cam = $("btnCamera");
   if (cam) {
-    const camOn = id === "tabScan";
-    cam.classList.toggle("active", camOn);
-    if (camOn) cam.setAttribute("aria-current", "page");
-    else cam.removeAttribute("aria-current");
+    cam.classList.remove("active");
+    cam.removeAttribute("aria-current");
   }
   const page = $(id);
   page.classList.remove("page-enter", "page-enter-l", "page-enter-r");
@@ -4580,7 +4577,7 @@ function switchTab(id) {
     loadSales(true); startSalesPoll(); loadScanSession();
   }
   else stopSalesPoll();
-  if (id === "tabScan") {
+  if (false && id === "tabScan") {
     renderScan();
     try { trackFunnel("scan_opened"); } catch (_) { /* */ }
   }
@@ -5199,7 +5196,7 @@ async function loadCollection() {
   if (state.items.some((i) => i.status === "analyzing" || i.status === "waiting"
       || i.cutout_status === "running" || i.design_status === "running")) {
     state.colPollTimer = setTimeout(loadCollection, 2200);
-    if (!$("tabScan").hidden) renderScan();
+    { const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan(); }
   }
   if (!state._designAutoQueued && (r.items || []).length) {
     state._designAutoQueued = true;
@@ -5798,6 +5795,7 @@ function openColSearch() {
 }
 
 $("emptyAdd").onclick = () => startScanMode("SELL_SINGLE");
+{ const eh = document.querySelector("#colEmpty h2"); if (eh) eh.textContent = L("Noch keine Stücke."); }
 
 async function importListings(btn) {
   if (needAccountForSave()) return;
@@ -6084,8 +6082,23 @@ function openQuickListSheet(item) {
 }
 
 $("btnCamera").onclick = () => {
-  switchTab("tabScan");
+  openPlusSheet();
 };
+
+function openPlusSheet() {
+  openSheet("", "", `<div class="plus-sheet-list">
+    <button type="button" class="btn-secondary" id="plusPhoto">${icon("camera", 17)}<span>${L("Foto aufnehmen")}</span></button>
+    <button type="button" class="btn-secondary" id="plusLibrary">${icon("photo", 17)}<span>${L("Aus Mediathek auswählen")}</span></button>
+  </div>`, null);
+  $("plusPhoto").onclick = () => { closeSheet(); startScanMode("SELL_SINGLE"); };
+  $("plusLibrary").onclick = () => {
+    closeSheet();
+    const inp = $("libraryInput") || $("fileInput");
+    try { if (inp) { inp.multiple = true; inp.click(); } } catch (_) { /* */ }
+  };
+  const sh = $("sheet");
+  if (sh) sh.classList.add("sheet-no-actions");
+}
 
 /** Scan-Modus starten — Kamera/Galerie im gleichen Gesture (iOS). */
 function startScanMode(mode) {
@@ -8204,19 +8217,19 @@ function renderSales() {
   let headVal = money(activeN ? listingVal : 0);
   let headSub = activeN
     ? esc(LF("{0} aktiv auf eBay", activeN)) + (draftN ? ` · ${esc(LF("{0} Entwürfe", draftN))}` : "")
-    : esc(L("Noch nichts live."));
+    : "";
   if (bucket === "draft") {
     headLabel = L("Entwurfswert");
     headVal = money(draftN ? draftVal : 0);
     headSub = draftN
       ? esc(LF("{0} Entwürfe", draftN))
-      : esc(L("Keine Entwürfe."));
+      : "";
   } else if (bucket === "ended") {
     headLabel = L("Erlös");
     headVal = money(soldN ? soldVal : 0);
     headSub = soldN
       ? esc(LF("{0} verkauft", soldN))
-      : esc(L("Noch nichts verkauft."));
+      : "";
   }
   const mode = salesViewMode();
   /* Bei null Stücken in diesem Reiter ist die weiße Leiste Verkäufer-Möbel um
@@ -8399,20 +8412,14 @@ function renderSales() {
     if (list && list.parentNode) list.parentNode.insertBefore(fotoHost, list.nextSibling);
   }
   if (fotoHost) {
-    if (!bucketLeer && bucket !== "ended") {
-      fotoHost.hidden = false;
-      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Fotografieren"))}</button>`;
-      const fb = $("salesFoto");
-      if (fb) fb.onclick = () => startScanMode("SELL_SINGLE");
-    } else {
-      fotoHost.hidden = true;
-      fotoHost.innerHTML = "";
-    }
+    fotoHost.hidden = true;
+    fotoHost.innerHTML = "";
   }
   if (!rows.length) {
     const v = state.salesBucket;
-    const openCam = () => {
-      startScanMode("SELL_SINGLE");
+    const listAction = () => {
+      if (!ebayConnectedNow()) { showEbayNotConnectedHint(); return; }
+      switchTab("tabCollection");
     };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
@@ -8432,11 +8439,10 @@ function renderSales() {
     }) : v === "active" ? emptyState({
       icon: "bag", titel: "Noch nichts live.",
       text: "",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
-      text: "Fotografiere ein Stück. SERO baut den Entwurf.",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      text: "",
+      aktion: "Einstellen", onAktion: listAction, well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
@@ -9093,25 +9099,12 @@ function syncDetailCtaDock(det) {
     hideDetailCtaDock();
     return;
   }
-  dock.innerHTML = `<div class="d-cta-row">
-    <button type="button" class="btn-secondary" id="btnHold">${esc(L("Als Entwurf behalten"))}</button>
-    <button type="button" class="btn-primary" id="btnList" aria-label="${esc(L("Einstellen"))}">
-      ${icon("tag", 18)}<span class="d-cta-lab">${esc(L("Einstellen"))}</span>
+  dock.innerHTML = `<button type="button" class="btn-primary d-ebay-cta" id="btnList" aria-label="${esc(L("Einstellen"))}">
+      <span class="d-cta-lab">${esc(L("Einstellen"))}</span>
     </button>
-  </div>
   <p class="d-cta-sub">${esc(L("über eBay"))}</p>`;
   dock.hidden = false;
   root.classList.add("has-cta-dock");
-  const hold = dock.querySelector("#btnHold");
-  if (hold) {
-    hold.onclick = (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      state._skipEnsureDraft = state._skipEnsureDraft || {};
-      state._skipEnsureDraft[item.id] = true;
-      closeDetail();
-    };
-  }
   const btn = dock.querySelector("#btnList");
   if (btn) {
     btn.onclick = (ev) => {
@@ -9523,8 +9516,29 @@ function fuelleOffers(det, item) {
 function renderDetail(det, opts) {
   opts = opts || {};
   const body = $("detailBody");
+  if (!det || !det.data) {
+    const retryId = "detRetry" + Math.random().toString(36).slice(2, 8);
+    body.innerHTML = `<div class="stage-line"><span class="spinner"></span> ${esc(L("Wird geladen …"))}</div>
+      <button class="btn-secondary" id="${retryId}" style="margin:16px auto;display:block">${esc(L("Erneut laden"))}</button>`;
+    const rb = $(retryId);
+    if (rb) rb.onclick = () => refreshDetail(true);
+    hideDetailCtaDock();
+    return;
+  }
+  try { return _renderDetail(det, opts, body); }
+  catch (e) {
+    console.error("renderDetail error", e);
+    const retryId = "detRetry" + Math.random().toString(36).slice(2, 8);
+    body.innerHTML = `<div class="err-box">${esc(String(e && e.message || e))}</div>
+      <button class="btn-secondary" id="${retryId}" style="margin:16px auto;display:block">${esc(L("Erneut laden"))}</button>`;
+    const rb = $(retryId);
+    if (rb) rb.onclick = () => refreshDetail(true);
+    hideDetailCtaDock();
+  }
+}
+function _renderDetail(det, opts, body) {
   const item = det.mode === "item" ? det.data : null;
-  const d = det.data.draft || null;
+  const d = (det.data && det.data.draft) || null;
 
   $("detailTitle").textContent = item ? "" : "Listing";
   $("detailTrash").hidden = true;
@@ -9681,8 +9695,8 @@ function renderDetail(det, opts) {
       const view = SD ? SD.detailView(item) : { title: item.name || "" };
       ht.textContent = view.title || L("Stück");
     }
-  } else if (skipListingPaint && item && $("detailPanes")) {
-    /* Erstes volles innerHTML würde das Sheet-Feld killen — später nachziehen. */
+  } else if (skipListingPaint && item && $("detailPanes") && body.innerHTML.trim()) {
+    /* Input focused — defer repaint, but only when body already has content. */
   } else {
     body.innerHTML = html;
     det._shellItemId = item ? item.id : null;

@@ -382,6 +382,9 @@ img.ld { opacity: 1 !important; }
   overflow: hidden;
 }
 .topbar-logo { height: 28px; width: auto; max-width: min(196px, 48vw); object-fit: contain; flex: 0 1 auto; filter: none; }
+.topbar-mark { display: none; }
+.topbar-ava-fallback { display: none; }
+.fab { display: none; }
 .topbar-rule {
   width: 1.5px;
   height: 24px;

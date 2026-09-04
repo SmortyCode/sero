@@ -87,9 +87,9 @@ def test_a4_desktop_responsive_und_tabs():
     assert 'data-tab="tabSales"' in HTML
     # Playbook Step 12: der eBay-Reiter ist raus, Start bleibt (im Clean-Skin verborgen).
     assert 'data-tab="tabProfile"' not in HTML
-    tabs = re.findall(r'data-tab="([^"]+)"|id="(btnCamera)"', HTML)
-    flat = [a or b for a, b in tabs]
-    assert flat == ["tabHome", "tabCollection", "btnCamera", "tabSales"]
+    tabs = re.findall(r'data-tab="([^"]+)"', HTML)
+    assert tabs == ["tabHome", "tabCollection", "tabSales"]
+    assert 'id="btnCamera"' in HTML
 
 
 def test_a5_pins_hochgezaehlt():
@@ -146,7 +146,6 @@ def test_overview_kein_bewegungs_umschalter():
     assert "ov-value-row" in JS
     assert 'assets/titles/sammlung.png' in HTML
     assert 'assets/titles/sammlung-dark.png' in HTML
-    assert 'assets/titles/scanner.png' in HTML
     assert 'assets/titles/verkauf.png' in HTML
     assert 'titlePair("profil"' in JS or "titlePair('profil'" in JS
     assert 'assets/titles/einstellungen.png' in JS
@@ -249,8 +248,7 @@ def test_clean_overlay_skin():
         clean,
     )
     assert top_logo, "Clean-Topbar-Logo fehlt"
-    assert "filter: none" in top_logo.group(1)
-    assert "grayscale" not in top_logo.group(1)
+    assert "display: none" in top_logo.group(1) or "filter: none" in top_logo.group(1)
     assert "html.skin-clean .login-card" in clean
     assert "var(--glass-radius)" in clean
     login_card = re.search(
@@ -307,15 +305,14 @@ def test_tour_chrome_wordmark_kein_kreis():
 
 
 def test_clean_ebay_tab_opens_hub():
-    """Tabbar: Sammlung, Scannen, Verkaufen. Der eBay-Hub hängt am Profil, nicht unten."""
+    """Tabbar: Collection, Sell pill. FAB separate. eBay-Hub via Profil."""
     assert not re.search(r'<button[^>]*data-tab="tabProfile"', HTML), \
         "Playbook Step 12: kein eBay-Reiter in der Tabbar"
     clean = (ROOT / "frontend" / "sero-clean.css").read_bytes()
     assert clean.startswith(b"/* SERO"), clean[:20]
     clean_txt = clean.decode("utf-8")
     assert re.search(r'tab\[data-tab="tabCollection"\]\s*\{\s*order:\s*1', clean_txt)
-    assert re.search(r"#btnCamera\s*\{\s*order:\s*2", clean_txt)
-    assert re.search(r'tab\[data-tab="tabSales"\]\s*\{\s*order:\s*3', clean_txt)
+    assert re.search(r'tab\[data-tab="tabSales"\]\s*\{\s*order:\s*2', clean_txt)
     hidden_block = re.search(
         r"html\.skin-clean \.tabbar \.tab\[data-tab=\"tabHome\"\]\s*\{[^}]*display:\s*none",
         clean_txt,
@@ -357,20 +354,19 @@ def test_clean_ebay_tab_opens_hub():
 
 
 def test_tabbar_buttons_unveraendert():
-    """Drei sichtbare Reiter: Sammlung, Scannen, Verkaufen. Kein eBay-Reiter."""
+    """Centered pill: Collection, Sell. FAB is separate. No eBay tab."""
     assert 'tab-lab">Start' in HTML
-    assert 'tab-lab">Sammlung' in HTML
-    assert 'tab-cam-lab">Scannen' in HTML
-    assert 'tab-lab">Verkaufen' in HTML
-    assert 'aria-label="Verkaufen"' in HTML
+    assert 'tab-lab">Collection' in HTML
+    assert 'tab-lab">Sell' in HTML
+    assert 'aria-label="Sell"' in HTML
     assert 'tab-lab">eBay' not in HTML
-    tabs = re.findall(r'data-tab="([^"]+)"|id="(btnCamera)"', HTML)
-    flat = [a or b for a, b in tabs]
-    assert flat == ["tabHome", "tabCollection", "btnCamera", "tabSales"]
+    tabs = re.findall(r'data-tab="([^"]+)"', HTML)
+    assert tabs == ["tabHome", "tabCollection", "tabSales"]
+    assert 'id="btnCamera"' in HTML
     nav = re.search(r'<nav class="tabbar">([\s\S]*?)</nav>', HTML)
     assert nav, "tabbar nav fehlt"
     inner = nav.group(1)
-    assert inner.count("<button") == 4
+    assert inner.count("<button") == 3
     assets = ROOT / "frontend" / "assets"
     bad = [p.name for p in assets.rglob("*") if p.is_file()
            and "ebay" in p.name.lower() and p.suffix.lower() in {".svg", ".png", ".jpg", ".webp"}]
@@ -378,15 +374,14 @@ def test_tabbar_buttons_unveraendert():
 
 
 def test_verkaufen_tab_ebay_wortmarke():
-    """Playbook Step 12: Verkaufen trägt das Preisschild-Linienicon, keine Wortmarke."""
+    """Sell tab: line icon, no eBay wordmark, EN label."""
     btn = re.search(r'<button[^>]*data-tab="tabSales"[^>]*>[\s\S]*?</button>', HTML)
     assert btn, "tabSales-Button fehlt"
     chunk = btn.group(0)
     assert "tab-ebay-mark" not in chunk
-    assert "<svg" not in chunk
     assert 'class="tic"' in chunk
-    assert 'tab-lab">Verkaufen' in chunk
-    assert 'aria-label="Verkaufen"' in chunk
+    assert 'tab-lab">Sell' in chunk
+    assert 'aria-label="Sell"' in chunk
     assert "src=" not in chunk
     assert 'tabSales: "tag"' in JS
     clean = (ROOT / "frontend" / "sero-clean.css").read_text(encoding="utf-8")
@@ -396,7 +391,7 @@ def test_verkaufen_tab_ebay_wortmarke():
     )
     assert sales, "Clean-Regel für tabSales fehlt"
     body = sales.group(1)
-    assert "order: 3" in body
+    assert "order: 2" in body
     assert "flex:" in body
     # 44pt-Trefferflächen (Step 12)
     tab_rule = re.search(r"html\.skin-clean \.tab\s*\{([^}]*)\}", clean)
@@ -427,14 +422,8 @@ def test_kein_sero_mascot_tabbar_content_breit():
     assert "min(340px" not in clean_txt
     assert "html.skin-clean .tabbar::after" not in clean_txt
     assert re.search(r"html\.skin-clean \.tab\s*\{[^}]*flex:\s*0 0 auto", clean_txt)
-    assert re.search(r"html\.skin-clean \.tab-cam,\s*html\.skin-clean\.force-dark \.tab-cam", clean_txt)
-    cam = re.search(
-        r"html\.skin-clean \.tab-cam,\s*html\.skin-clean\.force-dark \.tab-cam,\s*"
-        r"html\.skin-clean\.force-dark #btnCamera\s*\{([^}]*)\}",
-        clean_txt,
-    )
-    assert cam, "Clean-Scan-Tab-Regel fehlt"
-    assert "flex: 0 0 auto" in cam.group(1)
+    assert re.search(r"html\.skin-clean \.tab-cam", clean_txt)
+    assert re.search(r"html\.skin-clean \.fab\s*\{", clean_txt), "FAB-Regel fehlt"
 
 
 def test_sammlung_chart_filter_detail():
@@ -490,8 +479,7 @@ def test_sammlung_chart_filter_detail():
     assert "function seroPriceCardHtml" in JS
     assert "function showDetailSeg" in JS
     assert 'id="detailHero"' in JS
-    assert 'id="btnHold"' in JS
-    assert 'L("Als Entwurf behalten")' in JS
+    assert 'id="btnList"' in JS
     assert 'L("Einstellen")' in JS
     assert 'L("über eBay")' in JS
     assert 'id="detailSeg"' in JS

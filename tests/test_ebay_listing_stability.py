@@ -49,7 +49,7 @@ def test_f03_hero_nicht_neu_bauen_wenn_signatur_gleich():
     paint = _fn(JS, "paintDetailHeroGallery")
     assert "det._heroSig" in paint
     assert "track.scrollLeft = 0" not in paint
-    rend = _fn(JS, "renderDetail")
+    rend = _fn(JS, "_renderDetail")
     assert "keepShell" in rend
     assert "opts.ebayOnly" in rend
 
@@ -65,7 +65,7 @@ def test_f05_listener_cleanup_gallery_swipe():
     assert "removeEventListener" in gal
     sw = _fn(JS, "bindDetailPaneSwipe")
     assert "removeEventListener" in sw
-    rend = _fn(JS, "renderDetail")
+    rend = _fn(JS, "_renderDetail")
     assert "skipHeroBind" in rend
 
 
@@ -230,7 +230,7 @@ def test_listing_kein_remount_bei_sheet_input():
     assert "function listingInputBusy" in JS
     assert "function listingPaintKey" in JS
     assert "function flushQueuedDetailPaint" in JS
-    assert "skipListingPaint" in _fn(JS, "renderDetail")
+    assert "skipListingPaint" in _fn(JS, "_renderDetail")
     ref = _fn(JS, "refreshDetail")
     assert "listingInputBusy()" in ref
     assert "listingPaintKey" in ref
@@ -242,7 +242,7 @@ def test_listing_kein_remount_bei_sheet_input():
 
 
 def test_ebay_only_aktualisiert_listing_block():
-    rend = _fn(JS, "renderDetail")
+    rend = _fn(JS, "_renderDetail")
     assert 'block.innerHTML = ebayPane' in rend or "block.innerHTML = ebayPane" in rend
     assert 'id="detailListingBlock"' in rend
     assert "opts.ebayOnly" in rend
