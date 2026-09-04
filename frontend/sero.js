@@ -9517,14 +9517,22 @@ function renderDetail(det, opts) {
   opts = opts || {};
   const body = $("detailBody");
   if (!det || !det.data) {
-    body.innerHTML = "";
+    const retryId = "detRetry" + Math.random().toString(36).slice(2, 8);
+    body.innerHTML = `<div class="stage-line"><span class="spinner"></span> ${esc(L("Wird geladen …"))}</div>
+      <button class="btn-secondary" id="${retryId}" style="margin:16px auto;display:block">${esc(L("Erneut laden"))}</button>`;
+    const rb = $(retryId);
+    if (rb) rb.onclick = () => refreshDetail(true);
     hideDetailCtaDock();
     return;
   }
   try { return _renderDetail(det, opts, body); }
   catch (e) {
     console.error("renderDetail error", e);
-    body.innerHTML = `<div class="err-box">${esc(String(e && e.message || e))}</div>`;
+    const retryId = "detRetry" + Math.random().toString(36).slice(2, 8);
+    body.innerHTML = `<div class="err-box">${esc(String(e && e.message || e))}</div>
+      <button class="btn-secondary" id="${retryId}" style="margin:16px auto;display:block">${esc(L("Erneut laden"))}</button>`;
+    const rb = $(retryId);
+    if (rb) rb.onclick = () => refreshDetail(true);
     hideDetailCtaDock();
   }
 }
