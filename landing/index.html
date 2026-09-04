@@ -1,279 +1,789 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SERO — Scannen. Prüfen. Bei eBay verkaufen.</title>
-<meta name="description" content="SERO erkennt dein Stück auf dem Foto, zeigt den Marktwert aus echten Belegen und bereitet den eBay-Entwurf vor. Live geht er erst nach deiner Freigabe.">
-<link rel="canonical" href="https://seromunich.com/">
-<link rel="alternate" hreflang="de" href="https://seromunich.com/">
-<link rel="alternate" hreflang="en" href="https://seromunich.com/en/">
-<link rel="alternate" hreflang="x-default" href="https://seromunich.com/">
-<link rel="icon" href="assets/sero-slab.svg" type="image/svg+xml">
-<link rel="alternate icon" href="assets/app-icon.png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<title>SERO — Photo to eBay draft for collectibles</title>
+<meta name="description" content="Photograph a card, graded slab, game, or comic. SERO identifies it, finds market value from real listings, and builds an eBay draft. Nothing goes live until you say so.">
+<meta name="theme-color" content="#111111">
+<meta name="robots" content="index,follow">
+<link rel="canonical" href="https://sero.ltd/">
+<link rel="icon" href="assets/app-icon.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/app-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="SERO">
-<meta property="og:title" content="SERO — Scannen. Prüfen. Bei eBay verkaufen.">
-<meta property="og:description" content="Foto machen, Marktwert aus echten Belegen prüfen, bei eBay listen — live erst nach deiner Freigabe.">
-<meta property="og:url" content="https://seromunich.com/">
-<meta property="og:image" content="https://seromunich.com/assets/icon-512.png">
-<meta property="og:locale" content="de_DE">
-<meta name="theme-color" content="#151310">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Unbounded:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="landing.css?v=7">
+<meta property="og:url" content="https://sero.ltd/">
+<meta property="og:title" content="SERO — Photo to eBay draft for collectibles">
+<meta property="og:description" content="Photograph a card, graded slab, game, or comic. SERO identifies it, finds market value from real listings, and builds an eBay draft. Nothing goes live until you say so.">
+<meta property="og:image" content="https://sero.ltd/assets/app-icon.png">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:site" content="@seroltd">
+<meta name="twitter:title" content="SERO — Photo to eBay draft for collectibles">
+<meta name="twitter:description" content="Photograph a card, graded slab, game, or comic. SERO identifies it, finds market value from real listings, and builds an eBay draft.">
+<meta name="twitter:image" content="https://sero.ltd/assets/app-icon.png">
+<link rel="stylesheet" href="assets/fonts/sero-sans.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does SERO list on eBay by itself?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. SERO builds a draft. You review the title, photos, and price, then publish when you are ready. Nothing goes live until you say so."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What can I photograph?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Trading cards, graded slabs, retro games, manga, and comics. eBay.de first. Other categories follow as they prove out."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Where do prices come from?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "From real marketplace listings, not a language model. If there are not enough comps, SERO says value unknown instead of inventing a number."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need to install an app?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. Open SERO in the browser. On iPhone you can add it to the Home Screen later. App Store and Google Play are coming."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is this only for Germany?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "eBay.de and Euro first. The product is built in Munich. Other marketplaces are next, not live yet."
+      }
+    }
+  ]
+}
+</script>
+<style>
+:root {
+  --ink: #1C1C1E;
+  --paper: #ffffff;
+  --paper-soft: #f2f2f7;
+  --hero: #111111;
+  --hero-mid: #1C1C1E;
+  --line: rgba(28, 28, 30, 0.08);
+  --muted: #6e6e73;
+  --muted-dark: #a1a1a6;
+  --mint: #3d5a4c;
+  --mint-soft: #e8efe9;
+  --olive: #6b7a5a;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --pad: clamp(20px, 5vw, 48px);
+  --max: 1120px;
+  --font: "SERO Sans Beta", Inter, system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+.skip {
+  position: absolute;
+  left: -999px;
+  top: 8px;
+}
+.skip:focus {
+  left: 12px;
+  z-index: 80;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 12px;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px var(--pad);
+  background: transparent;
+  color: #fff;
+  transition: padding 0.28s var(--ease), background 0.28s var(--ease), box-shadow 0.28s var(--ease), color 0.28s var(--ease);
+}
+.nav.is-scrolled {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(28, 28, 30, 0.1);
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.nav-glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  transition: width 0.28s var(--ease), height 0.28s var(--ease);
+}
+.nav.is-scrolled .nav-glyph { width: 22px; height: 22px; }
+.nav-links { display: flex; align-items: center; gap: 22px; }
+.nav-links a:not(.btn) {
+  text-decoration: none;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.72);
+}
+.nav.is-scrolled .nav-links a:not(.btn) { color: var(--muted); }
+.nav-links a:not(.btn):hover { color: inherit; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 12px;
+  border: 0;
+  text-decoration: none;
+  font: 500 15px/1 var(--font);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  transform: translateY(0);
+  box-shadow: 0 8px 20px rgba(28, 28, 30, 0.18);
+  transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(28, 28, 30, 0.22); }
+.btn:active { transform: scale(0.97); box-shadow: inset 0 1px 4px rgba(28, 28, 30, 0.18); }
+.btn-ghost {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
+.nav .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  box-shadow: none;
+}
+.nav.is-scrolled .btn {
+  min-height: 36px;
+  background: var(--ink);
+  color: #fff;
+  border-color: transparent;
+}
+
+.hero {
+  margin-top: -76px;
+  padding: 120px var(--pad) 72px;
+  background:
+    radial-gradient(1200px 480px at 70% -10%, rgba(255,255,255,0.06), transparent 55%),
+    linear-gradient(180deg, var(--hero) 0%, var(--hero-mid) 100%);
+  color: #fff;
+}
+.hero-grid {
+  max-width: var(--max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 48px;
+  align-items: center;
+}
+.hero-mark {
+  width: min(200px, 38vw);
+  margin-bottom: 28px;
+  transform-origin: center;
+}
+.hero-mark img {
+  width: 100%;
+  height: auto;
+  border-radius: 28px;
+  box-shadow: 0 18px 40px rgba(17, 17, 17, 0.35);
+}
+.hero h1 {
+  margin: 0 0 10px;
+  font-weight: 500;
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+.hero .sub {
+  margin: 0 0 16px;
+  font-size: clamp(18px, 2.4vw, 26px);
+  font-weight: 500;
+}
+.hero .loop {
+  margin: 0 0 10px;
+  color: var(--muted-dark);
+  font-size: 16px;
+}
+.hero .draft {
+  margin: 0 0 28px;
+  color: #d2d2d7;
+  font-size: 15px;
+  max-width: 36em;
+}
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.hero-note { margin: 14px 0 0; color: var(--muted-dark); font-size: 13px; }
+
+/* TODO: replace staged stills with final muted reel when the cut exists */
+.reel {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--hero);
+  aspect-ratio: 4 / 5;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(17, 17, 17, 0.4);
+}
+.reel img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.55s var(--ease);
+}
+.reel img.is-on { opacity: 1; }
+.reel-cap {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(17, 17, 17, 0.72);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.stills {
+  background: var(--paper);
+  padding: 28px var(--pad) 8px;
+}
+.stills-row {
+  max-width: var(--max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.stills-row figure {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(28, 28, 30, 0.06);
+}
+.stills-row img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.stills-row figcaption {
+  padding: 10px 12px 14px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.wrap { max-width: var(--max); margin: 0 auto; padding: 72px var(--pad); }
+.kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+h2 {
+  margin: 0 0 8px;
+  font-weight: 500;
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -0.03em;
+}
+.rule {
+  width: 48px;
+  height: 1px;
+  background: var(--ink);
+  margin: 0 0 28px;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.38s var(--ease);
+}
+.reveal.is-in + .rule,
+.wrap.is-in .rule,
+h2.is-in + .rule { transform: scaleX(1); }
+.section-head.is-in .rule { transform: scaleX(1); }
+
+.how { background: var(--paper-soft); }
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.step {
+  background: #fff;
+  border-radius: 16px;
+  padding: 22px 20px;
+  border: 1px solid var(--line);
+}
+.step strong { display: block; margin-bottom: 6px; font-weight: 500; }
+.step p { margin: 0; color: var(--muted); font-size: 14px; }
+
+.markets-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.market {
+  padding: 20px 18px 42px;
+  border-radius: 16px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  min-height: 118px;
+  position: relative;
+  overflow: hidden;
+}
+.market .name { font-weight: 500; }
+.market .state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.market .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--olive);
+}
+.market.is-live { background: var(--mint-soft); }
+.market.is-live .state { color: var(--mint); }
+.market.is-live .dot {
+  background: var(--mint);
+  box-shadow: 0 0 0 0 rgba(61, 90, 76, 0.35);
+  animation: livepulse 2.8s var(--ease) infinite;
+}
+.market.is-next .state, .market.is-later .state { color: var(--olive); }
+.market .hint {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.22s var(--ease), transform 0.22s var(--ease);
+}
+.market:hover .hint, .market:focus-visible .hint {
+  opacity: 1;
+  transform: none;
+}
+@keyframes livepulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(61, 90, 76, 0.28); }
+  50% { box-shadow: 0 0 0 6px rgba(61, 90, 76, 0); }
+}
+
+.faq-list { display: grid; gap: 8px; }
+.faq-item {
+  background: var(--paper-soft);
+  border-radius: 14px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+}
+.faq-item:hover { border-left-color: var(--ink); }
+.faq-item summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  font-weight: 500;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-right: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: rotate(45deg);
+  transition: transform 0.2s var(--ease);
+  flex: 0 0 auto;
+}
+.faq-item[open] summary::after { transform: rotate(-135deg); }
+.faq-item p {
+  margin: 0 0 18px;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+.install { background: var(--paper-soft); }
+.install details {
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px 18px 18px;
+  border: 1px solid var(--line);
+}
+.install summary {
+  cursor: pointer;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+.install ol { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.store-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.store {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+}
+.reveal.is-in { opacity: 1; transform: none; }
+.stills-row figure:nth-child(2) { transition-delay: 0.1s; }
+.stills-row figure:nth-child(3) { transition-delay: 0.2s; }
+
+.foot {
+  padding: 40px var(--pad) 56px;
+  border-top: 1px solid var(--line);
+}
+.foot-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  display: grid;
+  gap: 18px;
+}
+.foot-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+.foot-brand img { width: 22px; height: 22px; border-radius: 5px; }
+.foot-tag { color: var(--muted); font-size: 13px; }
+.foot-links { display: flex; flex-wrap: wrap; gap: 16px 22px; font-size: 14px; }
+.foot-links a { color: var(--muted); text-decoration: none; }
+.foot-links a:hover { color: var(--ink); }
+.legal { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 980px) {
+  .hero-grid, .steps, .stills-row { grid-template-columns: 1fr 1fr; }
+  .markets-grid { grid-template-columns: 1fr 1fr; }
+  .nav-links a:not(.btn) { display: none; }
+}
+@media (max-width: 640px) {
+  .hero { padding: 96px var(--pad) 40px; }
+  .hero-grid, .steps, .stills-row, .markets-grid { grid-template-columns: 1fr; }
+  .hero-mark { width: 72px; margin-bottom: 16px; }
+  .hero-mark img { border-radius: 14px; }
+  .hero .draft, .hero .btn-ghost { display: none; }
+  .reel { max-width: 360px; margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn, .nav, .nav-glyph, .reel img, .reveal, .market .hint, .faq-item summary::after, .rule, .hero-mark {
+    transition: none !important;
+    animation: none !important;
+  }
+  .btn:hover, .btn:active { transform: none; }
+  .reveal { opacity: 1; transform: none; }
+  .rule { transform: none; }
+  .market.is-live .dot { animation: none; }
+  .stills-row figure { transition-delay: 0s; }
+}
+</style>
 </head>
 <body>
-<a class="skip" href="#main">Zum Inhalt springen</a>
-<div class="grain" aria-hidden="true"></div>
-
-<!-- ══════════════ Header ══════════════ -->
-<header class="top" id="top">
-  <a class="brand" href="#top" aria-label="SERO — nach oben">
-    <img src="assets/wordmark-white.png" width="108" height="26" alt="SERO">
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav" id="nav">
+  <a class="nav-brand" href="/">
+    <img class="nav-glyph" src="assets/app-icon.png" width="28" height="28" alt="">
+    SERO
   </a>
-  <nav class="top-nav" aria-label="Hauptnavigation">
-    <a href="#how">Wie es funktioniert</a>
-    <a href="#guide">Home-Screen</a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#how">How it works</a>
     <a href="#faq">FAQ</a>
+    <a class="btn" href="https://app.sero.ltd/app/">Start with a photo</a>
   </nav>
-  <a class="lang" href="en/" hreflang="en" lang="en" aria-label="Switch to English">EN</a>
-  <a class="btn btn-small" href="https://app.seromunich.com/app/">Zur App</a>
 </header>
 
 <main id="main">
-
-<!-- ══════════════ Hero ══════════════ -->
-<section class="hero" aria-labelledby="hero-h">
-  <div class="hero-light" data-parallax="0.18" aria-hidden="true"></div>
-  <div class="hero-sigil" data-parallax="0.06" aria-hidden="true"></div>
-  <div class="hero-inner">
-    <img class="hero-cam" data-parallax="-0.08" src="assets/scan-cam-dark.png"
-         width="180" height="178" alt="" aria-hidden="true">
-    <p class="hero-badge"><span class="dot" aria-hidden="true"></span>App Store · Available Soon</p>
-    <h1 id="hero-h" class="hero-title">
-      Scannen.<br>Prüfen.<br><em>Bei eBay verkaufen.</em>
-    </h1>
-    <p class="hero-sub">
-      SERO erkennt dein Stück auf dem Foto, belegt den Marktwert mit echten
-      Verkäufen und legt dir den fertigen eBay-Entwurf hin. Live geht er
-      erst, wenn du ihn freigibst.
-    </p>
-    <div class="hero-ctas">
-      <a class="btn btn-primary" href="https://app.seromunich.com/app/">Direkt zur App</a>
-      <a class="btn btn-ghost" href="#guide">Zum Home-Screen</a>
-    </div>
-  </div>
-  <div class="hero-fade" aria-hidden="true"></div>
-</section>
-
-<!-- ══════════════ Wie es funktioniert ══════════════ -->
-<section class="sect" id="how" aria-labelledby="how-h">
-  <p class="kicker reveal">Wie es funktioniert</p>
-  <h2 id="how-h" class="sect-title reveal">Drei Schritte.<br>Der letzte gehört dir.</h2>
-
-  <ol class="steps">
-    <li class="step reveal">
-      <span class="step-nr" aria-hidden="true">1</span>
+  <section class="hero">
+    <div class="hero-grid">
       <div>
-        <h3>Scannen</h3>
-        <p>Ein Foto reicht, mehrere sind besser. SERO erkennt Set, Nummer,
-        Auflage und Sprache — bei Slabs liest es PSA, CGC oder BGS samt Note
-        und Zertifikatsnummer direkt vom Label.</p>
+        <div class="hero-mark" id="hero-mark">
+          <img src="assets/app-icon.png" width="200" height="200" alt="SERO">
+        </div>
+        <h1>PHOTO IN.<br>EBAY OUT.</h1>
+        <p class="sub">Selling. Simplified.</p>
+        <p class="loop">Photo in. Value from real listings. eBay draft out.</p>
+        <p class="draft">SERO builds a draft. You review title, photos, and price, then publish when you are ready. Nothing goes live until you say so.</p>
+        <div class="hero-cta">
+          <a class="btn" href="https://app.sero.ltd/app/">Start with a photo</a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <p class="hero-note">No download. Review before anything goes live.</p>
       </div>
-    </li>
-    <li class="step reveal">
-      <span class="step-nr" aria-hidden="true">2</span>
-      <div>
-        <h3>Prüfen</h3>
-        <p>Titel in Käufersprache, Kategorie, Preisvorschlag, Versand,
-        freigestellte Fotos — alles liegt als Entwurf bereit. Was nicht
-        passt, tippst du an und änderst es.</p>
+      <div class="reel" id="reel" aria-label="Photo to draft">
+        <img class="is-on" src="assets/reel/01-photo.jpg" alt="Photograph the piece">
+        <img src="assets/reel/02-value.jpg" alt="Market value from real listings">
+        <img src="assets/reel/03-draft.jpg" alt="eBay draft ready to review">
+        <img src="assets/reel/04-review.jpg" alt="Review before anything goes live">
+        <div class="reel-cap" id="reel-cap">Photograph</div>
       </div>
-    </li>
-    <li class="step reveal">
-      <span class="step-nr" aria-hidden="true">3</span>
-      <div>
-        <h3>Listen</h3>
-        <p>Ein Tipp, und der Entwurf geht an dein eBay-Konto. Live ist er
-        erst nach deiner Freigabe — nie von allein, nie ungefragt.</p>
+    </div>
+  </section>
+
+  <section class="stills">
+    <div class="stills-row">
+      <figure class="reveal">
+        <img src="assets/stills/slab.jpg" alt="Graded trading card in a slab" width="720" height="720">
+        <figcaption>Graded slabs</figcaption>
+      </figure>
+      <figure class="reveal">
+        <img src="assets/stills/card.jpg" alt="Raw trading card on a desk" width="720" height="720">
+        <figcaption>Raw cards</figcaption>
+      </figure>
+      <figure class="reveal">
+        <img src="assets/stills/collection.jpg" alt="A mixed collection of cards and collectibles" width="720" height="720">
+        <figcaption>Collections</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">How it works</p>
+        <h2>Turn anything into a listing.</h2>
+        <div class="rule" aria-hidden="true"></div>
       </div>
-    </li>
-  </ol>
-</section>
-
-<!-- ══════════════ Was SERO vorbereitet ══════════════ -->
-<section class="sect sect-tint" id="prep" aria-labelledby="prep-h">
-  <p class="kicker reveal">Was SERO vorbereitet</p>
-  <h2 id="prep-h" class="sect-title reveal">Alles liegt bereit,<br>bevor du entscheidest.</h2>
-
-  <dl class="prep">
-    <div class="prep-row reveal">
-      <dt>Identität</dt>
-      <dd>Set, Nummer, Auflage, Sprache — die Details, an denen der Wert
-      hängt. Bei Slabs gehören Bewerter, Note und Zertifikat dazu: eine
-      PSA 10 ist ein anderes Stück als eine PSA 9.</dd>
+      <div class="steps">
+        <article class="step reveal">
+          <strong>Identify</strong>
+          <p>Photograph the piece. SERO reads the card, slab, game, or comic.</p>
+        </article>
+        <article class="step reveal">
+          <strong>Organize</strong>
+          <p>Keep the collection in one place, with your photos as the lead image.</p>
+        </article>
+        <article class="step reveal">
+          <strong>Value</strong>
+          <p>Market value from real listings. If comps are thin, value stays unknown.</p>
+        </article>
+        <article class="step reveal">
+          <strong>Sell</strong>
+          <p>One tap builds an eBay draft. You review, then go live.</p>
+        </article>
+      </div>
     </div>
-    <div class="prep-row reveal">
-      <dt>Marktwert</dt>
-      <dd>Aus echten Belegen: verkaufte Stücke und aktive Angebote,
-      passend zu Auflage, Sprache und Note. Reichen die Belege nicht,
-      steht da ehrlich „Wert unbekannt" — nie eine erfundene Zahl.</dd>
+  </section>
+
+  <section id="markets">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">Marketplaces</p>
+        <h2>One collection. More doors later.</h2>
+        <div class="rule" aria-hidden="true"></div>
+      </div>
+      <div class="markets-grid">
+        <article class="market is-live" tabindex="0">
+          <div class="name">eBay</div>
+          <span class="state"><i class="dot" aria-hidden="true"></i> Live</span>
+          <div class="hint">From one collection</div>
+        </article>
+        <article class="market is-next" tabindex="0">
+          <div class="name">Cardmarket</div>
+          <span class="state">Next</span>
+          <div class="hint">From one collection</div>
+        </article>
+        <article class="market is-next" tabindex="0">
+          <div class="name">TCGplayer</div>
+          <span class="state">Next</span>
+          <div class="hint">From one collection</div>
+        </article>
+        <article class="market is-next" tabindex="0">
+          <div class="name">Vinted</div>
+          <span class="state">Next</span>
+          <div class="hint">From one collection</div>
+        </article>
+        <article class="market is-later" tabindex="0">
+          <div class="name">More</div>
+          <span class="state">Planned</span>
+          <div class="hint">From one collection</div>
+        </article>
+      </div>
     </div>
-    <div class="prep-row reveal">
-      <dt>eBay-Entwurf</dt>
-      <dd>Titel, den Käufer wirklich suchen, die passende Kategorie,
-      alle Pflichtangaben, Versand. Dein eigenes Foto ist freigestellt
-      das Hauptbild — kein Katalogbild.</dd>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="kicker">FAQ</p>
+        <h2>Straight answers</h2>
+        <div class="rule" aria-hidden="true"></div>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>Does SERO list on eBay by itself?</summary>
+          <p>No. SERO builds a draft. You review the title, photos, and price, then publish when you are ready. Nothing goes live until you say so.</p>
+        </details>
+        <details class="faq-item">
+          <summary>What can I photograph?</summary>
+          <p>Trading cards, graded slabs, retro games, manga, and comics. eBay.de first. Other categories follow as they prove out.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Where do prices come from?</summary>
+          <p>From real marketplace listings, not a language model. If there are not enough comps, SERO says value unknown instead of inventing a number.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Do I need to install an app?</summary>
+          <p>No. Open SERO in the browser. On iPhone you can add it to the Home Screen later. App Store and Google Play are coming.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is this only for Germany?</summary>
+          <p>eBay.de and Euro first. The product is built in Munich. Other marketplaces are next, not live yet.</p>
+        </details>
+      </div>
     </div>
-    <div class="prep-row reveal">
-      <dt>Freigabe</dt>
-      <dd>Nichts geht von allein live. Der Entwurf wartet, bis du ihn
-      geprüft und freigegeben hast.</dd>
+  </section>
+
+  <section class="install" id="install">
+    <div class="wrap">
+      <details>
+        <summary>Add to Home Screen later</summary>
+        <p class="hero-note" style="color:var(--muted);margin:8px 0 0">The app runs in the browser today. Native stores are coming.</p>
+        <ol>
+          <li>iPhone: Share in Safari, then Add to Home Screen.</li>
+          <li>Android: browser menu, then Add to Home screen.</li>
+        </ol>
+        <div class="store-row">
+          <span class="store">App Store · coming</span>
+          <span class="store">Google Play · coming</span>
+        </div>
+      </details>
     </div>
-  </dl>
-
-  <p class="prep-note reveal">Nebenbei entsteht deine Sammlung mit
-  Wertverlauf — als Überblick, nicht als Selbstzweck.</p>
-</section>
-
-<!-- ══════════════ Für wen ══════════════ -->
-<section class="sect" id="who" aria-labelledby="who-h">
-  <p class="kicker reveal">Für wen</p>
-  <h2 id="who-h" class="sect-title reveal">Gemacht für Sammlerware.</h2>
-  <ul class="who">
-    <li class="reveal"><strong>Sammelkarten</strong><span>Pokémon, One Piece, Magic und mehr — roh und gegradet, PSA, CGC, BGS</span></li>
-    <li class="reveal"><strong>Retro-Spiele</strong><span>vom NES-Modul bis zum versiegelten PS2-Klassiker, auch WATA-gegradet</span></li>
-    <li class="reveal"><strong>Manga &amp; Comics</strong><span>Erstauflagen, japanische Originale, gegradete Bände</span></li>
-    <li class="reveal"><strong>Weitere Stücke</strong><span>SERO erkennt auch Elektronik, Spielzeug und mehr — dort prüfst du den Vorschlag genauer</span></li>
-  </ul>
-</section>
-
-<!-- ══════════════ Zeit-Vergleich ══════════════ -->
-<section class="sect sect-tint" id="time" aria-labelledby="time-h">
-  <p class="kicker reveal">Die ehrliche Rechnung</p>
-  <h2 id="time-h" class="sect-title reveal">Ein Stück listen.</h2>
-
-  <div class="time">
-    <div class="time-col reveal">
-      <p class="time-label">Von Hand</p>
-      <p class="time-value">~ 8 Minuten</p>
-      <p class="time-desc">Stück bestimmen, verkaufte Angebote durchsehen,
-      Foto zuschneiden, Titel und Pflichtfelder ausfüllen.</p>
-    </div>
-    <div class="time-col time-col-sero reveal">
-      <p class="time-label">Mit SERO</p>
-      <p class="time-value">~ 1 Minute</p>
-      <p class="time-desc">Fotografieren, Entwurf prüfen, freigeben.
-      Gerechnet mit der vollen Minute — inklusive Hinlegen und Prüfen.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════ Home-Screen Guide ══════════════ -->
-<section class="sect" id="guide" aria-labelledby="guide-h">
-  <p class="kicker reveal">Home-Screen</p>
-  <h2 id="guide-h" class="sect-title reveal">Wie eine App,<br>ohne App Store.</h2>
-  <p class="sect-sub reveal">SERO läuft im Browser. Auf dem Home-Screen
-  startet es wie eine installierte App — in Vollbild, mit eigenem Symbol.</p>
-
-  <div class="guide">
-    <article class="guide-card reveal" aria-labelledby="g-ios">
-      <h3 id="g-ios">iPhone <span>Safari</span></h3>
-      <ol>
-        <li>Öffne <a href="https://app.seromunich.com/app/">app.seromunich.com/app</a> in Safari</li>
-        <li>Tippe unten auf das Teilen-Symbol — das Viereck mit dem Pfeil nach oben</li>
-        <li>Wähle in der Liste „Zum Home-Bildschirm"</li>
-        <li>Tippe oben rechts auf „Hinzufügen"</li>
-      </ol>
-    </article>
-    <article class="guide-card reveal" aria-labelledby="g-android">
-      <h3 id="g-android">Android <span>Chrome</span></h3>
-      <ol>
-        <li>Öffne <a href="https://app.seromunich.com/app/">app.seromunich.com/app</a> in Chrome</li>
-        <li>Tippe oben rechts auf das Drei-Punkte-Menü</li>
-        <li>Wähle „App installieren" oder „Zum Startbildschirm hinzufügen"</li>
-        <li>Bestätige mit „Installieren"</li>
-      </ol>
-    </article>
-  </div>
-</section>
-
-<!-- ══════════════ FAQ ══════════════ -->
-<section class="sect sect-tint" id="faq" aria-labelledby="faq-h">
-  <p class="kicker reveal">FAQ</p>
-  <h2 id="faq-h" class="sect-title reveal">Kurz beantwortet.</h2>
-
-  <div class="faq reveal">
-    <details name="faq">
-      <summary>Brauche ich ein eBay-Konto?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Ja, dein eigenes. SERO listet über dein Konto —
-      du verbindest es einmal, Verkaufsrichtlinien und Versandstandort richtet
-      SERO dabei mit ein.</p></div>
-    </details>
-    <details name="faq">
-      <summary>Veröffentlicht SERO von allein?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Nein. Jeder Entwurf wartet auf deine Freigabe.
-      Erst dein Tipp macht ihn bei eBay live — es gibt keinen Autopiloten.</p></div>
-    </details>
-    <details name="faq">
-      <summary>Woher kommt der Marktwert?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Aus echten Belegen: verkaufte Stücke und aktive
-      Angebote, passend zu Auflage, Sprache und Zustand. Reichen die Belege
-      nicht, zeigt SERO „Wert unbekannt" — und du trägst deinen Preis selbst
-      ein. Lieber ehrlich als erfunden.</p></div>
-    </details>
-    <details name="faq">
-      <summary>Funktioniert das mit gegradeten Karten?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Ja. SERO liest Bewerter, Note und
-      Zertifikatsnummer direkt vom Label des Slabs — PSA, CGC, BGS, WATA und
-      weitere. Die Note gehört zur Identität: bewertet wird das gegradete
-      Stück, nicht die rohe Karte.</p></div>
-    </details>
-    <details name="faq">
-      <summary>Welche Kategorien kann SERO?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Zuhause ist SERO bei Sammelkarten, Retro-Spielen,
-      Manga und Comics. Andere Stücke — Elektronik, Spielzeug, Zubehör —
-      erkennt SERO ebenfalls; dort lohnt ein genauerer Blick auf den
-      Vorschlag, bevor du freigibst.</p></div>
-    </details>
-    <details name="faq">
-      <summary>Wann kommt SERO in den App Store?<span class="faq-ic" aria-hidden="true"></span></summary>
-      <div class="faq-body"><p>Bald. Bis dahin läuft SERO als Web-App im
-      Browser und vom Home-Screen — mit vollem Funktionsumfang. Der Weg dahin
-      steht oben im Guide.</p></div>
-    </details>
-  </div>
-</section>
-
-<!-- ══════════════ Final CTA ══════════════ -->
-<section class="sect final" aria-labelledby="final-h">
-  <img class="final-mark reveal" src="assets/wordmark-white.png" width="140" height="34" alt="" aria-hidden="true">
-  <h2 id="final-h" class="sect-title reveal">Bereit für dein<br>erstes Stück.</h2>
-  <p class="sect-sub reveal">Kostenlos starten, erstes Stück scannen,
-  Entwurf ansehen. Live geht nichts ohne dich.</p>
-  <div class="hero-ctas reveal">
-    <a class="btn btn-primary" href="https://app.seromunich.com/app/">Direkt zur App</a>
-  </div>
-</section>
-
+  </section>
 </main>
 
-<!-- ══════════════ Footer ══════════════ -->
 <footer class="foot">
-  <div class="foot-row">
-    <img src="assets/wordmark-white.png" width="90" height="22" alt="SERO">
-    <p class="foot-made">seromunich.com · Made in Munich</p>
+  <div class="foot-inner">
+    <div class="foot-brand">
+      <img src="assets/app-icon.png" width="22" height="22" alt="">
+      SERO
+    </div>
+    <div class="foot-tag">PHOTO IN. EBAY OUT. · Built in Munich</div>
+    <div class="foot-links">
+      <a href="https://app.sero.ltd/app/">Open the app</a>
+      <a href="mailto:kontakt@sero.ltd">kontakt@sero.ltd</a>
+      <a href="https://app.sero.ltd/legal.html">Legal</a>
+      <a href="https://x.com/seroltd">X</a>
+      <a href="https://www.ebay.de/str/seromunich">eBay shop</a>
+    </div>
+    <p class="legal">SERO does not buy or sell your pieces. Drafts stay yours until you publish.</p>
   </div>
-  <nav class="foot-nav" aria-label="Fußzeile">
-    <a href="https://app.seromunich.com/app/">App</a>
-    <a href="https://app.seromunich.com/legal.html">Rechtliches</a>
-    <a href="mailto:kontakt@seromunich.com">Kontakt</a>
-  </nav>
 </footer>
 
-<script src="landing.js?v=4" defer></script>
+<script>
+(function () {
+  var nav = document.getElementById("nav");
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  function onScroll() {
+    nav.classList.toggle("is-scrolled", window.scrollY > 80);
+  }
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  var frames = document.querySelectorAll("#reel img");
+  var cap = document.getElementById("reel-cap");
+  var labels = ["Photograph", "Value", "Draft", "Review"];
+  var i = 0;
+  if (!reduce && frames.length) {
+    setInterval(function () {
+      frames[i].classList.remove("is-on");
+      i = (i + 1) % frames.length;
+      frames[i].classList.add("is-on");
+      if (cap) cap.textContent = labels[i] || "";
+    }, 2200);
+  }
+
+  if (!reduce && "IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) entry.target.classList.add("is-in");
+      });
+    }, { threshold: 0.16 });
+    document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll(".reveal").forEach(function (el) { el.classList.add("is-in"); });
+  }
+
+  var mark = document.getElementById("hero-mark");
+  if (mark && !reduce && fine) {
+    var tx = 0, ty = 0, px = 0, py = 0, breath = 0;
+    mark.addEventListener("mousemove", function (e) {
+      var r = mark.getBoundingClientRect();
+      px = ((e.clientX - r.left) / r.width - 0.5) * 14;
+      py = ((e.clientY - r.top) / r.height - 0.5) * 14;
+    });
+    mark.addEventListener("mouseleave", function () { px = 0; py = 0; });
+    function tick(now) {
+      breath = Math.sin(now / 2400) * 0.35;
+      tx += (px - tx) * 0.08;
+      ty += (py - ty) * 0.08;
+      mark.style.transform = "translate(" + tx.toFixed(2) + "px," + ty.toFixed(2) + "px) rotate(" + breath.toFixed(2) + "deg)";
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+})();
+</script>
 </body>
 </html>
