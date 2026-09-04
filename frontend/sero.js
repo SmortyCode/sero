@@ -9530,14 +9530,14 @@ function renderDetail(det, opts) {
     hideDetailCtaDock();
     return;
   }
-  try { return _renderDetailInner(det, opts, body); }
+  try { return _renderDetail(det, opts, body); }
   catch (e) {
     console.error("renderDetail error", e);
     body.innerHTML = `<div class="err-box">${esc(String(e && e.message || e))}</div>`;
     hideDetailCtaDock();
   }
 }
-function _renderDetailInner(det, opts, body) {
+function _renderDetail(det, opts, body) {
   const item = det.mode === "item" ? det.data : null;
   const d = (det.data && det.data.draft) || null;
 
