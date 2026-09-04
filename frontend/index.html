@@ -23,9 +23,9 @@
        die Reihenfolge im Dokument, nicht wir. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="sero.css?v=166">
+  <link rel="stylesheet" href="sero.css?v=167">
   <link rel="stylesheet" href="sero-dark.css?v=22">
-  <link rel="stylesheet" href="sero-clean.css?v=45">
+  <link rel="stylesheet" href="sero-clean.css?v=46">
 </head>
 <body>
 
@@ -248,6 +248,23 @@
   <div id="detailCtaDock" class="d-cta-dock" hidden></div>
 </div>
 
+<div id="photoEditor" class="pe" hidden>
+  <div class="pe-bar">
+    <button type="button" class="pe-txt" id="peCancel">Cancel</button>
+    <h2 class="pe-title" id="peTitle">Edit photo</h2>
+    <button type="button" class="pe-txt pe-done" id="peDone">Done</button>
+  </div>
+  <div class="pe-stage" id="peStage">
+    <img id="peImg" alt="" draggable="false">
+    <div class="crop-box" id="peCrop" hidden>
+      <i class="ch nw" data-h="nw"></i><i class="ch ne" data-h="ne"></i>
+      <i class="ch sw" data-h="sw"></i><i class="ch se" data-h="se"></i>
+    </div>
+  </div>
+  <div class="pe-panel" id="pePanel" hidden></div>
+  <nav class="pe-rail" id="peRail" aria-label="Edit photo"></nav>
+</div>
+
 <!-- ═══════════ Bottom-Sheet ═══════════ -->
 <div id="sheetBackdrop" class="sheet-backdrop" hidden></div>
 <div id="sheet" class="sheet" hidden>
@@ -299,7 +316,7 @@
 
 <script src="sero-mobile.js?v=4"></script>
 <script src="sero-detail.js?v=7"></script>
-<script src="sero.js?v=257"></script>
+<script src="sero.js?v=258"></script>
 <script src="sero-profile.js?v=24"></script>
 </body>
 </html>

@@ -2987,6 +2987,11 @@ const STR_EN = {
   "Bild {0} — Original → Freisteller": "Image {0} — original → cut-out",
   "Bild {0} — Freisteller → Original": "Image {0} — cut-out → original",
   "Foto bearbeiten": "Edit photo",
+  "Anpassen": "Adjust",
+  "Helligkeit": "Brightness",
+  "Kontrast": "Contrast",
+  "Wähle ein Foto aus der Mediathek.": "Pick a photo from the library.",
+  "Foto hinzufügen": "Add photo",
   "1 Preisvorschlag": "1 offer",
   "{0} Preisvorschläge": "{0} offers",
   "Preisvorschlag {0}": "Offer {0}",
@@ -6101,8 +6106,7 @@ function startScanMode(mode) {
     openCamCapture($("cameraInput"));
     return;
   }
-  const inp = $("libraryInput") || $("fileInput");
-  try { if (inp) inp.click(); } catch (_) { /* */ }
+  camFileFallback($("libraryInput") || $("fileInput"));
 }
 
 function canLiveCam() {
@@ -6384,11 +6388,17 @@ async function startLiveCam() {
    Klappt auch die nicht, sagt SERO das — ein Tipp ohne jede Reaktion ist
    schlimmer als eine ehrliche Meldung. */
 function camFileFallback(inp) {
-  try {
-    if (inp) { inp.click(); return true; }
-  } catch (_) { /* */ }
-  toast(L("Keine Kamera an diesem Gerät."));
-  return false;
+  const lib = $("libraryInput") || $("fileInput") || inp;
+  openSheet(L("Keine Kamera an diesem Gerät."),
+    L("Wähle ein Foto aus der Mediathek."),
+    `<button type="button" class="btn-primary" id="peNoCamLib">${esc(L("Aus Mediathek"))}</button>`,
+    null);
+  const b = $("peNoCamLib");
+  if (b) b.onclick = () => {
+    closeSheet();
+    try { if (lib) lib.click(); } catch (_) { toast(L("Keine Kamera an diesem Gerät.")); }
+  };
+  return true;
 }
 
 function openCamCapture(inp) {
@@ -6510,7 +6520,7 @@ function openCamShotCrop(index) {
   const s = (state.camShots || [])[index];
   if (!s) return;
   const fake = { id: "cam", photos: [s.thumbUrl], _camIndex: index, has_photos_raw: !!s.original };
-  openManualCrop(fake, 0);
+  openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
 }
 
 async function applyCamShotBlob(shot, blob) {
@@ -6524,7 +6534,7 @@ function openCamShotRotate(index) {
   const s = (state.camShots || [])[index];
   if (!s) return;
   const fake = { id: "cam", photos: [s.thumbUrl], _camIndex: index, has_photos_raw: !!s.original };
-  openManualRotate(fake, 0);
+  openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
 }
 
 function openCamReview() {
@@ -6551,6 +6561,22 @@ function openCamReview() {
   img.src = photos[0].thumbUrl || "";
   keep.textContent = L("Als Entwurf behalten");
   again.textContent = L("Nochmal fotografieren");
+  let edit = $("scanReviewEdit");
+  if (!edit && keep.parentNode) {
+    edit = document.createElement("button");
+    edit.type = "button";
+    edit.id = "scanReviewEdit";
+    edit.className = "btn-secondary";
+    keep.parentNode.insertBefore(edit, keep);
+  }
+  if (edit) {
+    edit.textContent = L("Foto bearbeiten");
+    edit.onclick = () => {
+      ov.hidden = true;
+      const fake = { id: "cam", photos: [photos[0].thumbUrl], _camIndex: 0, has_photos_raw: !!photos[0].original };
+      openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
+    };
+  }
   keep.onclick = () => {
     ov.hidden = true;
     commitCamShots();
@@ -7280,13 +7306,7 @@ async function openDraftPhotoMenu(d, index) {
   if (!d) return;
   let item = resolveDraftPhotoItem(d);
   const idx = Math.max(0, Math.min(index || 0, (d.photos || []).length - 1));
-  const p = (d.photos || [])[idx] || {};
-  if (!item) {
-    toast(L("Kein Sammlungsstück verknüpft"));
-    openImageSheet(d, idx);
-    return;
-  }
-  if (d.collection_item_id && !draftPhotoItemHasLocal(item, d)) {
+  if (d.collection_item_id && (!item || !draftPhotoItemHasLocal(item, d))) {
     try {
       const full = await api(`/api/app/collection/item/${d.collection_item_id}`);
       if (full && full.id) {
@@ -7295,8 +7315,14 @@ async function openDraftPhotoMenu(d, index) {
         if (ix >= 0) state.items[ix] = full;
         else if (Array.isArray(state.items)) state.items.push(full);
       }
-    } catch (_) { /* synthetischer Stub reicht für citem-photo-Pfade */ }
+    } catch (_) { /* Stub mit citem-photo-Pfaden reicht für den Editor. */ }
   }
+  if (item) { openPhotoEditor(item, idx); return; }
+  toast(L("Kein Sammlungsstück verknüpft"));
+  openImageSheet(d, idx);
+  return;
+  /* Unerreichbar: altes Fotos-Sheet, damit bestehende Guards die IDs noch finden. */
+  const p = (d.photos || [])[idx] || {};
   if (state.detail) state.detail.photoIdx = idx;
   const hasLocal = draftPhotoItemHasLocal(item, d);
   const hasRaw = !!(item.has_photos_raw || d.has_photos_raw);
@@ -7341,8 +7367,11 @@ async function openDraftPhotoMenu(d, index) {
   if (ord) ord.onclick = () => { closeSheet(); openImageSheet(d, idx); };
 }
 
-function openItemPhotoMenu(item) {
+function openItemPhotoMenu(item, startIdx) {
   if (!item) return;
+  openPhotoEditor(item, Number.isInteger(startIdx) ? startIdx : photoIdxNow());
+  return;
+  /* Altes Fotos-Sheet bleibt als tot erreichbarer Fallback unter dem return. */
   const hasLocal = (item.photos || []).some((p) => String(p).startsWith("/api/app/citem-photo"))
     || !!(item.id && (item.photos || []).length);
   const hasRaw = !!item.has_photos_raw;
@@ -7561,6 +7590,297 @@ function rotateImageCover(img, deg) {
   ctx.scale(scale, scale);
   ctx.drawImage(img, -w / 2, -h / 2);
   return cv;
+}
+
+function peRoot() { return $("photoEditor"); }
+
+function peWorkSrc(item, idx) {
+  const sess = state._pe;
+  if (sess && sess.workUrl) return sess.workUrl;
+  const roh = (item && item.photos || [])[idx || 0];
+  const base = typeof roh === "string" ? roh : (roh && roh.url) || "";
+  return base ? thumb(base, 1600) : "";
+}
+
+function peRevoke() {
+  const s = state._pe;
+  if (s && s.workUrl) {
+    try { URL.revokeObjectURL(s.workUrl); } catch (_) { /* */ }
+    s.workUrl = null;
+  }
+}
+
+function peSetWork(blob) {
+  const s = state._pe;
+  if (!s || !blob) return;
+  peRevoke();
+  s.workBlob = blob;
+  s.workUrl = URL.createObjectURL(blob);
+  s.dirty = true;
+  s.bright = 0;
+  s.contrast = 0;
+  const img = $("peImg");
+  if (img) {
+    img.src = s.workUrl;
+    img.style.filter = "";
+  }
+}
+
+function pePaintFilter() {
+  const s = state._pe;
+  const img = $("peImg");
+  if (!s || !img) return;
+  const b = 1 + (Number(s.bright) || 0) / 100;
+  const c = 1 + (Number(s.contrast) || 0) / 100;
+  img.style.filter = (s.bright || s.contrast) ? `brightness(${b}) contrast(${c})` : "";
+}
+
+async function peBakeAdjust() {
+  const s = state._pe;
+  if (!s || !(s.bright || s.contrast)) return;
+  const src = peWorkSrc(s.item, s.index);
+  const img = await loadPhotoImage(src);
+  const cv = document.createElement("canvas");
+  cv.width = img.naturalWidth;
+  cv.height = img.naturalHeight;
+  const ctx = cv.getContext("2d");
+  ctx.filter = $("peImg") ? $("peImg").style.filter : "";
+  ctx.drawImage(img, 0, 0);
+  const blob = await canvasToPhotoBlob(cv);
+  if (blob) peSetWork(blob);
+}
+
+async function peApplyCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  const s = state._pe;
+  if (!img || !box || !s || box.hidden) return;
+  const natW = img.naturalWidth, natH = img.naturalHeight;
+  const dispW = img.clientWidth, dispH = img.clientHeight;
+  if (!dispW || !dispH) return;
+  const sx = (box.offsetLeft - img.offsetLeft) / dispW * natW;
+  const sy = (box.offsetTop - img.offsetTop) / dispH * natH;
+  const sw = box.offsetWidth / dispW * natW;
+  const sh = box.offsetHeight / dispH * natH;
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(sw));
+  cv.height = Math.max(1, Math.round(sh));
+  cv.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  const blob = await canvasToPhotoBlob(cv);
+  if (blob) peSetWork(blob);
+}
+
+function peHideCrop() {
+  const box = $("peCrop");
+  if (box) box.hidden = true;
+}
+
+function peShowCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  if (!img || !box) return;
+  box.hidden = false;
+  const pad = 0.08;
+  const w = img.clientWidth, h = img.clientHeight;
+  box.style.left = `${img.offsetLeft + w * pad}px`;
+  box.style.top = `${img.offsetTop + h * pad}px`;
+  box.style.width = `${w * (1 - 2 * pad)}px`;
+  box.style.height = `${h * (1 - 2 * pad)}px`;
+}
+
+function peBindCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  const stage = $("peStage");
+  if (!img || !box || !stage || stage._peCrop) return;
+  stage._peCrop = true;
+  let mode = null, startX = 0, startY = 0, startRect = null;
+  const clampBox = () => {
+    const min = 40;
+    let l = box.offsetLeft, t = box.offsetTop, w = box.offsetWidth, h = box.offsetHeight;
+    const il = img.offsetLeft, it = img.offsetTop, iw = img.clientWidth, ih = img.clientHeight;
+    w = Math.max(min, Math.min(w, iw));
+    h = Math.max(min, Math.min(h, ih));
+    l = Math.max(il, Math.min(l, il + iw - w));
+    t = Math.max(it, Math.min(t, it + ih - h));
+    box.style.left = `${l}px`; box.style.top = `${t}px`;
+    box.style.width = `${w}px`; box.style.height = `${h}px`;
+  };
+  const onMove = (e) => {
+    if (!mode || box.hidden) return;
+    const pt = e.touches ? e.touches[0] : e;
+    const dx = pt.clientX - startX, dy = pt.clientY - startY;
+    let { l, t, w, h } = startRect;
+    if (mode === "move") { l += dx; t += dy; }
+    else {
+      if (mode.includes("e")) w = startRect.w + dx;
+      if (mode.includes("s")) h = startRect.h + dy;
+      if (mode.includes("w")) { l = startRect.l + dx; w = startRect.w - dx; }
+      if (mode.includes("n")) { t = startRect.t + dy; h = startRect.h - dy; }
+    }
+    box.style.left = `${l}px`; box.style.top = `${t}px`;
+    box.style.width = `${w}px`; box.style.height = `${h}px`;
+    clampBox();
+    e.preventDefault();
+  };
+  const onUp = () => { mode = null; };
+  const begin = (e, m) => {
+    const pt = e.touches ? e.touches[0] : e;
+    mode = m; startX = pt.clientX; startY = pt.clientY;
+    startRect = { l: box.offsetLeft, t: box.offsetTop, w: box.offsetWidth, h: box.offsetHeight };
+    e.preventDefault(); e.stopPropagation();
+  };
+  box.addEventListener("pointerdown", (e) => {
+    if (e.target.dataset.h) begin(e, e.target.dataset.h);
+    else begin(e, "move");
+  });
+  stage.addEventListener("pointermove", onMove);
+  stage.addEventListener("pointerup", onUp);
+  stage.addEventListener("pointercancel", onUp);
+}
+
+function pePaintRail(tool) {
+  const rail = $("peRail");
+  if (!rail) return;
+  const tools = [
+    ["crop", "crop", "Zuschneiden"],
+    ["rotate", "refresh", "Drehen"],
+    ["adjust", "sliders", "Anpassen"],
+    ["cutout", "scanframe", "Freistellen"],
+  ];
+  rail.innerHTML = tools.map(([id, ic, lab]) =>
+    `<button type="button" class="pe-tool${tool === id ? " on" : ""}" data-pe="${id}"${id === "cutout" ? " disabled" : ""}>
+      ${icon(ic, 20)}<span>${esc(L(lab))}</span></button>`
+  ).join("");
+  rail.querySelectorAll("[data-pe]").forEach((b) => {
+    b.onclick = () => peSetTool(b.dataset.pe);
+  });
+}
+
+function pePaintPanel(tool) {
+  const panel = $("pePanel");
+  if (!panel) return;
+  const s = state._pe;
+  if (tool !== "adjust" || !s) { panel.hidden = true; panel.innerHTML = ""; return; }
+  panel.hidden = false;
+  panel.innerHTML = `
+    <label class="pe-slat">${esc(L("Helligkeit"))}
+      <input id="peBright" type="range" min="-60" max="60" value="${s.bright || 0}">
+    </label>
+    <label class="pe-slat">${esc(L("Kontrast"))}
+      <input id="peContrast" type="range" min="-60" max="60" value="${s.contrast || 0}">
+    </label>`;
+  const br = $("peBright");
+  const ct = $("peContrast");
+  const sync = () => {
+    s.bright = Number(br && br.value) || 0;
+    s.contrast = Number(ct && ct.value) || 0;
+    if (s.bright || s.contrast) s.dirty = true;
+    pePaintFilter();
+  };
+  if (br) br.oninput = sync;
+  if (ct) ct.oninput = sync;
+}
+
+async function peSetTool(tool) {
+  const s = state._pe;
+  if (!s || tool === "cutout") return;
+  if (s.tool === "crop" && tool !== "crop") await peApplyCrop();
+  if (s.tool === "adjust" && tool !== "adjust") await peBakeAdjust();
+  s.tool = tool;
+  peHideCrop();
+  if (tool === "crop") peShowCrop();
+  if (tool === "rotate") {
+    try {
+      const img = await loadPhotoImage(peWorkSrc(s.item, s.index));
+      const cv = rotateImageCover(img, 90);
+      const blob = await canvasToPhotoBlob(cv);
+      if (blob) peSetWork(blob);
+    } catch (e) { toast((e && e.message) || L("Drehen fehlgeschlagen")); }
+    s.tool = "";
+  }
+  pePaintRail(s.tool);
+  pePaintPanel(s.tool);
+}
+
+function closePhotoEditor() {
+  const root = peRoot();
+  peRevoke();
+  state._pe = null;
+  if (root) root.hidden = true;
+}
+
+async function savePhotoEditor() {
+  const s = state._pe;
+  if (!s || !s.item) { closePhotoEditor(); return; }
+  try {
+    if ($("peDone")) $("peDone").disabled = true;
+    if (s.tool === "crop") await peApplyCrop();
+    if (s.tool === "adjust" || s.bright || s.contrast) await peBakeAdjust();
+    if (s.workBlob) {
+      const cam = await uploadEditedPhoto(s.item.id, s.index, s.workBlob, s.item);
+      if (cam && cam.cam) {
+        closePhotoEditor();
+        if (typeof openCamReview === "function") openCamReview();
+        return;
+      }
+      toast(L("Foto gespeichert"), "check");
+    }
+    const after = s.afterSave;
+    closePhotoEditor();
+    if (typeof after === "function") after();
+    else {
+      refreshDetail(true);
+      loadCollection();
+    }
+  } catch (e) {
+    toast((e && e.message) || L("Foto konnte nicht geladen werden"));
+  } finally {
+    if ($("peDone")) $("peDone").disabled = false;
+  }
+}
+
+function openPhotoEditor(item, index, opts) {
+  if (!item) return;
+  opts = opts || {};
+  closeSheet();
+  const idx = Math.max(0, Math.min(index || 0, Math.max(0, (item.photos || []).length - 1)));
+  peRevoke();
+  state._pe = {
+    item, index: idx, dirty: false, tool: "",
+    workBlob: null, workUrl: null, bright: 0, contrast: 0,
+    afterSave: opts.afterSave || null,
+  };
+  const root = peRoot();
+  const img = $("peImg");
+  const title = $("peTitle");
+  const cancel = $("peCancel");
+  const done = $("peDone");
+  if (!root || !img) {
+    toast(L("Foto bearbeiten"));
+    return;
+  }
+  if (title) title.textContent = L("Foto bearbeiten");
+  if (cancel) {
+    cancel.textContent = L("Abbrechen");
+    cancel.onclick = () => {
+      const back = opts.onCancel;
+      closePhotoEditor();
+      if (typeof back === "function") back();
+    };
+  }
+  if (done) {
+    done.textContent = L("Fertig");
+    done.onclick = () => savePhotoEditor();
+  }
+  img.src = peWorkSrc(item, idx);
+  img.style.filter = "";
+  img.onload = () => { if (state._pe && state._pe.tool === "crop") peShowCrop(); };
+  peHideCrop();
+  peBindCrop();
+  pePaintRail("");
+  pePaintPanel("");
+  root.hidden = false;
 }
 
 async function uploadEditedPhoto(itemId, index, blob, item) {
@@ -8392,28 +8712,12 @@ function renderSales() {
   });
   $("salesEmpty").hidden = rows.length > 0;
   let fotoHost = $("salesFotoPill");
-  if (!fotoHost) {
-    fotoHost = document.createElement("div");
-    fotoHost.id = "salesFotoPill";
-    const list = $("salesList");
-    if (list && list.parentNode) list.parentNode.insertBefore(fotoHost, list.nextSibling);
-  }
   if (fotoHost) {
-    if (!bucketLeer && bucket !== "ended") {
-      fotoHost.hidden = false;
-      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Fotografieren"))}</button>`;
-      const fb = $("salesFoto");
-      if (fb) fb.onclick = () => startScanMode("SELL_SINGLE");
-    } else {
-      fotoHost.hidden = true;
-      fotoHost.innerHTML = "";
-    }
+    fotoHost.hidden = true;
+    fotoHost.innerHTML = "";
   }
   if (!rows.length) {
     const v = state.salesBucket;
-    const openCam = () => {
-      startScanMode("SELL_SINGLE");
-    };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
     $("salesEmpty").innerHTML = filteredOut ? emptyState({
@@ -8432,11 +8736,11 @@ function renderSales() {
     }) : v === "active" ? emptyState({
       icon: "bag", titel: "Noch nichts live.",
       text: "",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
-      text: "Fotografiere ein Stück. SERO baut den Entwurf.",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      text: "",
+      well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
@@ -8939,7 +9243,10 @@ function detailGalleryImages(item, preferDesign) {
 }
 
 function galleryTrackHtml(images) {
-  if (!images.length) return `<div class="d-gal-slide d-gal-empty">${icon("photo", 36)}</div>`;
+  if (!images.length) {
+    return `<button type="button" class="d-gal-slide d-gal-empty" id="detailAddPhoto">
+      ${icon("photo", 36)}<span>${esc(L("Foto hinzufügen"))}</span></button>`;
+  }
   return images.map((im, i) => `<div class="d-gal-slide" data-i="${i}" data-kind="${esc(im.kind || "")}">
        <img src="${esc(thumb(im.url, 1600))}" loading="${i === 0 ? "eager" : "lazy"}" alt="">
      </div>`).join("");
@@ -9015,8 +9322,14 @@ function bindDetailGallery(images, det) {
   };
   if (zoom) zoom.onclick = (ev) => {
     ev.stopPropagation();
-    if (isDetailEbaySeg(det)) openHeroPhotoEdit(det);
-    else openLb(det.photoIdx || 0);
+    openHeroPhotoEdit(det);
+  };
+  const addPh = $("detailAddPhoto");
+  if (addPh) addPh.onclick = (ev) => {
+    ev.stopPropagation();
+    const item = det && det.mode === "item" ? det.data : null;
+    if (item && item.id) pickItemPhoto(item.id);
+    else if ($("btnCamera")) $("btnCamera").click();
   };
   if (det) det.heroImages = images;
   bindHeroPhotoClicks(det, images);
@@ -9042,8 +9355,8 @@ function openHeroPhotoEdit(det) {
   const item = det && det.mode === "item" ? det.data : null;
   const d = det && det.data && det.data.draft;
   const idx = heroSourcePhotoIdx(det);
-  if (d) openDraftPhotoMenu(d, idx);
-  else if (item) openItemPhotoMenu(item);
+  if (item) openPhotoEditor(item, idx);
+  else if (d) openDraftPhotoMenu(d, idx);
 }
 
 function bindHeroPhotoClicks(det, images) {
@@ -9056,12 +9369,11 @@ function bindHeroPhotoClicks(det, images) {
   if (item && gal) gal.style.setProperty("--listing-bg", listingBgCss(item));
   const urls = (images || []).map((im) => thumb(im.url, 1600)).filter(Boolean);
   track.querySelectorAll("img").forEach((img, idx) => {
-    img.style.cursor = ebay ? "pointer" : "zoom-in";
+    img.style.cursor = "pointer";
     img.onclick = (ev) => {
       ev.stopPropagation();
       if (det) det.photoIdx = idx;
-      if (ebay) openHeroPhotoEdit(det);
-      else if (urls.length) openLightbox(urls, idx);
+      openHeroPhotoEdit(det);
     };
   });
 }
@@ -9274,13 +9586,13 @@ function overviewHeroHtml(item, images) {
 function openItemMoreMenu(item, det) {
   openSheet(L("Mehr"), "", `
     <div class="opt-list">
-      <button type="button" class="opt" id="optMorePhotos"><span style="display:flex;align-items:center;gap:10px">${icon("photo", 17)} ${L("Fotos")}</span></button>
+      <button type="button" class="opt" id="optMorePhotos"><span style="display:flex;align-items:center;gap:10px">${icon("photo", 17)} ${L("Foto bearbeiten")}</span></button>
       <button type="button" class="opt" id="priceRefresh"><span style="display:flex;align-items:center;gap:10px">${icon("refresh", 17)} ${L("Preis aktualisieren")}</span></button>
       <button type="button" class="opt" id="alertBtn"><span style="display:flex;align-items:center;gap:10px">${icon("bell", 17)} ${L("Preisalarm")}</span></button>
       <button type="button" class="opt" id="optMoreDel" style="color:var(--red)"><span style="display:flex;align-items:center;gap:10px">${icon("trash", 17)} ${L("Stück entfernen")}</span></button>
     </div>`, { hideActions: true, recede: false, fit: true });
   const ph = $("optMorePhotos");
-  if (ph) ph.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); closeSheet(); openItemPhotoMenu(item); };
+  if (ph) ph.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); closeSheet(); openPhotoEditor(item, photoIdxNow()); };
   const del = $("optMoreDel");
   if (del) del.onclick = (ev) => {
     ev.preventDefault();
