@@ -3849,6 +3849,9 @@ html.reduced-effects .tabbar {
   color: #fff; font: 500 16px/1 var(--font, inherit); cursor: pointer;
 }
 .pe-done { margin-left: auto; font-weight: 600; }
+.pe-restore {
+  align-self: center; min-height: 36px; color: #8e8e93; font-size: 13px;
+}
 .pe-title {
   position: absolute; left: 50%; transform: translateX(-50%);
   margin: 0; font: 500 16px/1.2 var(--font, inherit); letter-spacing: -.2px;

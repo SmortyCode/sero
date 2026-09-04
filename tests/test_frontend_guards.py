@@ -648,4 +648,7 @@ def test_lock_20260904_edit_photo_shell():
     assert "startScanMode" not in rend
     crop_rail = JS[JS.index("function pePaintRail") : JS.index("function pePaintPanel")]
     assert "cutout" in crop_rail
-    assert "disabled" in crop_rail
+    assert "disabled" not in crop_rail
+    assert "freistellenItemPhoto" in JS
+    assert "function waitCutoutSettled" in JS
+    assert 'id="peRestore"' in HTML

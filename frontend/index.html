@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=overlays-content">
   <title>SERO</title>
-  <link rel="manifest" href="manifest.webmanifest?v=8">
+  <link rel="manifest" href="manifest.webmanifest?v=9">
 
   <!-- Home-Screen / PWA: neues Line-Icon. Startup: Schwarz + Wordmark. -->
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=7">
@@ -23,7 +23,7 @@
        die Reihenfolge im Dokument, nicht wir. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="sero.css?v=167">
+  <link rel="stylesheet" href="sero.css?v=168">
   <link rel="stylesheet" href="sero-dark.css?v=22">
   <link rel="stylesheet" href="sero-clean.css?v=46">
 </head>
@@ -254,6 +254,7 @@
     <h2 class="pe-title" id="peTitle">Edit photo</h2>
     <button type="button" class="pe-txt pe-done" id="peDone">Done</button>
   </div>
+  <button type="button" class="pe-txt pe-restore" id="peRestore" hidden>Restore original</button>
   <div class="pe-stage" id="peStage">
     <img id="peImg" alt="" draggable="false">
     <div class="crop-box" id="peCrop" hidden>
@@ -316,7 +317,7 @@
 
 <script src="sero-mobile.js?v=4"></script>
 <script src="sero-detail.js?v=7"></script>
-<script src="sero.js?v=258"></script>
+<script src="sero.js?v=259"></script>
 <script src="sero-profile.js?v=24"></script>
 </body>
 </html>

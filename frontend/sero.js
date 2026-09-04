@@ -3045,6 +3045,19 @@ const STR_EN = {
   "Freistellen fehlgeschlagen": "Cut-out failed",
   "Freistellen fehlgeschlagen — Original bleibt. Tipp aufs Bild, dann Freistellen.":
     "Cut-out failed — original stays. Tap the photo, then Cut out.",
+  "Freistellen dauert zu lange — Original bleibt.": "Cut-out took too long — original stays.",
+  "Freistellen erst nach dem Speichern.": "Cut-out is available after you save.",
+  "Kein Foto übernommen. Sammlung unverändert.": "No photo kept. Collection unchanged.",
+  "Der Entwurf bleibt in der Sammlung. Verbinden ist der nächste Schritt.":
+    "The draft stays in the collection. Connecting eBay is the next step.",
+  "Beim Entwurf bleiben": "Stay with the draft",
+  "Aus der Sammlung listen": "List from collection",
+  "Keine Stücke in der Sammlung": "No items in the collection",
+  "Fotografiere zuerst ein Stück. Danach kannst du es listen.":
+    "Photograph an item first. After that you can list it.",
+  "Tipp auf ein Stück öffnet den Entwurf. Es geht nichts automatisch live.":
+    "Tap an item to open the draft. Nothing goes live on its own.",
+  "List item aus einem Stück in der Sammlung.": "List item from a collection piece.",
   "Nochmal freistellen": "Cut out again",
   "Original wiederherstellen": "Restore original",
   "Original wird wiederhergestellt …": "Restoring original …",
@@ -5943,17 +5956,24 @@ function ebayConnectedNow() {
   return !!(me.ebay_connected && !me.ebay_needs_reconnect);
 }
 
-function showEbayNotConnectedHint() {
+function showEbayNotConnectedHint(opts) {
+  opts = opts || {};
   openSheet(
     L("eBay ist nicht verbunden"),
-    L("Verbinde eBay unter eBay und Verkaufssetup, bevor du einstellst."),
-    "",
+    opts.secondary
+      ? L("Der Entwurf bleibt in der Sammlung. Verbinden ist der nächste Schritt.")
+      : L("Verbinde eBay unter eBay und Verkaufssetup, bevor du einstellst."),
+    opts.secondary
+      ? `<button type="button" class="btn-plain" id="ebayHintStay">${esc(L("Beim Entwurf bleiben"))}</button>`
+      : "",
     () => {
       closeSheet();
       openSeroProfile();
     },
     L("eBay verbinden")
   );
+  const stay = $("ebayHintStay");
+  if (stay) stay.onclick = () => closeSheet();
 }
 
 async function listNow(id, opts = null) {
@@ -6044,6 +6064,36 @@ async function ensureItemDraft(item, opts) {
   }
 }
 
+function openListFromCollection() {
+  const hold = (state.items || []).filter((i) => i && i.id && !i.sold && i.status !== "analyzing");
+  if (!hold.length) {
+    openSheet(
+      L("Keine Stücke in der Sammlung"),
+      L("Fotografiere zuerst ein Stück. Danach kannst du es listen."),
+      "",
+      () => { closeSheet(); startScanMode("SELL_SINGLE"); },
+      L("Foto machen")
+    );
+    return;
+  }
+  const rows = hold.slice(0, 24).map((i) => (
+    `<button type="button" class="opt" data-list-col="${esc(i.id)}"><span>${esc(i.name || L("Stück"))}</span></button>`
+  )).join("");
+  openSheet(
+    L("Aus der Sammlung listen"),
+    L("Tipp auf ein Stück öffnet den Entwurf. Es geht nichts automatisch live."),
+    `<div class="scan-mode-list">${rows}</div>`,
+    null
+  );
+  $("sheetBody").querySelectorAll("[data-list-col]").forEach((b) => {
+    b.onclick = () => {
+      closeSheet();
+      const it = (state.items || []).find((x) => x.id === b.dataset.listCol);
+      if (it) startListingPrep(it);
+    };
+  });
+}
+
 async function startListingPrep(item, btn) {
   if (!item || !item.id) return;
   if (needAccountForSave() || isGuestItemId(item.id)) {
@@ -6051,8 +6101,9 @@ async function startListingPrep(item, btn) {
     return;
   }
   if (state._listingPrepBusy) return;
+  try { await openItemDetail(item.id, "sell"); } catch (_) { /* Form zuerst, dann eBay */ }
   if (!ebayConnectedNow()) {
-    showEbayNotConnectedHint();
+    showEbayNotConnectedHint({ secondary: true });
     return;
   }
   state._listingPrepBusy = true;
@@ -6092,8 +6143,48 @@ $("btnCamera").onclick = () => {
   switchTab("tabScan");
 };
 
+const MIN_CAPTURE_BYTES = 32;
+
+function captureFilesAccepted(files) {
+  return (files || []).filter((f) => f && (f.size || 0) >= MIN_CAPTURE_BYTES);
+}
+
+function beginCaptureAttempt() {
+  state._captureAttempt = Date.now();
+  state._captureAccepted = false;
+}
+
+function markCaptureAccepted() {
+  state._captureAccepted = true;
+}
+
+async function rollbackGhostItem(id) {
+  if (!id || (typeof isGuestItemId === "function" && isGuestItemId(id))) return;
+  try {
+    await post(`/api/app/collection/item/${id}/delete`);
+    state.items = (state.items || []).filter((i) => i.id !== id);
+    try { renderCollection(); } catch (_) { /* */ }
+  } catch (_) { /* Rollback still — kein zweites Löschen */ }
+}
+
+function abortFailedCapture(msg) {
+  const speculative = state._speculativeItemId;
+  state._speculativeItemId = null;
+  state.camLoop = false;
+  state.stageResume = false;
+  state._captureAccepted = false;
+  state._captureAttempt = null;
+  try { stopLiveCam(); } catch (_) { /* */ }
+  if (!(state.camShots || []).length) {
+    try { clearCamShots(); } catch (_) { /* */ }
+  }
+  if (msg) toast(msg);
+  if (speculative) rollbackGhostItem(speculative);
+}
+
 /** Scan-Modus starten — Kamera/Galerie im gleichen Gesture (iOS). */
 function startScanMode(mode) {
+  beginCaptureAttempt();
   state.scanIntent = mode === "COLLECT_ONLY" ? "COLLECT_ONLY" : (mode === "SELL_BATCH" ? null : null);
   if (mode === "COLLECT_ONLY") state.scanIntent = "COLLECT_ONLY";
   try { trackFunnel("scan_mode_selected", { mode }); } catch (_) { /* */ }
@@ -6238,8 +6329,11 @@ function camPermissionMessage(err) {
 }
 
 async function addCamFiles(files, source) {
-  const list = [...(files || [])];
-  if (!list.length) return;
+  const list = captureFilesAccepted(files);
+  if (!list.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
   const room = MAX_LISTING_PHOTOS - (state.camShots || []).length;
   if (room <= 0) {
     toast(LF("{0} von {1}", MAX_LISTING_PHOTOS, MAX_LISTING_PHOTOS));
@@ -6266,6 +6360,8 @@ async function addCamFiles(files, source) {
     added += 1;
   }
   if (skipped && !added) toast(L("Foto ist schon dabei."));
+  if (added) markCaptureAccepted();
+  else if (!skipped) abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
   markCamPrimary();
   if (state.camLive) paintCamOverlay();
   else openCamReview();
@@ -6378,7 +6474,7 @@ async function startLiveCam() {
     paintCamTools();
     return true;
   } catch (err) {
-    const msg = camPermissionMessage(err);
+    const msg = camPermissionMessage(err) || L("Keine Kamera an diesem Gerät.");
     if (msg) toast(msg);
     return false;
   }
@@ -6391,12 +6487,21 @@ function camFileFallback(inp) {
   const lib = $("libraryInput") || $("fileInput") || inp;
   openSheet(L("Keine Kamera an diesem Gerät."),
     L("Wähle ein Foto aus der Mediathek."),
-    `<button type="button" class="btn-primary" id="peNoCamLib">${esc(L("Aus Mediathek"))}</button>`,
-    null);
+    `<button type="button" class="btn-primary" id="peNoCamLib">${esc(L("Aus Mediathek auswählen"))}</button>`,
+    {
+      onCancel: () => {
+        closeSheet();
+        if (!state._captureAccepted) {
+          abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+        }
+      },
+    });
   const b = $("peNoCamLib");
   if (b) b.onclick = () => {
     closeSheet();
-    try { if (lib) lib.click(); } catch (_) { toast(L("Keine Kamera an diesem Gerät.")); }
+    try { if (lib) lib.click(); } catch (_) {
+      abortFailedCapture(L("Keine Kamera an diesem Gerät."));
+    }
   };
   return true;
 }
@@ -6591,8 +6696,11 @@ function openCamReview() {
 
 async function commitCamShots() {
   const shots = state.camShots || [];
-  if (!shots.length) return;
-  const files = shots.map((s) => camShotBlob(s)).filter(Boolean);
+  const files = captureFilesAccepted(shots.map((s) => camShotBlob(s)));
+  if (!files.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
   stopLiveCam();
   state.camLoop = false;
   closeSheet();
@@ -6704,14 +6812,22 @@ for (const inputId of ["fileInput", "cameraInput", "libraryInput"]) {
   const el = $(inputId);
   if (!el) continue;
   el.addEventListener("cancel", () => {
-    if (state.camLoop && (state.camShots || []).length) openCamSheet();
+    if (state.camLoop && (state.camShots || []).length) { openCamSheet(); return; }
+    if (state._captureAttempt && !state._captureAccepted) {
+      abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+      return;
+    }
     if (state.stageResume) { state.stageResume = false; pruefeAblage(); }
   });
   el.onchange = () => {
-    const picked = [...el.files];
+    const picked = captureFilesAccepted([...el.files]);
     el.value = "";
     if (!picked.length) {
-      if (state.camLoop && (state.camShots || []).length) openCamSheet();
+      if (state.camLoop && (state.camShots || []).length) { openCamSheet(); return; }
+      if (state._captureAttempt && !state._captureAccepted) {
+        abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+        return;
+      }
       if (state.stageResume) { state.stageResume = false; pruefeAblage(); }
       return;
     }
@@ -6776,6 +6892,13 @@ function openScanDoneSheet({ itemId, photoUrl }) {
 }
 
 async function stageUpload(files) {
+  const ready = captureFilesAccepted(files);
+  if (!ready.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
+  files = ready;
+  markCaptureAccepted();
   if (isGuest()) {
     const row = await keepGuestDraftFromFiles(files);
     closeSheet();
@@ -7512,24 +7635,56 @@ function pickItemPhoto(itemId) {
   inp.click();
 }
 
+const CUTOUT_WAIT_MS = 45000;
+
+async function waitCutoutSettled(itemId, ms) {
+  const deadline = Date.now() + (ms || CUTOUT_WAIT_MS);
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const row = await api(`/api/app/collection/item/${itemId}`);
+      const st = row && row.cutout_status;
+      if (st === "running") continue;
+      if (st === "error") return "error";
+      return "done";
+    } catch (_) { /* weiterwarten */ }
+  }
+  return "timeout";
+}
+
 async function freistellenItemPhoto(itemId) {
+  if (freistellenItemPhoto._busy === itemId) return;
+  freistellenItemPhoto._busy = itemId;
   const line = $("cutoutChrome");
-  if (line) line.textContent = L("Freistellen…");
-  try {
-    await post(`/api/app/collection/item/${itemId}/recrop`, {}, { timeout: 45000 });
-    toast(L("Freistellen fertig"), "check");
-    refreshDetail(true);
-    loadCollection();
-  } catch (e) {
-    const msg = (e && e.message) || L("Freistellen fehlgeschlagen — Original bleibt.");
-    try { console.warn("Freistellen", e && e.status, msg); } catch (_) { /* */ }
+  const paintBusy = () => {
+    if (line) line.innerHTML = `<span class="spinner"></span> ${esc(L("Freistellen…"))}`;
+  };
+  const paintFail = (msg) => {
     if (line) {
       line.innerHTML = `${esc(msg)} <button type="button" class="btn-plain" id="btnCutoutRetry">${esc(L("Nochmal freistellen"))}</button>`;
       const b = $("btnCutoutRetry");
       if (b) b.onclick = () => freistellenItemPhoto(itemId);
-    } else {
-      toast(msg);
+    } else toast(msg);
+  };
+  paintBusy();
+  try {
+    await post(`/api/app/collection/item/${itemId}/recrop`, {}, { timeout: 20000 });
+    const st = await waitCutoutSettled(itemId, CUTOUT_WAIT_MS);
+    if (st === "done") {
+      toast(L("Freistellen fertig"), "check");
+      if (line) line.textContent = "";
+      refreshDetail(true);
+      loadCollection();
+      return;
     }
+    if (st === "error") throw new Error(L("Freistellen fehlgeschlagen — Original bleibt."));
+    throw new Error(L("Freistellen dauert zu lange — Original bleibt."));
+  } catch (e) {
+    const msg = (e && e.message) || L("Freistellen fehlgeschlagen — Original bleibt.");
+    try { console.warn("Freistellen", e && e.status, msg); } catch (_) { /* */ }
+    paintFail(msg);
+  } finally {
+    if (freistellenItemPhoto._busy === itemId) freistellenItemPhoto._busy = null;
   }
 }
 
@@ -7743,14 +7898,14 @@ function pePaintRail(tool) {
   const rail = $("peRail");
   if (!rail) return;
   const tools = [
-    ["crop", "crop", "Zuschneiden"],
-    ["rotate", "refresh", "Drehen"],
-    ["adjust", "sliders", "Anpassen"],
-    ["cutout", "scanframe", "Freistellen"],
+    ["crop", "crop", L("Zuschneiden")],
+    ["rotate", "refresh", L("Drehen")],
+    ["adjust", "sliders", L("Anpassen")],
+    ["cutout", "scanframe", L("Freistellen")],
   ];
   rail.innerHTML = tools.map(([id, ic, lab]) =>
-    `<button type="button" class="pe-tool${tool === id ? " on" : ""}" data-pe="${id}"${id === "cutout" ? " disabled" : ""}>
-      ${icon(ic, 20)}<span>${esc(L(lab))}</span></button>`
+    `<button type="button" class="pe-tool${tool === id ? " on" : ""}" data-pe="${id}">
+      ${icon(ic, 20)}<span>${esc(lab)}</span></button>`
   ).join("");
   rail.querySelectorAll("[data-pe]").forEach((b) => {
     b.onclick = () => peSetTool(b.dataset.pe);
@@ -7784,7 +7939,15 @@ function pePaintPanel(tool) {
 
 async function peSetTool(tool) {
   const s = state._pe;
-  if (!s || tool === "cutout") return;
+  if (!s) return;
+  if (tool === "cutout") {
+    if (!s.item || s.item.id === "cam") {
+      toast(L("Freistellen erst nach dem Speichern."));
+      return;
+    }
+    await freistellenItemPhoto(s.item.id);
+    return;
+  }
   if (s.tool === "crop" && tool !== "crop") await peApplyCrop();
   if (s.tool === "adjust" && tool !== "adjust") await peBakeAdjust();
   s.tool = tool;
@@ -7872,6 +8035,30 @@ function openPhotoEditor(item, index, opts) {
   if (done) {
     done.textContent = L("Fertig");
     done.onclick = () => savePhotoEditor();
+  }
+  const restore = $("peRestore");
+  if (restore) {
+    const canRestore = !!(item.has_photos_raw || item.id === "cam");
+    restore.hidden = !canRestore;
+    restore.textContent = L("Original wiederherstellen");
+    restore.onclick = async () => {
+      if (item.id === "cam") {
+        const i = Number.isFinite(item._camIndex) ? item._camIndex : idx;
+        const shot = (state.camShots || [])[i];
+        if (shot && shot.original) {
+          await applyCamShotBlob(shot, shot.original);
+          img.src = shot.thumbUrl || peWorkSrc(item, idx);
+          if (state._pe) { state._pe.dirty = false; state._pe.workBlob = null; }
+        }
+        return;
+      }
+      try {
+        await restoreItemPhoto(item.id, idx);
+        const src = peWorkSrc(item, idx);
+        img.src = src + (src.includes("?") ? "&" : "?") + "r=" + Date.now();
+        if (state._pe) { state._pe.dirty = false; state._pe.workBlob = null; }
+      } catch (e) { toast((e && e.message) || L("Original wiederherstellen")); }
+    };
   }
   img.src = peWorkSrc(item, idx);
   img.style.filter = "";
@@ -8739,7 +8926,9 @@ function renderSales() {
       well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
-      text: "",
+      text: "List item aus einem Stück in der Sammlung.",
+      aktion: "Aus der Sammlung listen",
+      onAktion: () => openListFromCollection(),
       well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }

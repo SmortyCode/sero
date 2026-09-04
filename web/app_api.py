@@ -3361,6 +3361,8 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 shutil.rmtree(folder, ignore_errors=True)
                 return JSONResponse({"error": f"Bild {i + 1} ist zu groß (max. 20 MB)."},
                                     status_code=400)
+            if len(raw) < 32:
+                continue
             path = folder / f"{i:02d}.jpg"
             try:
                 await asyncio.to_thread(_to_jpeg, raw, path)
@@ -3514,6 +3516,9 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
                 if raw is None:
                     _stage_log(account["id"], "too_big")
                     continue
+                if len(raw) < 32:
+                    _stage_log(account["id"], "too_small")
+                    continue
                 h = _hl.sha1(raw).hexdigest()
                 if h in seen:
                     # iOS feuert Aufnahmen gern doppelt — Inhalt schon da
@@ -3599,6 +3604,8 @@ def build_router(store: Store, ebay: EbayClient, cfg) -> APIRouter:
             path = folder / f"{i:02d}.jpg"
             try:
                 raw = await asyncio.to_thread(sp.read_bytes)
+                if len(raw) < 32:
+                    continue
                 await asyncio.to_thread(_to_jpeg, raw, path)
             except Exception as e:  # noqa: BLE001
                 log.warning("Geparktes Foto %s nicht lesbar (%s)", sp.name, type(e).__name__)

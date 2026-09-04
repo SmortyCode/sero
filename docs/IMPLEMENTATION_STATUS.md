@@ -1,5 +1,26 @@
 # SERO — Stand der Umsetzung
 
+**Stand: 4. September 2026 — Phase-1 Follow-up (Draft-PR, kein Deploy).**
+
+Quelle: `Downloads/dd.md`. Branch `fix/phase1-followup-2026-09-04` auf
+Foto-Editor-Stand (`photo/edit-photo-2026-09-04`). Live-App und Contabo
+unangetastet. PR #2 bleibt Draft — Ziele (Detail-CTA, Scan weg, List item
+≠ Capture) sind auf der Live-Kopie schon drin.
+
+| Schritt | Stand |
+|---|---|
+| 0 Ghost-Create | Sammlung erst nach übernommenem Foto. Abbruch/Fehler: Toast, Rollback, Owned unverändert. |
+| 1 PR #2 | Weiter Draft, nicht gemerged. Diff-Review: Ziele bereits live. |
+| 2 Freistellen | Wartet auf done/error, sonst Timeout. Nie dauerhaft „Cutting out…“. Original wiederherstellen speichert. |
+| 3 Edit photo | ≤2 Tipps, Crop/Rotate/Adjust, Cut-out verdrahtet. Done aktualisiert Hero, Cancel verwirft. |
+| 4 Keine Kamera | Sheet mit Mediathek-Knopf, kein totes Ende. |
+| 4b Sammlung→Entwurf | List item öffnet Entwurf zuerst. Ohne eBay: Verbinden sekundär. Sell-Leer: Aus der Sammlung listen. Nie auto-publish. |
+| 5 PWA | Manifest `id` + `description`. HSTS-Snippet für Sysadmin. CSP `unsafe-inline` dokumentiert. Service Worker nur Vorschlag, nicht gebaut. |
+
+Pins: `sero.js?v=259`, `sero.css?v=168`. Wache: `tests/test_phase1_followup_20260904.py`.
+
+---
+
 **Stand: 4. September 2026 — Edit-photo Vollbild (Draft-PR, kein Deploy).**
 
 Dunkle Bühne Cancel | Edit photo | Done. Werkzeuge Crop · Rotate · Adjust,
