@@ -236,16 +236,15 @@ html.skin-clean .topbar-actions {
   flex: 0 0 auto;
 }
 html.skin-clean .topbar-logo { display: none !important; }
-html.skin-clean .topbar-glyph {
-  display: flex;
-  align-items: center;
-  color: #1C1C1E;
-}
-html.skin-clean .topbar-glyph svg {
+html.skin-clean .topbar-mark {
+  display: block;
   height: 28px;
   width: auto;
+  max-width: min(140px, 36vw);
+  object-fit: contain;
+  filter: none;
 }
-html.skin-clean.force-dark .topbar-glyph { color: #d1d1d6; }
+html.skin-clean.force-dark .topbar-mark { filter: invert(1) brightness(0.82); }
 html.skin-clean .topbar-rule,
 html.skin-clean .topbar-section,
 html.skin-clean .page-tab-title,
@@ -269,7 +268,7 @@ html.skin-clean.force-dark .topbar-ava {
   background: #2c2c2e;
   color: #636366;
 }
-html.skin-clean.force-light .topbar-glyph { color: #1C1C1E; }
+html.skin-clean.force-light .topbar-mark { filter: none; }
 html.skin-clean.force-light .topbar-ava {
   background: #e5e5ea;
   color: #636366;
