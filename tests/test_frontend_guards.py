@@ -629,3 +629,26 @@ def test_kamera_sofort_mediathek_getrennt_kein_dnd():
     assert "Kamera nicht freigegeben. Mediathek geht trotzdem." in JS
     assert "function shippingFactRows" in JS
     assert "pc-strip" in JS
+
+
+def test_lock_20260904_edit_photo_shell():
+    """Lock 04.09.2026: Edit photo Vollbild, Cancel/Done, <=4 Tools, Sell ohne Scan."""
+    assert 'id="photoEditor"' in HTML
+    assert 'id="peCancel"' in HTML
+    assert 'id="peDone"' in HTML
+    assert "function openPhotoEditor" in JS
+    assert "function closePhotoEditor" in JS
+    assert "function savePhotoEditor" in JS
+    assert 'L("Foto bearbeiten")' in JS
+    assert 'L("Anpassen")' in JS
+    more = JS[JS.index("function openItemMoreMenu") : JS.index("function closeDetail")]
+    assert 'L("Foto bearbeiten")' in more
+    assert 'L("Fotos")' not in more
+    rend = JS[JS.index("function renderSales") : JS.index("function emptyState")]
+    assert "startScanMode" not in rend
+    crop_rail = JS[JS.index("function pePaintRail") : JS.index("function pePaintPanel")]
+    assert "cutout" in crop_rail
+    assert "disabled" not in crop_rail
+    assert "freistellenItemPhoto" in JS
+    assert "function waitCutoutSettled" in JS
+    assert 'id="peRestore"' in HTML

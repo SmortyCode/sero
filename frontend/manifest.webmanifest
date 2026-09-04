@@ -1,6 +1,10 @@
 {
+  "id": "/app/",
   "name": "SERO — Deine Karten. Dein Marktplatz.",
   "short_name": "SERO",
+  "description": "Photograph a collectible. SERO reads it, finds the market value, and builds an eBay.de draft.",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
   "start_url": "/app/",
   "scope": "/app/",

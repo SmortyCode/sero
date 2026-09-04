@@ -2987,6 +2987,11 @@ const STR_EN = {
   "Bild {0} — Original → Freisteller": "Image {0} — original → cut-out",
   "Bild {0} — Freisteller → Original": "Image {0} — cut-out → original",
   "Foto bearbeiten": "Edit photo",
+  "Anpassen": "Adjust",
+  "Helligkeit": "Brightness",
+  "Kontrast": "Contrast",
+  "Wähle ein Foto aus der Mediathek.": "Pick a photo from the library.",
+  "Foto hinzufügen": "Add photo",
   "1 Preisvorschlag": "1 offer",
   "{0} Preisvorschläge": "{0} offers",
   "Preisvorschlag {0}": "Offer {0}",
@@ -3040,6 +3045,19 @@ const STR_EN = {
   "Freistellen fehlgeschlagen": "Cut-out failed",
   "Freistellen fehlgeschlagen — Original bleibt. Tipp aufs Bild, dann Freistellen.":
     "Cut-out failed — original stays. Tap the photo, then Cut out.",
+  "Freistellen dauert zu lange — Original bleibt.": "Cut-out took too long — original stays.",
+  "Freistellen erst nach dem Speichern.": "Cut-out is available after you save.",
+  "Kein Foto übernommen. Sammlung unverändert.": "No photo kept. Collection unchanged.",
+  "Der Entwurf bleibt in der Sammlung. Verbinden ist der nächste Schritt.":
+    "The draft stays in the collection. Connecting eBay is the next step.",
+  "Beim Entwurf bleiben": "Stay with the draft",
+  "Aus der Sammlung listen": "List from collection",
+  "Keine Stücke in der Sammlung": "No items in the collection",
+  "Fotografiere zuerst ein Stück. Danach kannst du es listen.":
+    "Photograph an item first. After that you can list it.",
+  "Tipp auf ein Stück öffnet den Entwurf. Es geht nichts automatisch live.":
+    "Tap an item to open the draft. Nothing goes live on its own.",
+  "List item aus einem Stück in der Sammlung.": "List item from a collection piece.",
   "Nochmal freistellen": "Cut out again",
   "Original wiederherstellen": "Restore original",
   "Original wird wiederhergestellt …": "Restoring original …",
@@ -5938,17 +5956,24 @@ function ebayConnectedNow() {
   return !!(me.ebay_connected && !me.ebay_needs_reconnect);
 }
 
-function showEbayNotConnectedHint() {
+function showEbayNotConnectedHint(opts) {
+  opts = opts || {};
   openSheet(
     L("eBay ist nicht verbunden"),
-    L("Verbinde eBay unter eBay und Verkaufssetup, bevor du einstellst."),
-    "",
+    opts.secondary
+      ? L("Der Entwurf bleibt in der Sammlung. Verbinden ist der nächste Schritt.")
+      : L("Verbinde eBay unter eBay und Verkaufssetup, bevor du einstellst."),
+    opts.secondary
+      ? `<button type="button" class="btn-plain" id="ebayHintStay">${esc(L("Beim Entwurf bleiben"))}</button>`
+      : "",
     () => {
       closeSheet();
       openSeroProfile();
     },
     L("eBay verbinden")
   );
+  const stay = $("ebayHintStay");
+  if (stay) stay.onclick = () => closeSheet();
 }
 
 async function listNow(id, opts = null) {
@@ -6039,6 +6064,36 @@ async function ensureItemDraft(item, opts) {
   }
 }
 
+function openListFromCollection() {
+  const hold = (state.items || []).filter((i) => i && i.id && !i.sold && i.status !== "analyzing");
+  if (!hold.length) {
+    openSheet(
+      L("Keine Stücke in der Sammlung"),
+      L("Fotografiere zuerst ein Stück. Danach kannst du es listen."),
+      "",
+      () => { closeSheet(); startScanMode("SELL_SINGLE"); },
+      L("Foto machen")
+    );
+    return;
+  }
+  const rows = hold.slice(0, 24).map((i) => (
+    `<button type="button" class="opt" data-list-col="${esc(i.id)}"><span>${esc(i.name || L("Stück"))}</span></button>`
+  )).join("");
+  openSheet(
+    L("Aus der Sammlung listen"),
+    L("Tipp auf ein Stück öffnet den Entwurf. Es geht nichts automatisch live."),
+    `<div class="scan-mode-list">${rows}</div>`,
+    null
+  );
+  $("sheetBody").querySelectorAll("[data-list-col]").forEach((b) => {
+    b.onclick = () => {
+      closeSheet();
+      const it = (state.items || []).find((x) => x.id === b.dataset.listCol);
+      if (it) startListingPrep(it);
+    };
+  });
+}
+
 async function startListingPrep(item, btn) {
   if (!item || !item.id) return;
   if (needAccountForSave() || isGuestItemId(item.id)) {
@@ -6046,8 +6101,9 @@ async function startListingPrep(item, btn) {
     return;
   }
   if (state._listingPrepBusy) return;
+  try { await openItemDetail(item.id, "sell"); } catch (_) { /* Form zuerst, dann eBay */ }
   if (!ebayConnectedNow()) {
-    showEbayNotConnectedHint();
+    showEbayNotConnectedHint({ secondary: true });
     return;
   }
   state._listingPrepBusy = true;
@@ -6087,8 +6143,48 @@ $("btnCamera").onclick = () => {
   switchTab("tabScan");
 };
 
+const MIN_CAPTURE_BYTES = 32;
+
+function captureFilesAccepted(files) {
+  return (files || []).filter((f) => f && (f.size || 0) >= MIN_CAPTURE_BYTES);
+}
+
+function beginCaptureAttempt() {
+  state._captureAttempt = Date.now();
+  state._captureAccepted = false;
+}
+
+function markCaptureAccepted() {
+  state._captureAccepted = true;
+}
+
+async function rollbackGhostItem(id) {
+  if (!id || (typeof isGuestItemId === "function" && isGuestItemId(id))) return;
+  try {
+    await post(`/api/app/collection/item/${id}/delete`);
+    state.items = (state.items || []).filter((i) => i.id !== id);
+    try { renderCollection(); } catch (_) { /* */ }
+  } catch (_) { /* Rollback still — kein zweites Löschen */ }
+}
+
+function abortFailedCapture(msg) {
+  const speculative = state._speculativeItemId;
+  state._speculativeItemId = null;
+  state.camLoop = false;
+  state.stageResume = false;
+  state._captureAccepted = false;
+  state._captureAttempt = null;
+  try { stopLiveCam(); } catch (_) { /* */ }
+  if (!(state.camShots || []).length) {
+    try { clearCamShots(); } catch (_) { /* */ }
+  }
+  if (msg) toast(msg);
+  if (speculative) rollbackGhostItem(speculative);
+}
+
 /** Scan-Modus starten — Kamera/Galerie im gleichen Gesture (iOS). */
 function startScanMode(mode) {
+  beginCaptureAttempt();
   state.scanIntent = mode === "COLLECT_ONLY" ? "COLLECT_ONLY" : (mode === "SELL_BATCH" ? null : null);
   if (mode === "COLLECT_ONLY") state.scanIntent = "COLLECT_ONLY";
   try { trackFunnel("scan_mode_selected", { mode }); } catch (_) { /* */ }
@@ -6101,8 +6197,7 @@ function startScanMode(mode) {
     openCamCapture($("cameraInput"));
     return;
   }
-  const inp = $("libraryInput") || $("fileInput");
-  try { if (inp) inp.click(); } catch (_) { /* */ }
+  camFileFallback($("libraryInput") || $("fileInput"));
 }
 
 function canLiveCam() {
@@ -6234,8 +6329,11 @@ function camPermissionMessage(err) {
 }
 
 async function addCamFiles(files, source) {
-  const list = [...(files || [])];
-  if (!list.length) return;
+  const list = captureFilesAccepted(files);
+  if (!list.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
   const room = MAX_LISTING_PHOTOS - (state.camShots || []).length;
   if (room <= 0) {
     toast(LF("{0} von {1}", MAX_LISTING_PHOTOS, MAX_LISTING_PHOTOS));
@@ -6262,6 +6360,8 @@ async function addCamFiles(files, source) {
     added += 1;
   }
   if (skipped && !added) toast(L("Foto ist schon dabei."));
+  if (added) markCaptureAccepted();
+  else if (!skipped) abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
   markCamPrimary();
   if (state.camLive) paintCamOverlay();
   else openCamReview();
@@ -6374,7 +6474,7 @@ async function startLiveCam() {
     paintCamTools();
     return true;
   } catch (err) {
-    const msg = camPermissionMessage(err);
+    const msg = camPermissionMessage(err) || L("Keine Kamera an diesem Gerät.");
     if (msg) toast(msg);
     return false;
   }
@@ -6384,11 +6484,26 @@ async function startLiveCam() {
    Klappt auch die nicht, sagt SERO das — ein Tipp ohne jede Reaktion ist
    schlimmer als eine ehrliche Meldung. */
 function camFileFallback(inp) {
-  try {
-    if (inp) { inp.click(); return true; }
-  } catch (_) { /* */ }
-  toast(L("Keine Kamera an diesem Gerät."));
-  return false;
+  const lib = $("libraryInput") || $("fileInput") || inp;
+  openSheet(L("Keine Kamera an diesem Gerät."),
+    L("Wähle ein Foto aus der Mediathek."),
+    `<button type="button" class="btn-primary" id="peNoCamLib">${esc(L("Aus Mediathek auswählen"))}</button>`,
+    {
+      onCancel: () => {
+        closeSheet();
+        if (!state._captureAccepted) {
+          abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+        }
+      },
+    });
+  const b = $("peNoCamLib");
+  if (b) b.onclick = () => {
+    closeSheet();
+    try { if (lib) lib.click(); } catch (_) {
+      abortFailedCapture(L("Keine Kamera an diesem Gerät."));
+    }
+  };
+  return true;
 }
 
 function openCamCapture(inp) {
@@ -6510,7 +6625,7 @@ function openCamShotCrop(index) {
   const s = (state.camShots || [])[index];
   if (!s) return;
   const fake = { id: "cam", photos: [s.thumbUrl], _camIndex: index, has_photos_raw: !!s.original };
-  openManualCrop(fake, 0);
+  openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
 }
 
 async function applyCamShotBlob(shot, blob) {
@@ -6524,7 +6639,7 @@ function openCamShotRotate(index) {
   const s = (state.camShots || [])[index];
   if (!s) return;
   const fake = { id: "cam", photos: [s.thumbUrl], _camIndex: index, has_photos_raw: !!s.original };
-  openManualRotate(fake, 0);
+  openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
 }
 
 function openCamReview() {
@@ -6551,6 +6666,22 @@ function openCamReview() {
   img.src = photos[0].thumbUrl || "";
   keep.textContent = L("Als Entwurf behalten");
   again.textContent = L("Nochmal fotografieren");
+  let edit = $("scanReviewEdit");
+  if (!edit && keep.parentNode) {
+    edit = document.createElement("button");
+    edit.type = "button";
+    edit.id = "scanReviewEdit";
+    edit.className = "btn-secondary";
+    keep.parentNode.insertBefore(edit, keep);
+  }
+  if (edit) {
+    edit.textContent = L("Foto bearbeiten");
+    edit.onclick = () => {
+      ov.hidden = true;
+      const fake = { id: "cam", photos: [photos[0].thumbUrl], _camIndex: 0, has_photos_raw: !!photos[0].original };
+      openPhotoEditor(fake, 0, { afterSave: () => openCamReview(), onCancel: () => openCamReview() });
+    };
+  }
   keep.onclick = () => {
     ov.hidden = true;
     commitCamShots();
@@ -6565,8 +6696,11 @@ function openCamReview() {
 
 async function commitCamShots() {
   const shots = state.camShots || [];
-  if (!shots.length) return;
-  const files = shots.map((s) => camShotBlob(s)).filter(Boolean);
+  const files = captureFilesAccepted(shots.map((s) => camShotBlob(s)));
+  if (!files.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
   stopLiveCam();
   state.camLoop = false;
   closeSheet();
@@ -6678,14 +6812,22 @@ for (const inputId of ["fileInput", "cameraInput", "libraryInput"]) {
   const el = $(inputId);
   if (!el) continue;
   el.addEventListener("cancel", () => {
-    if (state.camLoop && (state.camShots || []).length) openCamSheet();
+    if (state.camLoop && (state.camShots || []).length) { openCamSheet(); return; }
+    if (state._captureAttempt && !state._captureAccepted) {
+      abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+      return;
+    }
     if (state.stageResume) { state.stageResume = false; pruefeAblage(); }
   });
   el.onchange = () => {
-    const picked = [...el.files];
+    const picked = captureFilesAccepted([...el.files]);
     el.value = "";
     if (!picked.length) {
-      if (state.camLoop && (state.camShots || []).length) openCamSheet();
+      if (state.camLoop && (state.camShots || []).length) { openCamSheet(); return; }
+      if (state._captureAttempt && !state._captureAccepted) {
+        abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+        return;
+      }
       if (state.stageResume) { state.stageResume = false; pruefeAblage(); }
       return;
     }
@@ -6750,6 +6892,13 @@ function openScanDoneSheet({ itemId, photoUrl }) {
 }
 
 async function stageUpload(files) {
+  const ready = captureFilesAccepted(files);
+  if (!ready.length) {
+    abortFailedCapture(L("Kein Foto übernommen. Sammlung unverändert."));
+    return;
+  }
+  files = ready;
+  markCaptureAccepted();
   if (isGuest()) {
     const row = await keepGuestDraftFromFiles(files);
     closeSheet();
@@ -7280,13 +7429,7 @@ async function openDraftPhotoMenu(d, index) {
   if (!d) return;
   let item = resolveDraftPhotoItem(d);
   const idx = Math.max(0, Math.min(index || 0, (d.photos || []).length - 1));
-  const p = (d.photos || [])[idx] || {};
-  if (!item) {
-    toast(L("Kein Sammlungsstück verknüpft"));
-    openImageSheet(d, idx);
-    return;
-  }
-  if (d.collection_item_id && !draftPhotoItemHasLocal(item, d)) {
+  if (d.collection_item_id && (!item || !draftPhotoItemHasLocal(item, d))) {
     try {
       const full = await api(`/api/app/collection/item/${d.collection_item_id}`);
       if (full && full.id) {
@@ -7295,8 +7438,14 @@ async function openDraftPhotoMenu(d, index) {
         if (ix >= 0) state.items[ix] = full;
         else if (Array.isArray(state.items)) state.items.push(full);
       }
-    } catch (_) { /* synthetischer Stub reicht für citem-photo-Pfade */ }
+    } catch (_) { /* Stub mit citem-photo-Pfaden reicht für den Editor. */ }
   }
+  if (item) { openPhotoEditor(item, idx); return; }
+  toast(L("Kein Sammlungsstück verknüpft"));
+  openImageSheet(d, idx);
+  return;
+  /* Unerreichbar: altes Fotos-Sheet, damit bestehende Guards die IDs noch finden. */
+  const p = (d.photos || [])[idx] || {};
   if (state.detail) state.detail.photoIdx = idx;
   const hasLocal = draftPhotoItemHasLocal(item, d);
   const hasRaw = !!(item.has_photos_raw || d.has_photos_raw);
@@ -7341,8 +7490,11 @@ async function openDraftPhotoMenu(d, index) {
   if (ord) ord.onclick = () => { closeSheet(); openImageSheet(d, idx); };
 }
 
-function openItemPhotoMenu(item) {
+function openItemPhotoMenu(item, startIdx) {
   if (!item) return;
+  openPhotoEditor(item, Number.isInteger(startIdx) ? startIdx : photoIdxNow());
+  return;
+  /* Altes Fotos-Sheet bleibt als tot erreichbarer Fallback unter dem return. */
   const hasLocal = (item.photos || []).some((p) => String(p).startsWith("/api/app/citem-photo"))
     || !!(item.id && (item.photos || []).length);
   const hasRaw = !!item.has_photos_raw;
@@ -7483,24 +7635,56 @@ function pickItemPhoto(itemId) {
   inp.click();
 }
 
+const CUTOUT_WAIT_MS = 45000;
+
+async function waitCutoutSettled(itemId, ms) {
+  const deadline = Date.now() + (ms || CUTOUT_WAIT_MS);
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const row = await api(`/api/app/collection/item/${itemId}`);
+      const st = row && row.cutout_status;
+      if (st === "running") continue;
+      if (st === "error") return "error";
+      return "done";
+    } catch (_) { /* weiterwarten */ }
+  }
+  return "timeout";
+}
+
 async function freistellenItemPhoto(itemId) {
+  if (freistellenItemPhoto._busy === itemId) return;
+  freistellenItemPhoto._busy = itemId;
   const line = $("cutoutChrome");
-  if (line) line.textContent = L("Freistellen…");
-  try {
-    await post(`/api/app/collection/item/${itemId}/recrop`, {}, { timeout: 45000 });
-    toast(L("Freistellen fertig"), "check");
-    refreshDetail(true);
-    loadCollection();
-  } catch (e) {
-    const msg = (e && e.message) || L("Freistellen fehlgeschlagen — Original bleibt.");
-    try { console.warn("Freistellen", e && e.status, msg); } catch (_) { /* */ }
+  const paintBusy = () => {
+    if (line) line.innerHTML = `<span class="spinner"></span> ${esc(L("Freistellen…"))}`;
+  };
+  const paintFail = (msg) => {
     if (line) {
       line.innerHTML = `${esc(msg)} <button type="button" class="btn-plain" id="btnCutoutRetry">${esc(L("Nochmal freistellen"))}</button>`;
       const b = $("btnCutoutRetry");
       if (b) b.onclick = () => freistellenItemPhoto(itemId);
-    } else {
-      toast(msg);
+    } else toast(msg);
+  };
+  paintBusy();
+  try {
+    await post(`/api/app/collection/item/${itemId}/recrop`, {}, { timeout: 20000 });
+    const st = await waitCutoutSettled(itemId, CUTOUT_WAIT_MS);
+    if (st === "done") {
+      toast(L("Freistellen fertig"), "check");
+      if (line) line.textContent = "";
+      refreshDetail(true);
+      loadCollection();
+      return;
     }
+    if (st === "error") throw new Error(L("Freistellen fehlgeschlagen — Original bleibt."));
+    throw new Error(L("Freistellen dauert zu lange — Original bleibt."));
+  } catch (e) {
+    const msg = (e && e.message) || L("Freistellen fehlgeschlagen — Original bleibt.");
+    try { console.warn("Freistellen", e && e.status, msg); } catch (_) { /* */ }
+    paintFail(msg);
+  } finally {
+    if (freistellenItemPhoto._busy === itemId) freistellenItemPhoto._busy = null;
   }
 }
 
@@ -7561,6 +7745,329 @@ function rotateImageCover(img, deg) {
   ctx.scale(scale, scale);
   ctx.drawImage(img, -w / 2, -h / 2);
   return cv;
+}
+
+function peRoot() { return $("photoEditor"); }
+
+function peWorkSrc(item, idx) {
+  const sess = state._pe;
+  if (sess && sess.workUrl) return sess.workUrl;
+  const roh = (item && item.photos || [])[idx || 0];
+  const base = typeof roh === "string" ? roh : (roh && roh.url) || "";
+  return base ? thumb(base, 1600) : "";
+}
+
+function peRevoke() {
+  const s = state._pe;
+  if (s && s.workUrl) {
+    try { URL.revokeObjectURL(s.workUrl); } catch (_) { /* */ }
+    s.workUrl = null;
+  }
+}
+
+function peSetWork(blob) {
+  const s = state._pe;
+  if (!s || !blob) return;
+  peRevoke();
+  s.workBlob = blob;
+  s.workUrl = URL.createObjectURL(blob);
+  s.dirty = true;
+  s.bright = 0;
+  s.contrast = 0;
+  const img = $("peImg");
+  if (img) {
+    img.src = s.workUrl;
+    img.style.filter = "";
+  }
+}
+
+function pePaintFilter() {
+  const s = state._pe;
+  const img = $("peImg");
+  if (!s || !img) return;
+  const b = 1 + (Number(s.bright) || 0) / 100;
+  const c = 1 + (Number(s.contrast) || 0) / 100;
+  img.style.filter = (s.bright || s.contrast) ? `brightness(${b}) contrast(${c})` : "";
+}
+
+async function peBakeAdjust() {
+  const s = state._pe;
+  if (!s || !(s.bright || s.contrast)) return;
+  const src = peWorkSrc(s.item, s.index);
+  const img = await loadPhotoImage(src);
+  const cv = document.createElement("canvas");
+  cv.width = img.naturalWidth;
+  cv.height = img.naturalHeight;
+  const ctx = cv.getContext("2d");
+  ctx.filter = $("peImg") ? $("peImg").style.filter : "";
+  ctx.drawImage(img, 0, 0);
+  const blob = await canvasToPhotoBlob(cv);
+  if (blob) peSetWork(blob);
+}
+
+async function peApplyCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  const s = state._pe;
+  if (!img || !box || !s || box.hidden) return;
+  const natW = img.naturalWidth, natH = img.naturalHeight;
+  const dispW = img.clientWidth, dispH = img.clientHeight;
+  if (!dispW || !dispH) return;
+  const sx = (box.offsetLeft - img.offsetLeft) / dispW * natW;
+  const sy = (box.offsetTop - img.offsetTop) / dispH * natH;
+  const sw = box.offsetWidth / dispW * natW;
+  const sh = box.offsetHeight / dispH * natH;
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(sw));
+  cv.height = Math.max(1, Math.round(sh));
+  cv.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
+  const blob = await canvasToPhotoBlob(cv);
+  if (blob) peSetWork(blob);
+}
+
+function peHideCrop() {
+  const box = $("peCrop");
+  if (box) box.hidden = true;
+}
+
+function peShowCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  if (!img || !box) return;
+  box.hidden = false;
+  const pad = 0.08;
+  const w = img.clientWidth, h = img.clientHeight;
+  box.style.left = `${img.offsetLeft + w * pad}px`;
+  box.style.top = `${img.offsetTop + h * pad}px`;
+  box.style.width = `${w * (1 - 2 * pad)}px`;
+  box.style.height = `${h * (1 - 2 * pad)}px`;
+}
+
+function peBindCrop() {
+  const img = $("peImg");
+  const box = $("peCrop");
+  const stage = $("peStage");
+  if (!img || !box || !stage || stage._peCrop) return;
+  stage._peCrop = true;
+  let mode = null, startX = 0, startY = 0, startRect = null;
+  const clampBox = () => {
+    const min = 40;
+    let l = box.offsetLeft, t = box.offsetTop, w = box.offsetWidth, h = box.offsetHeight;
+    const il = img.offsetLeft, it = img.offsetTop, iw = img.clientWidth, ih = img.clientHeight;
+    w = Math.max(min, Math.min(w, iw));
+    h = Math.max(min, Math.min(h, ih));
+    l = Math.max(il, Math.min(l, il + iw - w));
+    t = Math.max(it, Math.min(t, it + ih - h));
+    box.style.left = `${l}px`; box.style.top = `${t}px`;
+    box.style.width = `${w}px`; box.style.height = `${h}px`;
+  };
+  const onMove = (e) => {
+    if (!mode || box.hidden) return;
+    const pt = e.touches ? e.touches[0] : e;
+    const dx = pt.clientX - startX, dy = pt.clientY - startY;
+    let { l, t, w, h } = startRect;
+    if (mode === "move") { l += dx; t += dy; }
+    else {
+      if (mode.includes("e")) w = startRect.w + dx;
+      if (mode.includes("s")) h = startRect.h + dy;
+      if (mode.includes("w")) { l = startRect.l + dx; w = startRect.w - dx; }
+      if (mode.includes("n")) { t = startRect.t + dy; h = startRect.h - dy; }
+    }
+    box.style.left = `${l}px`; box.style.top = `${t}px`;
+    box.style.width = `${w}px`; box.style.height = `${h}px`;
+    clampBox();
+    e.preventDefault();
+  };
+  const onUp = () => { mode = null; };
+  const begin = (e, m) => {
+    const pt = e.touches ? e.touches[0] : e;
+    mode = m; startX = pt.clientX; startY = pt.clientY;
+    startRect = { l: box.offsetLeft, t: box.offsetTop, w: box.offsetWidth, h: box.offsetHeight };
+    e.preventDefault(); e.stopPropagation();
+  };
+  box.addEventListener("pointerdown", (e) => {
+    if (e.target.dataset.h) begin(e, e.target.dataset.h);
+    else begin(e, "move");
+  });
+  stage.addEventListener("pointermove", onMove);
+  stage.addEventListener("pointerup", onUp);
+  stage.addEventListener("pointercancel", onUp);
+}
+
+function pePaintRail(tool) {
+  const rail = $("peRail");
+  if (!rail) return;
+  const tools = [
+    ["crop", "crop", L("Zuschneiden")],
+    ["rotate", "refresh", L("Drehen")],
+    ["adjust", "sliders", L("Anpassen")],
+    ["cutout", "scanframe", L("Freistellen")],
+  ];
+  rail.innerHTML = tools.map(([id, ic, lab]) =>
+    `<button type="button" class="pe-tool${tool === id ? " on" : ""}" data-pe="${id}">
+      ${icon(ic, 20)}<span>${esc(lab)}</span></button>`
+  ).join("");
+  rail.querySelectorAll("[data-pe]").forEach((b) => {
+    b.onclick = () => peSetTool(b.dataset.pe);
+  });
+}
+
+function pePaintPanel(tool) {
+  const panel = $("pePanel");
+  if (!panel) return;
+  const s = state._pe;
+  if (tool !== "adjust" || !s) { panel.hidden = true; panel.innerHTML = ""; return; }
+  panel.hidden = false;
+  panel.innerHTML = `
+    <label class="pe-slat">${esc(L("Helligkeit"))}
+      <input id="peBright" type="range" min="-60" max="60" value="${s.bright || 0}">
+    </label>
+    <label class="pe-slat">${esc(L("Kontrast"))}
+      <input id="peContrast" type="range" min="-60" max="60" value="${s.contrast || 0}">
+    </label>`;
+  const br = $("peBright");
+  const ct = $("peContrast");
+  const sync = () => {
+    s.bright = Number(br && br.value) || 0;
+    s.contrast = Number(ct && ct.value) || 0;
+    if (s.bright || s.contrast) s.dirty = true;
+    pePaintFilter();
+  };
+  if (br) br.oninput = sync;
+  if (ct) ct.oninput = sync;
+}
+
+async function peSetTool(tool) {
+  const s = state._pe;
+  if (!s) return;
+  if (tool === "cutout") {
+    if (!s.item || s.item.id === "cam") {
+      toast(L("Freistellen erst nach dem Speichern."));
+      return;
+    }
+    await freistellenItemPhoto(s.item.id);
+    return;
+  }
+  if (s.tool === "crop" && tool !== "crop") await peApplyCrop();
+  if (s.tool === "adjust" && tool !== "adjust") await peBakeAdjust();
+  s.tool = tool;
+  peHideCrop();
+  if (tool === "crop") peShowCrop();
+  if (tool === "rotate") {
+    try {
+      const img = await loadPhotoImage(peWorkSrc(s.item, s.index));
+      const cv = rotateImageCover(img, 90);
+      const blob = await canvasToPhotoBlob(cv);
+      if (blob) peSetWork(blob);
+    } catch (e) { toast((e && e.message) || L("Drehen fehlgeschlagen")); }
+    s.tool = "";
+  }
+  pePaintRail(s.tool);
+  pePaintPanel(s.tool);
+}
+
+function closePhotoEditor() {
+  const root = peRoot();
+  peRevoke();
+  state._pe = null;
+  if (root) root.hidden = true;
+}
+
+async function savePhotoEditor() {
+  const s = state._pe;
+  if (!s || !s.item) { closePhotoEditor(); return; }
+  try {
+    if ($("peDone")) $("peDone").disabled = true;
+    if (s.tool === "crop") await peApplyCrop();
+    if (s.tool === "adjust" || s.bright || s.contrast) await peBakeAdjust();
+    if (s.workBlob) {
+      const cam = await uploadEditedPhoto(s.item.id, s.index, s.workBlob, s.item);
+      if (cam && cam.cam) {
+        closePhotoEditor();
+        if (typeof openCamReview === "function") openCamReview();
+        return;
+      }
+      toast(L("Foto gespeichert"), "check");
+    }
+    const after = s.afterSave;
+    closePhotoEditor();
+    if (typeof after === "function") after();
+    else {
+      refreshDetail(true);
+      loadCollection();
+    }
+  } catch (e) {
+    toast((e && e.message) || L("Foto konnte nicht geladen werden"));
+  } finally {
+    if ($("peDone")) $("peDone").disabled = false;
+  }
+}
+
+function openPhotoEditor(item, index, opts) {
+  if (!item) return;
+  opts = opts || {};
+  closeSheet();
+  const idx = Math.max(0, Math.min(index || 0, Math.max(0, (item.photos || []).length - 1)));
+  peRevoke();
+  state._pe = {
+    item, index: idx, dirty: false, tool: "",
+    workBlob: null, workUrl: null, bright: 0, contrast: 0,
+    afterSave: opts.afterSave || null,
+  };
+  const root = peRoot();
+  const img = $("peImg");
+  const title = $("peTitle");
+  const cancel = $("peCancel");
+  const done = $("peDone");
+  if (!root || !img) {
+    toast(L("Foto bearbeiten"));
+    return;
+  }
+  if (title) title.textContent = L("Foto bearbeiten");
+  if (cancel) {
+    cancel.textContent = L("Abbrechen");
+    cancel.onclick = () => {
+      const back = opts.onCancel;
+      closePhotoEditor();
+      if (typeof back === "function") back();
+    };
+  }
+  if (done) {
+    done.textContent = L("Fertig");
+    done.onclick = () => savePhotoEditor();
+  }
+  const restore = $("peRestore");
+  if (restore) {
+    const canRestore = !!(item.has_photos_raw || item.id === "cam");
+    restore.hidden = !canRestore;
+    restore.textContent = L("Original wiederherstellen");
+    restore.onclick = async () => {
+      if (item.id === "cam") {
+        const i = Number.isFinite(item._camIndex) ? item._camIndex : idx;
+        const shot = (state.camShots || [])[i];
+        if (shot && shot.original) {
+          await applyCamShotBlob(shot, shot.original);
+          img.src = shot.thumbUrl || peWorkSrc(item, idx);
+          if (state._pe) { state._pe.dirty = false; state._pe.workBlob = null; }
+        }
+        return;
+      }
+      try {
+        await restoreItemPhoto(item.id, idx);
+        const src = peWorkSrc(item, idx);
+        img.src = src + (src.includes("?") ? "&" : "?") + "r=" + Date.now();
+        if (state._pe) { state._pe.dirty = false; state._pe.workBlob = null; }
+      } catch (e) { toast((e && e.message) || L("Original wiederherstellen")); }
+    };
+  }
+  img.src = peWorkSrc(item, idx);
+  img.style.filter = "";
+  img.onload = () => { if (state._pe && state._pe.tool === "crop") peShowCrop(); };
+  peHideCrop();
+  peBindCrop();
+  pePaintRail("");
+  pePaintPanel("");
+  root.hidden = false;
 }
 
 async function uploadEditedPhoto(itemId, index, blob, item) {
@@ -8392,28 +8899,12 @@ function renderSales() {
   });
   $("salesEmpty").hidden = rows.length > 0;
   let fotoHost = $("salesFotoPill");
-  if (!fotoHost) {
-    fotoHost = document.createElement("div");
-    fotoHost.id = "salesFotoPill";
-    const list = $("salesList");
-    if (list && list.parentNode) list.parentNode.insertBefore(fotoHost, list.nextSibling);
-  }
   if (fotoHost) {
-    if (!bucketLeer && bucket !== "ended") {
-      fotoHost.hidden = false;
-      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Fotografieren"))}</button>`;
-      const fb = $("salesFoto");
-      if (fb) fb.onclick = () => startScanMode("SELL_SINGLE");
-    } else {
-      fotoHost.hidden = true;
-      fotoHost.innerHTML = "";
-    }
+    fotoHost.hidden = true;
+    fotoHost.innerHTML = "";
   }
   if (!rows.length) {
     const v = state.salesBucket;
-    const openCam = () => {
-      startScanMode("SELL_SINGLE");
-    };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
     $("salesEmpty").innerHTML = filteredOut ? emptyState({
@@ -8432,11 +8923,13 @@ function renderSales() {
     }) : v === "active" ? emptyState({
       icon: "bag", titel: "Noch nichts live.",
       text: "",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
-      text: "Fotografiere ein Stück. SERO baut den Entwurf.",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      text: "List item aus einem Stück in der Sammlung.",
+      aktion: "Aus der Sammlung listen",
+      onAktion: () => openListFromCollection(),
+      well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
@@ -8939,7 +9432,10 @@ function detailGalleryImages(item, preferDesign) {
 }
 
 function galleryTrackHtml(images) {
-  if (!images.length) return `<div class="d-gal-slide d-gal-empty">${icon("photo", 36)}</div>`;
+  if (!images.length) {
+    return `<button type="button" class="d-gal-slide d-gal-empty" id="detailAddPhoto">
+      ${icon("photo", 36)}<span>${esc(L("Foto hinzufügen"))}</span></button>`;
+  }
   return images.map((im, i) => `<div class="d-gal-slide" data-i="${i}" data-kind="${esc(im.kind || "")}">
        <img src="${esc(thumb(im.url, 1600))}" loading="${i === 0 ? "eager" : "lazy"}" alt="">
      </div>`).join("");
@@ -9015,8 +9511,14 @@ function bindDetailGallery(images, det) {
   };
   if (zoom) zoom.onclick = (ev) => {
     ev.stopPropagation();
-    if (isDetailEbaySeg(det)) openHeroPhotoEdit(det);
-    else openLb(det.photoIdx || 0);
+    openHeroPhotoEdit(det);
+  };
+  const addPh = $("detailAddPhoto");
+  if (addPh) addPh.onclick = (ev) => {
+    ev.stopPropagation();
+    const item = det && det.mode === "item" ? det.data : null;
+    if (item && item.id) pickItemPhoto(item.id);
+    else if ($("btnCamera")) $("btnCamera").click();
   };
   if (det) det.heroImages = images;
   bindHeroPhotoClicks(det, images);
@@ -9042,8 +9544,8 @@ function openHeroPhotoEdit(det) {
   const item = det && det.mode === "item" ? det.data : null;
   const d = det && det.data && det.data.draft;
   const idx = heroSourcePhotoIdx(det);
-  if (d) openDraftPhotoMenu(d, idx);
-  else if (item) openItemPhotoMenu(item);
+  if (item) openPhotoEditor(item, idx);
+  else if (d) openDraftPhotoMenu(d, idx);
 }
 
 function bindHeroPhotoClicks(det, images) {
@@ -9056,12 +9558,11 @@ function bindHeroPhotoClicks(det, images) {
   if (item && gal) gal.style.setProperty("--listing-bg", listingBgCss(item));
   const urls = (images || []).map((im) => thumb(im.url, 1600)).filter(Boolean);
   track.querySelectorAll("img").forEach((img, idx) => {
-    img.style.cursor = ebay ? "pointer" : "zoom-in";
+    img.style.cursor = "pointer";
     img.onclick = (ev) => {
       ev.stopPropagation();
       if (det) det.photoIdx = idx;
-      if (ebay) openHeroPhotoEdit(det);
-      else if (urls.length) openLightbox(urls, idx);
+      openHeroPhotoEdit(det);
     };
   });
 }
@@ -9274,13 +9775,13 @@ function overviewHeroHtml(item, images) {
 function openItemMoreMenu(item, det) {
   openSheet(L("Mehr"), "", `
     <div class="opt-list">
-      <button type="button" class="opt" id="optMorePhotos"><span style="display:flex;align-items:center;gap:10px">${icon("photo", 17)} ${L("Fotos")}</span></button>
+      <button type="button" class="opt" id="optMorePhotos"><span style="display:flex;align-items:center;gap:10px">${icon("photo", 17)} ${L("Foto bearbeiten")}</span></button>
       <button type="button" class="opt" id="priceRefresh"><span style="display:flex;align-items:center;gap:10px">${icon("refresh", 17)} ${L("Preis aktualisieren")}</span></button>
       <button type="button" class="opt" id="alertBtn"><span style="display:flex;align-items:center;gap:10px">${icon("bell", 17)} ${L("Preisalarm")}</span></button>
       <button type="button" class="opt" id="optMoreDel" style="color:var(--red)"><span style="display:flex;align-items:center;gap:10px">${icon("trash", 17)} ${L("Stück entfernen")}</span></button>
     </div>`, { hideActions: true, recede: false, fit: true });
   const ph = $("optMorePhotos");
-  if (ph) ph.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); closeSheet(); openItemPhotoMenu(item); };
+  if (ph) ph.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); closeSheet(); openPhotoEditor(item, photoIdxNow()); };
   const del = $("optMoreDel");
   if (del) del.onclick = (ev) => {
     ev.preventDefault();

@@ -944,7 +944,18 @@ html.skin-clean .d-gal-slide img {
   height: auto;
   object-fit: contain;
 }
-html.skin-clean .d-gal-empty { color: #8e8e93; min-height: 240px; }
+html.skin-clean .d-gal-empty {
+  color: #8e8e93;
+  min-height: 240px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: 500 14px/1.2 var(--font, inherit);
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
 html.skin-clean .d-gallery-zoom {
   position: absolute;
   top: 10px;
@@ -2286,3 +2297,14 @@ html.skin-clean #sheetBody .inv-range { margin: 0 0 8px; }
     transition: none !important;
   }
 }
+
+html.skin-clean .pe,
+html.skin-clean.force-light .pe {
+  background: #0B0B0C !important;
+  color: #fff !important;
+}
+html.skin-clean .pe-stage { background: #1C1C1E !important; }
+html.skin-clean .pe-txt,
+html.skin-clean .pe-title,
+html.skin-clean.force-light .pe-txt,
+html.skin-clean.force-light .pe-title { color: #fff !important; }

@@ -171,6 +171,9 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # unsafe-inline bleibt nötig: die PWA hat kein Build, Inline-Handler
+    # und dynamisches CSS sitzen in index.html / sero.js. Verschärfen erst
+    # mit Nonce, sonst bricht die App. HSTS setzt nginx (siehe deploy/).
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
