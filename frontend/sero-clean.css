@@ -1327,27 +1327,10 @@ html.skin-clean #lightbox img { touch-action: none; }
 html.skin-clean #salesSeg {
   position: relative;
   margin: 0 0 12px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-radius: var(--glass-radius);
-  padding: 0 0 8px;
-  display: flex;
-  gap: 16px;
 }
 html.skin-clean #salesSeg button {
   position: relative;
   z-index: 1;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 0;
-  min-height: 36px;
-  padding: 6px 0;
-  background: transparent;
-  color: #a1a1a6;
-  border: 0;
 }
 html.skin-clean #salesBulk {
   display: flex;
@@ -1796,31 +1779,37 @@ html.skin-clean #salesSeg {
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: var(--glass-radius);
-  padding: 0 4px;
+  border-radius: 0;
+  padding: 0;
   display: flex;
-  gap: 16px;
+  gap: 8px;
   overflow: visible;
 }
+html.skin-clean #salesSeg .sales-seg-ink { display: none; }
 html.skin-clean #salesSeg button {
-  background: transparent;
+  background: #1c1c1e;
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  color: #8e8e93;
-  padding: 8px 0;
+  border-radius: 999px;
+  color: #a1a1a6;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
   letter-spacing: 0.02em;
+  min-height: 34px;
 }
 html.skin-clean #salesSeg button.on,
 html.skin-clean.force-dark #salesSeg button.on {
-  background: transparent !important;
+  background: #2c2c2e !important;
   box-shadow: none !important;
   color: #fff !important;
-  border-bottom-color: #fff;
+}
+html.skin-clean.force-light #salesSeg button {
+  background: #f2f2f7;
+  color: #636366;
 }
 html.skin-clean.force-light #salesSeg button.on {
+  background: #e5e5ea !important;
   color: #1C1C1E !important;
-  border-bottom-color: #1C1C1E;
 }
 html.skin-clean .scan-review {
   position: fixed;
@@ -2078,6 +2067,7 @@ html.skin-clean .fchip:active {
 }
 
 html.skin-clean .sales-seg-ink {
+  display: none;
   position: absolute;
   left: 0;
   bottom: 0;
