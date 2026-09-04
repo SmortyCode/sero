@@ -8419,7 +8419,7 @@ function renderSales() {
     const v = state.salesBucket;
     const listAction = () => {
       if (!ebayConnectedNow()) { showEbayNotConnectedHint(); return; }
-      openPlusSheet();
+      switchTab("tabCollection");
     };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
