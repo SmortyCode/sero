@@ -1,5 +1,13 @@
 # SERO — Stand der Umsetzung
 
+**Stand: 4. September 2026 — Edit-photo Vollbild (Draft-PR, kein Deploy).**
+
+Dunkle Bühne Cancel | Edit photo | Done. Werkzeuge Crop · Rotate · Adjust,
+Cut-out nur Platzhalter. Bild-Tipp und Mehr → Edit photo. Sell öffnet keine
+Kamera. Speichern erst mit Done. Pins js 258 / css 167 / clean 46.
+
+---
+
 **Stand: 30. August 2026 — aaaa.md Follow-up (Filter/Sheet/Detail/Light nachgezogen); Pins js 257 / css 166 / clean 45. Kein Deploy (Briefing).**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.

@@ -126,7 +126,7 @@ def test_teil_b_verkaufen_labels():
     assert 'L("Erlös")' in chunk or 'L("Entwurfswert")' in chunk
     assert 'L("Live")' in chunk
     assert 'id="salesView"' not in chunk
-    assert "sales-foto-pill" in JS
+    assert "salesFotoPill" in JS
 
 
 def test_teil_b_profil_hub_eine_zeile():
