@@ -3241,15 +3241,16 @@ function paintTopAva() {
   if (!btn) return;
   const me = state.me;
   btn.hidden = false;
+  const personSvg = `<svg class="topbar-ava-fallback" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="14" r="6" fill="currentColor"/><path d="M6 32c0-6.6 5.4-12 12-12s12 5.4 12 12" fill="currentColor"/></svg>`;
   if (!me) {
-    btn.innerHTML = `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    btn.innerHTML = personSvg;
     btn.onclick = () => openSaveLoginSheet();
     btn.setAttribute("aria-label", L("Anmelden zum Speichern"));
     return;
   }
   btn.innerHTML = me.avatar_url
-    ? `<img src="${esc(me.avatar_url)}" alt="">`
-    : `<img src="assets/app-icon.png?v=7" alt="SERO">`;
+    ? `<img src="${esc(me.avatar_url)}" alt="">${personSvg}`
+    : personSvg;
   btn.onclick = () => openSeroProfile();
   btn.setAttribute("aria-label", L("Profil"));
 }
