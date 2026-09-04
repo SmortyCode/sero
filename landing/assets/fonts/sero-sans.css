@@ -1,0 +1,58 @@
+/* SERO Sans Beta v0.3: Regular Fließtext, Medium Überschriften — ohne Hints. */
+@font-face {
+  font-family: "SERO Sans Beta";
+  src: url("SEROSansBeta-Regular.woff2?v=6") format("woff2"),
+       url("SEROSansBeta-Regular.woff?v=6") format("woff"),
+       url("SEROSansBeta-Regular.ttf?v=6") format("truetype");
+  font-style: normal;
+  font-weight: 100 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SERO Sans Beta";
+  src: url("SEROSansBeta-Medium.woff2?v=6") format("woff2"),
+       url("SEROSansBeta-Medium.woff?v=6") format("woff"),
+       url("SEROSansBeta-Medium.ttf?v=6") format("truetype");
+  font-style: normal;
+  font-weight: 500 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SERO Sans Beta";
+  src: url("SEROSansBeta-Regular.woff2?v=6") format("woff2"),
+       url("SEROSansBeta-Regular.woff?v=6") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SERO Sans Beta";
+  src: url("SEROSansBeta-Medium.woff2?v=6") format("woff2"),
+       url("SEROSansBeta-Medium.woff?v=6") format("woff");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "SERO Sans Beta";
+  src: url("SEROSansBeta-Medium.woff2?v=6") format("woff2"),
+       url("SEROSansBeta-Medium.woff?v=6") format("woff");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --font-sero: "SERO Sans Beta", sans-serif;
+}
+
+html {
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}

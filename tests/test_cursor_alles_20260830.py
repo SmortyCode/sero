@@ -187,9 +187,7 @@ def test_d5_monogram_nicht_mehr_ausliefern():
     assert not Path("landing/assets/monogram-white.png").exists()
     assert not Path("landing/assets/monogram-navy.png").exists()
     land = Path("landing/index.html").read_text(encoding="utf-8")
-    land_en = Path("landing/en/index.html").read_text(encoding="utf-8")
-    lcss = Path("landing/landing.css").read_text(encoding="utf-8")
     assert "monogram-white.png" not in land
-    assert "monogram-white.png" not in land_en
-    assert "monogram-white.png" not in lcss
-    assert "monogram-navy.png" not in lcss
+    assert "monogram-navy.png" not in land
+    assert not Path("landing/en/index.html").exists()
+    assert not Path("landing/landing.css").exists()

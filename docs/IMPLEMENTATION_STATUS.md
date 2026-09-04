@@ -1,5 +1,18 @@
 # SERO — Stand der Umsetzung
 
+**Stand: 4. September 2026 — Landing sero.ltd umgebaut, kein Deploy.**
+
+## Auftrag 04.09. — Landing Dark Hero + SEO (Draft-PR)
+
+Quelle: `SERO-LANDING-CURSOR-PROMPT-2026-09-04.md`. Nur `landing/`.
+Kein Contabo, kein Merge. Dark Hero mit **PHOTO IN. EBAY OUT.**, Micro-Reel
+aus Onboard-Stills, Still-Strip, Marketplace-Rail (eBay Live, Rest Next/Planned),
+FAQ zuerst offen, Install zugeklappt. Echte `robots.txt` + `sitemap.xml`.
+IG/TikTok entfernt (zeigten auf X). Anthrazit `#1C1C1E`, CTA
+`https://app.sero.ltd/app/`. CSS/JS weiter inline (Wache D5).
+
+---
+
 **Stand: 30. August 2026 — aaaa.md Follow-up (Filter/Sheet/Detail/Light nachgezogen); Pins js 257 / css 166 / clean 45. Kein Deploy (Briefing).**
 Diese Datei ist die einzige Wahrheit über den Zustand des Projekts. Wer hier
 weiterbaut: erst lesen, dann ändern, danach diese Datei aktualisieren.
