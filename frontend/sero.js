@@ -350,7 +350,7 @@ function removeItemWithUndo(item) {
   } catch (_) { /* */ }
   state._colSig = null;
   renderCollection();
-  if (!$("tabScan").hidden) renderScan();
+  const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan();
 
   const undoGone = { done: false };
   const clearPending = () => {
@@ -4200,7 +4200,7 @@ function showApp() {
   api("/api/app/settings").then((s) => {
     state.settings = s;
     if (state.dash) renderDashboard();
-    if (!$("tabScan").hidden) renderScan();
+    { const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan(); }
   }).catch(() => {});
   loadDashboard();
   loadCollection();
@@ -4559,13 +4559,11 @@ function switchTab(id) {
   });
   paintTopbarSection(id);
   const review = $("scanReview");
-  if (review && id !== "tabScan") review.hidden = true;
+  if (review) review.hidden = true;
   const cam = $("btnCamera");
   if (cam) {
-    const camOn = id === "tabScan";
-    cam.classList.toggle("active", camOn);
-    if (camOn) cam.setAttribute("aria-current", "page");
-    else cam.removeAttribute("aria-current");
+    cam.classList.remove("active");
+    cam.removeAttribute("aria-current");
   }
   const page = $(id);
   page.classList.remove("page-enter", "page-enter-l", "page-enter-r");
@@ -4579,7 +4577,7 @@ function switchTab(id) {
     loadSales(true); startSalesPoll(); loadScanSession();
   }
   else stopSalesPoll();
-  if (id === "tabScan") {
+  if (false && id === "tabScan") {
     renderScan();
     try { trackFunnel("scan_opened"); } catch (_) { /* */ }
   }
@@ -5198,7 +5196,7 @@ async function loadCollection() {
   if (state.items.some((i) => i.status === "analyzing" || i.status === "waiting"
       || i.cutout_status === "running" || i.design_status === "running")) {
     state.colPollTimer = setTimeout(loadCollection, 2200);
-    if (!$("tabScan").hidden) renderScan();
+    { const _ts = $("tabScan"); if (_ts && !_ts.hidden) renderScan(); }
   }
   if (!state._designAutoQueued && (r.items || []).length) {
     state._designAutoQueued = true;
