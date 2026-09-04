@@ -8219,19 +8219,19 @@ function renderSales() {
   let headVal = money(activeN ? listingVal : 0);
   let headSub = activeN
     ? esc(LF("{0} aktiv auf eBay", activeN)) + (draftN ? ` · ${esc(LF("{0} Entwürfe", draftN))}` : "")
-    : esc(L("Noch nichts live."));
+    : "";
   if (bucket === "draft") {
     headLabel = L("Entwurfswert");
     headVal = money(draftN ? draftVal : 0);
     headSub = draftN
       ? esc(LF("{0} Entwürfe", draftN))
-      : esc(L("Keine Entwürfe."));
+      : "";
   } else if (bucket === "ended") {
     headLabel = L("Erlös");
     headVal = money(soldN ? soldVal : 0);
     headSub = soldN
       ? esc(LF("{0} verkauft", soldN))
-      : esc(L("Noch nichts verkauft."));
+      : "";
   }
   const mode = salesViewMode();
   /* Bei null Stücken in diesem Reiter ist die weiße Leiste Verkäufer-Möbel um
@@ -8414,20 +8414,14 @@ function renderSales() {
     if (list && list.parentNode) list.parentNode.insertBefore(fotoHost, list.nextSibling);
   }
   if (fotoHost) {
-    if (!bucketLeer && bucket !== "ended") {
-      fotoHost.hidden = false;
-      fotoHost.innerHTML = `<button type="button" class="btn-primary sales-foto-pill" id="salesFoto">${esc(L("Fotografieren"))}</button>`;
-      const fb = $("salesFoto");
-      if (fb) fb.onclick = () => startScanMode("SELL_SINGLE");
-    } else {
-      fotoHost.hidden = true;
-      fotoHost.innerHTML = "";
-    }
+    fotoHost.hidden = true;
+    fotoHost.innerHTML = "";
   }
   if (!rows.length) {
     const v = state.salesBucket;
-    const openCam = () => {
-      startScanMode("SELL_SINGLE");
+    const listAction = () => {
+      if (!ebayConnectedNow()) { showEbayNotConnectedHint(); return; }
+      openPlusSheet();
     };
     const q = (state.salesQuery || "").trim();
     const filteredOut = rawRows.length > 0;
@@ -8447,11 +8441,10 @@ function renderSales() {
     }) : v === "active" ? emptyState({
       icon: "bag", titel: "Noch nichts live.",
       text: "",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
     }) : v === "draft" ? emptyState({
       icon: "doc", titel: "Keine Entwürfe.",
-      text: "Fotografiere ein Stück. SERO baut den Entwurf.",
-      aktion: "Fotografieren", onAktion: openCam, well: true,
+      text: "",
+      aktion: "Einstellen", onAktion: listAction, well: true,
     }) : `<p class="sales-empty-muted">${esc(L("Erlöse erscheinen hier"))}</p>`;
   }
   fadeImgs($("salesList"));
