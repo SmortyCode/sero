@@ -1203,8 +1203,14 @@ html.skin-clean .d-cta-dock {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+html.skin-clean .d-cta-dock .d-cta-sub {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--label-3, #8e8e93);
+}
 html.skin-clean #detail.has-cta-dock .detail-body {
-  padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
+  padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px) + var(--vv-keyboard, 0px));
 }
 html.skin-clean .d-ebay-cta {
   width: 100%;

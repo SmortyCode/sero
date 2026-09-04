@@ -2765,7 +2765,7 @@ const STR_EN = {
     "Partly saved — remaining drafts stay on this device.",
   "Anmeldung fehlgeschlagen": "Sign-in failed",
   "Code": "Code",
-  "Einstellen": "List",
+  "Einstellen": "List item",
   "über eBay": "via eBay",
   "Notizen": "Notes",
   "Aktiv": "Active",
@@ -9093,25 +9093,12 @@ function syncDetailCtaDock(det) {
     hideDetailCtaDock();
     return;
   }
-  dock.innerHTML = `<div class="d-cta-row">
-    <button type="button" class="btn-secondary" id="btnHold">${esc(L("Als Entwurf behalten"))}</button>
-    <button type="button" class="btn-primary" id="btnList" aria-label="${esc(L("Einstellen"))}">
-      ${icon("tag", 18)}<span class="d-cta-lab">${esc(L("Einstellen"))}</span>
+  dock.innerHTML = `<button type="button" class="btn-primary d-ebay-cta" id="btnList" aria-label="${esc(L("Einstellen"))}">
+      <span class="d-cta-lab">${esc(L("Einstellen"))}</span>
     </button>
-  </div>
   <p class="d-cta-sub">${esc(L("über eBay"))}</p>`;
   dock.hidden = false;
   root.classList.add("has-cta-dock");
-  const hold = dock.querySelector("#btnHold");
-  if (hold) {
-    hold.onclick = (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      state._skipEnsureDraft = state._skipEnsureDraft || {};
-      state._skipEnsureDraft[item.id] = true;
-      closeDetail();
-    };
-  }
   const btn = dock.querySelector("#btnList");
   if (btn) {
     btn.onclick = (ev) => {
@@ -9523,8 +9510,21 @@ function fuelleOffers(det, item) {
 function renderDetail(det, opts) {
   opts = opts || {};
   const body = $("detailBody");
+  if (!det || !det.data) {
+    body.innerHTML = "";
+    hideDetailCtaDock();
+    return;
+  }
+  try { return _renderDetailInner(det, opts, body); }
+  catch (e) {
+    console.error("renderDetail error", e);
+    body.innerHTML = `<div class="err-box">${esc(String(e && e.message || e))}</div>`;
+    hideDetailCtaDock();
+  }
+}
+function _renderDetailInner(det, opts, body) {
   const item = det.mode === "item" ? det.data : null;
-  const d = det.data.draft || null;
+  const d = (det.data && det.data.draft) || null;
 
   $("detailTitle").textContent = item ? "" : "Listing";
   $("detailTrash").hidden = true;
@@ -9681,8 +9681,8 @@ function renderDetail(det, opts) {
       const view = SD ? SD.detailView(item) : { title: item.name || "" };
       ht.textContent = view.title || L("Stück");
     }
-  } else if (skipListingPaint && item && $("detailPanes")) {
-    /* Erstes volles innerHTML würde das Sheet-Feld killen — später nachziehen. */
+  } else if (skipListingPaint && item && $("detailPanes") && body.innerHTML.trim()) {
+    /* Input focused — defer repaint, but only when body already has content. */
   } else {
     body.innerHTML = html;
     det._shellItemId = item ? item.id : null;
