@@ -5797,6 +5797,7 @@ function openColSearch() {
 }
 
 $("emptyAdd").onclick = () => startScanMode("SELL_SINGLE");
+{ const eh = document.querySelector("#colEmpty h2"); if (eh) eh.textContent = L("Noch keine Stücke."); }
 
 async function importListings(btn) {
   if (needAccountForSave()) return;
